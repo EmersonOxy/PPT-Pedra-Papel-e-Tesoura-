@@ -4,18 +4,26 @@ import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
 
 const base = process.env.TRINDADE_BASE_URL || 'http://127.0.0.1:4173';
+const modularPath = resolve(fileURLToPath(new URL('../../index.html', import.meta.url)));
 const originalPath = resolve(fileURLToPath(new URL('../../Jogar-Trindade-transicao-preta.html', import.meta.url)));
+const modular = await readFile(modularPath);
 const original = await readFile(originalPath);
 const page = await fetch(`${base}/`);
 assert.equal(page.status, 200);
 assert.equal(page.headers.get('content-type'), 'text/html; charset=utf-8');
-assert.equal(Number(page.headers.get('content-length')), original.byteLength);
-assert.equal(await page.text().then((text) => Buffer.byteLength(text, 'utf8')), original.byteLength);
+assert.equal(Number(page.headers.get('content-length')), modular.byteLength);
+const modularText = await page.text();
+assert.equal(Buffer.byteLength(modularText, 'utf8'), modular.byteLength);
+assert.match(modularText, /type="module"/);
 assert.equal(page.headers.get('access-control-allow-origin'), null);
 
 const head = await fetch(`${base}/`, { method: 'HEAD' });
 assert.equal(head.status, 200);
-assert.equal(Number(head.headers.get('content-length')), original.byteLength);
+assert.equal(Number(head.headers.get('content-length')), modular.byteLength);
+
+const originalPage = await fetch(`${base}/Jogar-Trindade-transicao-preta.html`);
+assert.equal(originalPage.status, 200);
+assert.deepEqual(Buffer.from(await originalPage.arrayBuffer()), original);
 
 const post = await fetch(`${base}/`, { method: 'POST' });
 assert.equal(post.status, 405);
@@ -28,4 +36,4 @@ assert.equal(gitMetadata.status, 404);
 const codexConfig = await fetch(`${base}/.codex/config.toml`);
 assert.equal(codexConfig.status, 404);
 
-process.stdout.write('Local server smoke: 6 checks passed (GET integrity, HEAD, write-method rejection, traversal and hidden-config rejection)\n');
+process.stdout.write('Local server smoke: 8 checks passed (modular GET/HEAD, original HTML integrity, write-method rejection, traversal and hidden-config rejection)\n');

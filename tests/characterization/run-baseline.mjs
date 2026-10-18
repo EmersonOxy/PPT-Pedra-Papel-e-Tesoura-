@@ -15,15 +15,37 @@ const rulesSource = html.slice(rulesStart, domStart);
 const expose = `\nglobalThis.__characterization = { SIGNS, POWERS, MAX_HP, DAMAGE, CRIT_DAMAGE, POINTS_FOR_PRIZE, POINTS_TO_WIN, TURN_SECONDS, MAX_MISSES, outcome, createGame, powerCount, activateAbility, chooseEnemySign, chooseEnemyAbility, awardBattle, play, nextBattle, missChoice };`;
 const context = { Math };
 runInNewContext(`${rulesSource}${expose}`, context, { timeout: 1000, filename: 'original-game-rules.js' });
-const rules = context.__characterization;
+const baselineRules = context.__characterization;
+const modularRules = await import('../../src/game/core/rules.js');
+function runSuite(implementation) {
+const games = [];
+const randomStreams = [];
+const rules = {
+  ...implementation,
+  createGame() {
+    const game = implementation.createGame();
+    games.push(game);
+    return game;
+  },
+};
 const testCases = [];
 const test = (name, fn) => {
+  const firstGame = games.length;
+  const firstStream = randomStreams.length;
   fn();
-  testCases.push(name);
+  const states = games.slice(firstGame).map((game) => JSON.parse(JSON.stringify(game)));
+  const rngCalls = randomStreams.slice(firstStream).map((stream) => stream.calls);
+  testCases.push({ name, states, rngCalls });
 };
 const sequence = (...values) => {
   let index = 0;
-  return () => values[Math.min(index++, values.length - 1)];
+  const stream = () => {
+    stream.calls++;
+    return values[Math.min(index++, values.length - 1)];
+  };
+  stream.calls = 0;
+  randomStreams.push(stream);
+  return stream;
 };
 
 test('RPS outcome matrix and invalid-input rejection', () => {
@@ -163,5 +185,56 @@ test('enemy choice is based on stored history and seeded randomness', () => {
   assert.ok(rules.SIGNS.includes(first));
 });
 
-process.stdout.write(`Baseline characterization: ${testCases.length} cenários aprovados\n`);
-for (const name of testCases) process.stdout.write(`  OK ${name}\n`);
+test('invalid play leaves all game state unchanged', () => {
+  const game = rules.createGame();
+  const before = JSON.stringify(game);
+  assert.equal(rules.play(game, 'invalid', sequence(0)), null);
+  assert.equal(JSON.stringify(game), before);
+});
+
+test('RNG values are clamped to the original supported interval', () => {
+  const game = rules.createGame();
+  game.hp = 50;
+  game.inventory.player.push('heal');
+  const result = rules.activateAbility(game, 'player', 'heal', sequence(-3));
+  assert.deepEqual(JSON.parse(JSON.stringify(result)), { kind: 'heal', rolled: 10, restored: 10 });
+  game.hp = 50;
+  game.inventory.player.push('heal');
+  const upper = rules.activateAbility(game, 'player', 'heal', sequence(2));
+  assert.deepEqual(JSON.parse(JSON.stringify(upper)), { kind: 'heal', rolled: 50, restored: 50 });
+  assert.equal(game.hp, 100);
+});
+
+test('five consecutive losses end one battle at zero HP without negative health', () => {
+  const game = rules.createGame();
+  const turns = [];
+  for (let i = 0; i < 5; i++) turns.push(rules.play(game, 'scissors', sequence(0)));
+  assert.ok(turns.every((turn) => turn.result === 'loss' && turn.enemy === 'rock'));
+  assert.equal(game.hp, 0);
+  assert.equal(game.enemyHp, 100);
+  assert.equal(game.enemyPoints, 1);
+  assert.equal(game.phase, 'lost');
+});
+
+test('enemy healing threshold, transfer, and next battle retain match history and misses', () => {
+  const game = rules.createGame();
+  game.enemyHp = 45;
+  game.inventory.enemy.push('heal');
+  const healing = rules.chooseEnemyAbility(game, sequence(0));
+  assert.deepEqual(JSON.parse(JSON.stringify(healing)), { kind: 'heal', rolled: 10, restored: 10 });
+  game.phase = 'won';
+  game.misses = 2;
+  game.playerHistory.push('rock', 'paper', 'scissors');
+  assert.equal(rules.nextBattle(game), true);
+  assert.equal(game.misses, 2);
+  assert.deepEqual(Array.from(game.playerHistory), ['rock', 'paper', 'scissors']);
+});
+
+return testCases;
+}
+
+const baselineCases = runSuite(baselineRules);
+const modularCases = runSuite(modularRules);
+assert.deepEqual(modularCases, baselineCases, 'A implementação modular diverge da referência congelada.');
+process.stdout.write(`Caracterização diferencial: ${baselineCases.length} cenários aprovados na referência e na versão modular\n`);
+for (const { name } of baselineCases) process.stdout.write(`  OK ${name}\n`);

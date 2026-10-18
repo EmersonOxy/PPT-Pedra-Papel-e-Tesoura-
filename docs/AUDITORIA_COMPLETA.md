@@ -137,4 +137,4 @@ WebSocket é adequado para troca rápida e bidirecional de eventos, mas exige se
 
 ## Organização Git desta auditoria
 
-O diretório não era um repositório Git; a verificação read-only a `origin` não encontrou refs e terminou sem erro. Foi inicializado Git local sem commits, configurados `origin` e identidade apenas no repositório, e a branch de trabalho atual ficou como `audit/comprehensive-game-audit`. `main` permanece a branch estável definida nas diretrizes, mas ainda não existe commit/ref local ou remoto que a materialize. Não foi feito commit, push, reset, checkout destrutivo ou alteração do HTML. Os arquivos de setup existentes continuam sem stage.
+Na auditoria inicial de 17/10/2026, o diretório ainda não era um repositório Git e a consulta read-only a `origin` não encontrou refs. Em seguida o baseline aprovado foi commitado e publicado, sem reescrita de histórico, em `main`, que é a branch padrão no GitHub. O commit é `00a5a3c18764e6dcc8e4773a06c52fcc0fbfadeb`; a branch de auditoria continua preservada. O estado atual do Marco 2 está documentado em `docs/GIT_WORKFLOW.md`.

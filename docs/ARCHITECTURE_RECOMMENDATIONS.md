@@ -1,8 +1,26 @@
 # Recomendações de arquitetura
 
+Estado atualizado em 18/10/2026: a implementação do Marco 2 foi concluída e validada em `feature/marco-2-modularizacao`. O baseline foi publicado em `origin/main` no commit `00a5a3c18764e6dcc8e4773a06c52fcc0fbfadeb`. O HTML original continua íntegro; a aplicação modular possui `index.html`, CSS/assets extraídos, núcleo JavaScript puro, adaptador DOM genérico e configuração visual validada. A recomendação anterior de extrair o núcleo “após aprovação do Marco 2” foi cumprida nesta branch.
+
+## Arquitetura aplicada no Marco 2
+
+| Camada | Local atual | Responsabilidade |
+|---|---|---|
+| Entrada | `index.html`, `src/game/main.js` | Carregar a config visual e inicializar a UI modular. |
+| Regras | `src/game/core/rules.js` | Estado, RPS, poderes, IA, dano, prêmio, faltas e transições. JavaScript ES sem DOM. |
+| Interface/controller | `src/game/ui/game-ui.js` | Composição de estado, eventos e integração das regras. |
+| Apresentação | `src/game/ui/game-view.js` | HUD, botões, barras, mensagens de progresso e telas de resultado. |
+| Relógio visual | `src/game/ui/turn-clock.js` | Exibição do prazo e timeout; depende do estado por callbacks. |
+| Animações | `src/game/ui/game-animations.js` | Movimento das mãos, recuo/recuperação e feedback de dano. |
+| Contrato visual | `src/game/ui/visual-config.js`, `config/editor-elements.schema.json` | Validar IDs e allowlist; aplicar texto simples, cores validadas e assets locais conhecidos. |
+| Recursos | `assets/styles/`, `assets/images/` | CSS e PNG locais extraídos sem conversão. |
+| Referência | `Jogar-Trindade-transicao-preta.html`, `reference/` | Arquivo original executável e oráculo de caracterização congelados. |
+
+A suíte `tests/characterization/run-baseline.mjs` executa os mesmos 14 cenários no trecho de regras extraído da referência e no módulo atual, comparando estado final e chamadas de RNG. A comparação de screenshot com cenário de início determinístico foi pixel a pixel idêntica em 1366×768, 390×844 e 320×568. Esses resultados caracterizam a tela inicial da partida e ainda não substituem a revisão manual de todos os estados de combate.
+
 ## Diagnóstico atual
 
-O jogo é entregue por um único arquivo `Jogar-Trindade-transicao-preta.html`, com HTML, CSS, imagens embutidas e um IIFE JavaScript. No IIFE, as regras e o estado inicial ficam antes dos adaptadores de DOM; em seguida há IA, timer, renderização, eventos, mensagens e Web Animations. Não há build, dependências, persistência, endpoints ou testes observados.
+O baseline congelado continua entregue pelo único arquivo `Jogar-Trindade-transicao-preta.html`, com HTML, CSS, imagens embutidas e um IIFE JavaScript. A entrada modular em `index.html` separa CSS, PNG, regras puras e UI sem build nem dependências externas. O editor, persistência e integração desktop ainda não foram implementados.
 
 O desenho é apropriado para um protótipo pequeno e offline. O custo de manutenção cresce quando sistemas passam a compartilhar estado e eventos no mesmo escopo. Já existem boas funções candidatas a um núcleo independente (`outcome`, `createGame`, `activateAbility`, `chooseEnemySign`, `awardBattle`, `play`, `nextBattle`, `missChoice`) e um parâmetro RNG em várias regras. O próximo passo técnico deve ser incremental e manter o HTML como ponto de entrada até a separação ser comprovada.
 
@@ -79,10 +97,10 @@ Não recomendo migrar agora para Phaser, React, TypeScript ou outro framework: o
 
 ## Decisão arquitetural aprovada para preparação (17/10/2026)
 
-Émerson aprovou a stack inicial do Trindade Studio: Electron para o host desktop e React + TypeScript + Vite apenas na interface do editor. O jogo será extraído incrementalmente para JavaScript ES modular sem framework obrigatório para o núcleo. A mudança de estrutura ainda requer autorização específica do Marco 2.
+Émerson aprovou a stack inicial do Trindade Studio: Electron para o host desktop e React + TypeScript + Vite apenas na interface do editor. O runtime do jogo usa JavaScript ES modular sem framework no núcleo. O Marco 2 atualizou a estrutura em branch dedicada; a stack do Studio continua reservada aos marcos futuros.
 
 O contrato de IDs e propriedades editáveis, persistência, fronteiras de segurança, schema e extensibilidade está documentado em [EDITOR_ARCHITECTURE.md](EDITOR_ARCHITECTURE.md). A estrutura alvo está em [PROJECT_STRUCTURE.md](PROJECT_STRUCTURE.md). O requisito de experiência visual semelhante ao Canva permanece no produto, limitado por um catálogo seguro de elementos registrados.
 
 ## Recomendação de decisão anterior à aprovação
 
-O plano aprovado preserva o protótipo atual, estabiliza regras e comportamento em testes e extrai o núcleo puro em branch própria após aprovação do Marco 2. A escolha React/TypeScript/Vite vale para o editor; não migra o núcleo do jogo. Para multiplayer, desenhar e provar primeiro um servidor autoritativo simples de sala 1×1; autenticação persistente, matchmaking, ranking e temporadas são etapas posteriores condicionadas a métricas e orçamento.
+O plano mantém a referência original como oráculo, protege regras com comparação diferencial e deixa o jogo independente do Studio. A escolha React/TypeScript/Vite vale para o editor; não migra o núcleo do jogo. Para multiplayer, desenhar e provar primeiro um servidor autoritativo simples de sala 1×1; autenticação persistente, matchmaking, ranking e temporadas são etapas posteriores condicionadas a métricas e orçamento.
