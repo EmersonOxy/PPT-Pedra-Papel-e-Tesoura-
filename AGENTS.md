@@ -91,6 +91,18 @@ Delegue em paralelo apenas perguntas independentes. Não permita que agentes edi
 - Salvamento valida JSON e assets, grava atomicamente e mantém backup. Importação rejeita traversal, links fora da raiz, MIME/extensão incompatíveis e conteúdo ativo não sanitizado.
 - Segredos nunca entram na configuração, logs ou Git. Git usa helper de credenciais existente e stage explícito.
 
+## Publicação Web e Vercel
+
+- O fluxo cotidiano de jogo deve usar a URL pública ou autorizada do projeto; validar atualizações em links Preview. PowerShell e servidor local são ferramentas internas de diagnóstico, não requisitos para o jogador. O acesso público deve respeitar a decisão de Émerson sobre SSO e domínios.
+- A saída web é estática e determinística: `node scripts/build-web.mjs` gera somente os arquivos explícitos da allowlist em `dist/web/`; não copie diretórios recursivamente. Ao adicionar runtime necessário, atualize a allowlist e o teste de publicação na mesma mudança. Não inclua baseline original, `reference/`, documentação, testes, código do editor, `.git`, launcher, `config/gameplay.local.json`, arquivos ocultos ou segredos.
+- `vercel.json` configura o projeto como saída estática: comando `node scripts/build-web.mjs`, diretório de saída `dist/web`. Não adicione framework, dependências npm ou comandos de instalação para esse build sem decisão técnica documentada.
+- Execute `node tests/deployment/web-dist-smoke.mjs` após o build. A verificação deve confirmar caminhos essenciais com 200, conteúdo interno fora da allowlist com 404 e rejeição de traversal.
+- Preview deve partir da branch de trabalho e não deve receber aliases de produção. Produção continua vinculada à `main`; não altere settings de proteção, domínios ou ambiente de produção como parte de uma validação Preview.
+- Não publicar ou fazer push sem autorização expressa. A criação de um deployment Preview também precisa estar dentro do escopo autorizado da tarefa.
+- Manter `docs/VERCEL_DEPLOYMENT.md` e `docs/BUILD_AND_TEST.md` atualizados com configuração, build, testes, causa de falhas e fluxo futuro. A documentação do Studio deve prever ações gráficas para publicar Preview, ver build e PR e promover para produção somente depois de aprovação explícita.
+- Para testar Preview protegido, mantenha SSO e demais proteções. Não altere a política de proteção para facilitar teste; use acesso autenticado suportado ou registre a limitação. Não compartilhe nem persista links temporários de bypass.
+- npm/npx não fazem parte do build estático e não devem ser instalados globalmente só para essa publicação. O plugin/connector Vercel já disponível na sessão pode ser usado; se a integração futura depender de outra ferramenta, documente e peça decisão antes de instalar.
+
 ## Critérios de aprovação
 
 Uma mudança está pronta quando respeita o escopo aprovado, preserva os fluxos não envolvidos, inclui evidência de validação compatível com a tarefa, descreve limitações e riscos restantes e mantém as instruções e a documentação atualizadas. Nenhuma nova mecânica ou alteração de regra é presumida aprovada por estar tecnicamente implementada.

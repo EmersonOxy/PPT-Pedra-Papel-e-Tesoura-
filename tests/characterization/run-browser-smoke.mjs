@@ -8,6 +8,7 @@ import { join } from 'node:path';
 
 const edgePath = process.env.TRINDADE_EDGE || 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe';
 const baseUrl = process.env.TRINDADE_BASE_URL || 'http://127.0.0.1:4173';
+const baselineUrl = process.env.TRINDADE_BASELINE_URL || baseUrl;
 await access(edgePath);
 
 async function availablePort() {
@@ -99,11 +100,16 @@ async function runViewport(viewport) {
       window.matchMedia = (query) => query === '(prefers-reduced-motion: reduce)'
         ? { matches: true, media: query, addEventListener() {}, removeEventListener() {} }
         : originalMatchMedia(query);
-      Element.prototype.animate = () => ({ finished: Promise.resolve(), cancel() {} });
+      Object.defineProperty(window, '__animationIds', { value: [], writable: false });
+      Element.prototype.animate = function() {
+        const animation = { finished: Promise.resolve(), cancel() {} };
+        Object.defineProperty(animation, 'id', { set(value) { window.__animationIds.push(value); } });
+        return animation;
+      };
     ` });
 
     const scenarios = [];
-    for (const [label, path] of [['baseline', '/Jogar-Trindade-transicao-preta.html'], ['modular', '/']]) {
+    for (const [label, url] of [['baseline', `${baselineUrl}/Jogar-Trindade-transicao-preta.html`], ['modular', `${baseUrl}/`]]) {
       const loaded = new Promise((resolve) => socket.addEventListener('message', function onMessage(event) {
         const message = JSON.parse(event.data);
         if (message.method === 'Page.loadEventFired') {
@@ -111,7 +117,7 @@ async function runViewport(viewport) {
           resolve();
         }
       }));
-      await send('Page.navigate', { url: `${baseUrl}${path}` });
+      await send('Page.navigate', { url });
       await loaded;
       if (label === 'modular') {
         const configuredValues = await evaluate(`(async () => {
@@ -183,6 +189,8 @@ async function runViewport(viewport) {
         document.querySelector('[data-sign="paper"]').click();
         await wait(() => read().enemyHp === '80 / 100' && read().turnStatus === 'Sua vez', 'jogada vencedora');
         expect('vitória, dano e barra de vida', read().enemyFill === '80%' && read().selected === 'paper');
+        expect('animações de avanço, recuo e recuperação são chamadas', ['advance', 'recoil', 'recover'].every((id) => window.__animationIds.includes(id)));
+        expect('animação de empate em ambas as mãos', ['draw-player', 'draw-enemy'].every((id) => window.__animationIds.includes(id)));
         await wait(() => getComputedStyle(document.querySelector('[data-sign="paper"]')).backgroundColor === 'rgb(230, 237, 226)', 'cor do botão selecionado');
         expect('cor do botão selecionado', true);
 

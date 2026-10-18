@@ -27,6 +27,17 @@ Os cenários cobrem matriz RPS/entrada inválida, estado inicial/constantes, cur
 - `node scripts/validate-assets.mjs` verifica SHA-256 dos três PNG, dimensões 500×500 e canal alpha.
 - `node tests/characterization/server-smoke.mjs` roda com o servidor ativo e verifica entrada modular, HTML original, HEAD, rejeição de escrita, CORS, traversal e caminhos ocultos.
 
+## Build para Preview Web
+
+O build estático para Vercel é determinístico, usa allowlist e não instala dependências:
+
+```powershell
+node scripts/build-web.mjs
+node tests/deployment/web-dist-smoke.mjs
+```
+
+A saída permitida é `dist/web/`. O smoke valida respostas HTTP de entrada, módulos, CSS, configuração e imagens, além da ausência de referência, documentação, arquivos internos e configuração experimental. Veja [`VERCEL_DEPLOYMENT.md`](VERCEL_DEPLOYMENT.md) para o diagnóstico da integração Vercel, configurações recomendadas e limites da validação Preview.
+
 ## Comparação visual
 
 Capturas controladas foram feitas no Edge com movimento reduzido, RNG e relógio fixos, mesma escala e tela no baseline e no jogo modular. Pixels diferentes: 0 nos estados de jogo inicial em 1366×768 (desktop), 390×844 (celular) e 320×568 (estreito). A extração não mudou estilo ou recursos visuais. Essa verificação cobre uma tela após início; os estados de dano, poderes, empate, prêmio, timeout, resultado e próxima batalha ainda precisam de screenshots e revisão manual antes de considerar a equivalência visual completa.
