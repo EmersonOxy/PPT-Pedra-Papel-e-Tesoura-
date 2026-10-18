@@ -60,8 +60,8 @@ export function validateConfig(catalog, config) {
   }
 }
 
-function targetFor(id) {
-  const element = document.querySelector(`[data-editor-id="${id}"]`);
+function targetFor(id, targetDocument = document) {
+  const element = targetDocument.querySelector(`[data-editor-id="${id}"]`);
   if (!element) throw new Error(`Alvo do elemento editável ausente: ${id}`);
   return element;
 }
@@ -77,12 +77,31 @@ function applyProperty(target, property, value) {
   else throw new Error(`Operação de vínculo não registrada: ${binding.operation}`);
 }
 
-function valuesForViewport(entry) {
+function valuesForViewport(entry, targetWindow = window) {
   const values = { ...(entry.base || {}) };
   for (const [name, query] of Object.entries(breakpoints)) {
-    if (window.matchMedia(query).matches) Object.assign(values, entry.responsive?.[name] || {});
+    if (targetWindow.matchMedia(query).matches) Object.assign(values, entry.responsive?.[name] || {});
   }
   return values;
+}
+
+export function applyVisualConfiguration(catalog, config, targetDocument = document) {
+  validateConfig(catalog, config);
+  const targetWindow = targetDocument.defaultView;
+  if (!targetWindow) throw new Error('O documento de prévia não está disponível.');
+  for (const id of Object.keys(config.elements)) targetFor(id, targetDocument);
+  const apply = () => {
+    for (const [id, entry] of Object.entries(config.elements)) {
+      const definition = catalog.elements.find((element) => element.id === id);
+      const properties = new Map(definition.properties.map((property) => [property.key, property]));
+      const target = targetFor(id, targetDocument);
+      for (const [key, value] of Object.entries(valuesForViewport(entry, targetWindow))) {
+        applyProperty(target, properties.get(key), value);
+      }
+    }
+  };
+  apply();
+  return apply;
 }
 
 export async function loadVisualConfig() {
@@ -91,16 +110,7 @@ export async function loadVisualConfig() {
     if (!catalogResponse.ok || !visualResponse.ok) throw new Error('Arquivos de configuração visual indisponíveis.');
     const [catalog, config] = await Promise.all([catalogResponse.json(), visualResponse.json()]);
     validateConfig(catalog, config);
-    for (const id of Object.keys(config.elements)) targetFor(id);
-    const apply = () => {
-      for (const [id, entry] of Object.entries(config.elements)) {
-        const definition = catalog.elements.find((element) => element.id === id);
-        const properties = new Map(definition.properties.map((property) => [property.key, property]));
-        const target = targetFor(id);
-        for (const [key, value] of Object.entries(valuesForViewport(entry))) applyProperty(target, properties.get(key), value);
-      }
-    };
-    apply();
+    const apply = applyVisualConfiguration(catalog, config);
     for (const query of Object.values(breakpoints)) window.matchMedia(query).addEventListener('change', apply);
     return { loaded: true };
   } catch (error) {

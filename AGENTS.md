@@ -65,13 +65,25 @@ Delegue em paralelo apenas perguntas independentes. Não permita que agentes edi
 
 ## Marco 2 — baseline, compatibilidade e runtime modular
 
-- O Marco 1 foi concluído e o Marco 2 foi autorizado. Trabalhe somente em `feature/marco-2-modularizacao`; não altere `main` nem a branch de auditoria.
+- O Marco 1 foi concluído e o Marco 2 está em `feature/marco-2-modularizacao`. Ao continuar trabalho específico do Marco 2, use essa branch; o Studio evolui em sua própria branch autorizada, sem alterar `main` ou a branch de auditoria.
 - Preserve `Jogar-Trindade-transicao-preta.html` e `reference/Jogar-Trindade-transicao-preta.baseline.html` byte a byte. Confirme o SHA-256 dos dois em qualquer validação final.
 - O runtime modular começa em `index.html`; regras puras ficam em `src/game/core/`, integração DOM em `src/game/ui/`, recursos em `assets/` e opções visuais validadas em `config/visual.json`. Não importe código do jogo para o Studio.
 - Faça mudanças pequenas e valide cada etapa com os comandos em `docs/BUILD_AND_TEST.md`. A suíte diferencial deve executar as mesmas entradas/RNG na referência e no núcleo modular; divergência de regras interrompe o avanço até ser explicada e corrigida.
 - Use `node scripts/serve-local.mjs` para abrir `http://127.0.0.1:4173/`; o servidor permanece somente leitura, em loopback, sem CORS e contido à raiz. Não contorne políticas de `file://`, browser ou segurança do sistema.
-- Não substitua nem atualize a referência para fazer teste passar. Mecânicas só mudam com solicitação/aprovação própria. Não inicie o Marco 3.
-- Não instale ferramentas ou dependências globais sem necessidade demonstrada e decisão apresentada. Para o Studio, Electron/React/TypeScript/Vite são a stack de UI aprovada como proposta; o runtime do jogo continua em JavaScript modular sem framework imposto.
+- Não substitua nem atualize a referência para fazer teste passar. Mecânicas só mudam com solicitação/aprovação própria.
+- Não instale ferramentas ou dependências globais sem necessidade demonstrada e decisão apresentada. Electron/React/TypeScript/Vite são a stack de UI aprovada para o Studio; o runtime do jogo continua em JavaScript modular sem framework imposto.
+
+## Marco 3 — Trindade Studio
+
+- O Marco 3 está autorizado na branch isolada `feature/marco-3-studio`, iniciada do `origin/main` aprovado. Não misture alterações locais do launcher da branch `feature/marco-2-modularizacao`; preserve-as. Não altere `main`, faça commit, push ou merge sem aprovação posterior.
+- O primeiro incremento entrega uma experiência Windows gráfica: abrir, selecionar elemento no canvas/lista, editar propriedade allowlisted, visualizar, alternar edição/teste, desfazer/refazer e salvar. O uso cotidiano não deve exigir terminal, PowerShell, Node.js instalado ou servidor manual.
+- Mantenha Electron seguro (`contextIsolation`, sandbox, `nodeIntegration: false`, CSP), preload mínimo com métodos nomeados, validação de sender/origem/caminho no processo principal e preview separado, sem IPC. Não exponha shell, Git ou filesystem genérico ao renderer.
+- Mantenha Electron como processo principal único e reaproveite módulos/serviços comuns. Não crie três aplicativos independentes para Studio, testes e Git.
+- A prévia usa somente arquivos explicitamente allowlisted do runtime do jogo em loopback; nunca leia, sirva ou empacote documentação, `.git`, testes, segredos, Studio ou configurações de gameplay.
+- Não edite regra, estado competitivo ou arte da referência. Propriedades novas precisam passar pelo contrato do catálogo/schema e ter alvo real/default/teste na mesma mudança.
+- Dependências são exatas e têm lockfile local em `studio/`; não instalar ferramentas globais. Reveja scripts de instalação antes de aprová-los. Usuários finais instalam e abrem pelo instalador/atalho gráfico; Node/pnpm pertencem apenas ao build/desenvolvimento.
+- Antes de declarar pronto, execute testes unitários/negativos, typecheck, build renderer/Windows, caracterização diferencial e evidência da interface real. Declare falhas, limitações e testes que não puderam ser executados; não conte checks de HTTP como teste interativo.
+- Atualize `docs/STUDIO_ARCHITECTURE.md`, `docs/STUDIO_USER_GUIDE.md` e `docs/BUILD_AND_TEST.md` quando o contrato, suporte, execução ou riscos mudarem.
 
 ## Contrato obrigatório para elementos editáveis no Studio
 
@@ -116,6 +128,6 @@ Uma mudança está pronta quando respeita o escopo aprovado, preserva os fluxos 
 - Não reescreva histórico existente sem autorização explícita. Nunca use force push neste projeto.
 - Não publique nem faça push automaticamente. Envie alterações ao remoto somente após aprovação de Émerson.
 - O primeiro commit do baseline também exige aprovação após revisão da lista staged, verificação de segredos, diff/checks e integridade/hash. Push exige aprovação separada; não use force push.
-- A autorização de Marco 2 não autoriza iniciar o Marco 3. Conclua as etapas e peça aprovação para qualquer próximo Marco.
+- A autorização de cada Marco vale somente para seu escopo. Aguarde aprovação explícita antes de iniciar o próximo Marco.
 - Não crie commit, push ou merge sem aprovação expressa de Émerson após a revisão da entrega. Não use force push.
 - Use a identidade Git local já configurada neste repositório; não copie nome/email pessoal para a documentação nem propague a configuração para o Git global.

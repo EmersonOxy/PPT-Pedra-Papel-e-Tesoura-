@@ -1,13 +1,13 @@
 # Build, teste e compatibilidade
 
-Status: comandos locais do jogo modular e verificações do Marco 2. Build do Studio não existe e pertence a marco posterior.
+Status: comandos locais do jogo modular, verificações de compatibilidade e build/testes do primeiro incremento do Trindade Studio.
 
 ## Ambiente observado
 
 - Windows 10 Pro 10.0.19045; PowerShell.
 - Git disponível; Node.js `v24.19.0` visível pelo runtime do Codex.
-- `npm`, `dotnet`, `csc`, `cl`, `msbuild` e Electron não encontrados no PATH. O compilador .NET Framework `C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe` existe fora do PATH e foi usado na prova dos launchers. `iexpress.exe` está presente, mas não será usado para fingir que scripts são executáveis de aplicação.
-- Não instalar ferramentas durante o Marco 1 sem necessidade observada. Antes de iniciar build do Studio, decidir instalação controlada de Node.js LTS/npm e dependências com lockfile; SDK .NET só se a prova dos launchers demonstrar que é necessário.
+- Runtime local do Codex: Node.js `v24.19.0` e pnpm `v11.25.0`; dependências do Studio ficam em `studio/node_modules` (ignorado) e versões exatas em `studio/pnpm-lock.yaml`.
+- O build Windows do Studio usa instalador NSIS x64 por usuário via `electron-builder`; o usuário final não precisa de Node nem SDK .NET. O ambiente de build usa o runtime Node/pnpm configurado pelo Codex.
 
 ## Execução local
 
@@ -40,15 +40,15 @@ A saída permitida é `dist/web/`. O smoke valida respostas HTTP de entrada, mó
 
 ## Comparação visual
 
-Capturas controladas foram feitas no Edge com movimento reduzido, RNG e relógio fixos, mesma escala e tela no baseline e no jogo modular. Pixels diferentes: 0 nos estados de jogo inicial em 1366×768 (desktop), 390×844 (celular) e 320×568 (estreito). A extração não mudou estilo ou recursos visuais. Essa verificação cobre uma tela após início; os estados de dano, poderes, empate, prêmio, timeout, resultado e próxima batalha ainda precisam de screenshots e revisão manual antes de considerar a equivalência visual completa.
+`node tests/characterization/run-browser-smoke.mjs` usa um Electron/Chromium de teste com perfil temporário separado; não abre, fecha ou modifica o perfil Edge existente. RNG e relógio são fixados, os controles percorrem empate, ataque, poderes e resultado, e as animações Web Animations reais são pausadas em 75 ms para comparar o mesmo frame. `node tests/characterization/compare-visual-captures.mjs` compara pixel a pixel as capturas baseline/modular. Resultado atual: 22 verificações por viewport, zero erros de console/rede e zero canais de pixel diferentes em 14 cenas a 1366×768 e 390×844. Cenas: menu, combate inicial, empate, ataque, combate após ataque, resultado e poder disponível. Capturas locais ignoradas pelo Git ficam em `studio/release/visual-comparison/`.
 
-## Fluxo de desenvolvimento
+## Fluxo de desenvolvimento do jogo
 
 ```powershell
 node scripts/serve-local.mjs
 ```
 
-Em outro terminal:
+Em uma segunda janela de desenvolvimento:
 
 ```powershell
 node tests/characterization/run-baseline.mjs
@@ -57,7 +57,31 @@ node scripts/validate-assets.mjs
 node tests/characterization/server-smoke.mjs
 ```
 
-Não há build step ou dependência de npm para o runtime do jogo. O Studio e seus executáveis Windows continuam fora do Marco 2.
+O runtime do jogo não requer build step ou dependência de npm. Seu acesso cotidiano ocorre pela URL pública/Preview ou pelo servidor local documentado; use o Studio abaixo para testar alterações visuais.
+
+## Trindade Studio — testes e empacotamento
+
+As dependências do Studio ficam isoladas em `studio/` e são fixadas por `pnpm-lock.yaml`. `pnpm-workspace.yaml` permite scripts de instalação revisados somente para Electron (download do runtime) e electron-winstaller (seleção do 7-Zip interno). Nenhum comando instala Node, pnpm ou dependência global.
+
+```powershell
+cd studio
+pnpm install --frozen-lockfile
+pnpm run typecheck
+pnpm test
+pnpm run build:renderer
+pnpm run prepare:game-template
+pnpm run build:windows
+```
+
+`pnpm run build:windows` produz `studio/release/Trindade-Studio-Setup-0.1.0.exe`, instalador Windows por usuário com atalhos de desktop e menu Iniciar. O usuário final instala uma vez e usa o atalho gráfico; não precisa iniciar servidores, terminal ou PowerShell. A pasta `release/`, `dist/`, `.bundle/` e `node_modules/` não entram no Git. Veja [`STUDIO_USER_GUIDE.md`](STUDIO_USER_GUIDE.md) para abertura, edição, salvamento e recuperação; veja [`STUDIO_ARCHITECTURE.md`](STUDIO_ARCHITECTURE.md) para limites de segurança e extensão.
+
+Os testes em `studio/tests/` exercitam a allowlist, nove alvos editáveis, defaults, valores inválidos, rejeição de caminhos internos, schema futuro, cópia `.bak`, gravação atômica, falha interrompida e prévia local com origem/sessão restritas. A criação de symlink pode ser ignorada quando a política Windows do ambiente não permite essa operação.
+
+`pnpm run test:package` inicia o executável Electron empacotado num projeto temporário e valida UI isolada, seleção pelo canvas, alteração de texto/cor/imagem permitida, isolamento de cor entre botões com vínculo compartilhado, undo/redo, uma jogada, alternância mobile, salvamento/backup e persistência após fechar/reabrir. O harness usa movimento reduzido e animações resolvidas imediatamente; ele verifica o fluxo funcional, não a duração visual de cada animação. A tela capturada fica em `studio/release/Trindade-Studio-proof.png` e não é versionada.
+
+O wrapper portable gerado no primeiro build não completou o teste de inicialização pelo canal de depuração em duas tentativas; o produto padrão foi alterado para o instalador NSIS. Não use o portable como evidência de uma execução aprovada. O instalador foi instalado em pasta temporária, os dois atalhos foram confirmados apontando ao app, o executável instalado passou o smoke completo e o desinstalador foi executado. Projeto de teste, `visual.json`, `.bak` e `studio-settings.json` permaneceram após desinstalar; os atalhos e a pasta instalada foram removidos.
+
+O teste automatizado de UI e comparação visual foi concluído em Electron/Chromium isolado, com perfil temporário separado; a sessão Edge existente permaneceu aberta e inalterada. As 22 verificações por viewport passaram sem erros de console/rede, e as 14 capturas de referência e modular tiveram igualdade pixel a pixel. O harness não usa o perfil Edge do usuário. A validação final do fluxo de edição do Studio também foi feita no executável instalado; a abertura literal do atalho por clique físico não foi automatizada neste ambiente, mas o destino dos atalhos e o executável instalado foram verificados e o executável completou o fluxo de uso.
 
 ## Gates do `Testar-Jogo.exe`
 
