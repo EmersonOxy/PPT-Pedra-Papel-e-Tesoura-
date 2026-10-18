@@ -10,6 +10,7 @@ const contentTypes = new Map([
   ['.json', 'application/json; charset=utf-8'],
   ['.png', 'image/png'],
 ]);
+const sceneCatalogPath = path.resolve(__dirname, '..', 'scenes.json');
 
 function send(response, status, headers = {}, body = '') {
   response.writeHead(status, {
@@ -55,6 +56,22 @@ function createPreviewServer(projectRoot, getEditorOrigin) {
       }
     }
 
+    if (pathname === '/__studio/scenes.json') {
+      const editorOrigin = getEditorOrigin();
+      const session = query.get('studioSession');
+      const parentOrigin = query.get('studioParent');
+      if (!editorOrigin || !session || session.length < 32 || parentOrigin !== editorOrigin) return send(response, 404);
+      try {
+        const scenes = await fs.readFile(sceneCatalogPath);
+        return send(response, 200, {
+          'Content-Type': 'application/json; charset=utf-8',
+          'Content-Security-Policy': `default-src 'none'; frame-ancestors ${editorOrigin}`,
+        }, request.method === 'HEAD' ? '' : scenes);
+      } catch {
+        return send(response, 500);
+      }
+    }
+
     const relativePath = pathname === '/' ? 'index.html' : pathname.replace(/^\//, '');
     if (!allowedFiles.has(relativePath)) return send(response, 404);
     if (!projectRoot) return send(response, 503);
@@ -69,7 +86,8 @@ function createPreviewServer(projectRoot, getEditorOrigin) {
         const bridgeSession = query.get('studioSession') || '';
         if (!/^[a-f0-9]{64}$/.test(bridgeSession)) return send(response, 400);
         const html = body.toString('utf8');
-        const bridgeQuery = new URLSearchParams({ studioParent: editorOrigin, studioSession: bridgeSession }).toString().replaceAll('&', '&amp;');
+        const requestedMode = query.get('studioMode') === 'test' ? 'test' : 'edit';
+        const bridgeQuery = new URLSearchParams({ studioParent: editorOrigin, studioSession: bridgeSession, studioMode: requestedMode }).toString().replaceAll('&', '&amp;');
         const bridge = `<script src="/__studio/preview-bridge.js?${bridgeQuery}"></script>`;
         if (!html.includes('</head>')) return send(response, 400);
         body = Buffer.from(html.replace('</head>', `${bridge}</head>`));

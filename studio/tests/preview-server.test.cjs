@@ -38,6 +38,19 @@ test('serves the actual modular runtime with a strict frame boundary and a sessi
   assert.match(bridgeScript, /document\.currentScript\?\.src/);
   assert.match(bridgeScript, /message\.type === 'HELLO'/);
 
+  const validScenes = new URL(`${origin}/__studio/scenes.json`);
+  validScenes.searchParams.set('studioParent', editorOrigin);
+  validScenes.searchParams.set('studioSession', session);
+  const scenesResponse = await fetch(validScenes);
+  assert.equal(scenesResponse.status, 200);
+  const scenes = await scenesResponse.json();
+  assert.equal(scenes.version, 1);
+  assert.deepEqual(scenes.scenes.map((scene) => scene.id), ['menu', 'combat', 'battle-win', 'battle-loss', 'reward', 'match-win', 'match-loss', 'timeout-loss']);
+  const missingScenesAuth = new URL(validScenes);
+  missingScenesAuth.searchParams.set('studioParent', 'https://attacker.invalid');
+  assert.equal((await fetch(missingScenesAuth)).status, 404);
+  assert.equal((await fetch(`${origin}/__studio/scenes.json`)).status, 404);
+
   const invalidBridge = new URL(validBridge);
   invalidBridge.searchParams.set('studioParent', 'https://attacker.invalid');
   assert.equal((await fetch(invalidBridge)).status, 404);

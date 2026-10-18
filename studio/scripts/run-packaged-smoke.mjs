@@ -12,6 +12,7 @@ const repositoryRoot = resolve(studioRoot, '..');
 const packageRoot = join(studioRoot, 'release');
 const executable = process.env.TRINDADE_STUDIO_TEST_EXE || join(packageRoot, 'win-unpacked', 'Trindade Studio.exe');
 const screenshotPath = join(packageRoot, 'Trindade-Studio-proof.png');
+const sceneScreenshotRoot = join(packageRoot, 'scene-browser');
 const require = createRequire(import.meta.url);
 const allowedFiles = require('../electron/project-service.cjs').allowedFiles;
 
@@ -167,27 +168,41 @@ try {
   const studio = await waitFor(async () => {
     const state = await session.evaluate(`(() => ({
     project: document.querySelector('.project-name')?.textContent,
-    elements: document.querySelectorAll('.layer-item[role="option"]').length,
+    scenes: document.querySelectorAll('.scene-item[role="option"]').length,
+    layers: document.querySelectorAll('.layer-item[role="option"]').length,
     preview: document.querySelector('iframe')?.src,
     status: document.querySelector('.canvas-statusbar')?.innerText,
     nodeAccess: [typeof window.require, typeof window.process],
     api: Object.keys(window.trindadeStudio || {}),
     body: document.body.innerText,
   }))()`);
-    return state.elements === 9 || state.body.includes('Não foi possível carregar') ? state : null;
+    return state.scenes === 8 && state.project !== 'Nenhum projeto aberto' && state.layers > 0
+      || state.body.includes('Não foi possível carregar') ? state : null;
   }, 'interface React e projeto em edição');
-  assert.equal(studio.elements, 9, `O catálogo exibido não tem os nove elementos esperados: ${JSON.stringify(studio)}`);
+  assert.equal(studio.scenes, 8, `O navegador não apresentou as oito cenas cadastradas: ${JSON.stringify(studio)}`);
+  assert.equal(studio.layers, 1, `O menu deve listar somente seu alvo editável: ${JSON.stringify(studio)}`);
   assert.match(studio.preview, /^http:\/\/127\.0\.0\.1:/, 'A prévia não usa servidor local isolado.');
   assert.deepEqual(studio.nodeAccess, ['undefined', 'undefined'], 'O renderer recebeu acesso Node inesperado.');
   assert.deepEqual(studio.api.sort(), ['closeStudio', 'getProject', 'onCloseRequest', 'onHistoryCommand', 'onOpenProjectRequest', 'onSaveRequest', 'openProject', 'respondToClose', 'saveVisualConfig', 'setDirty'].sort());
-  report('renderer isolado e nove elementos verificados');
+  report('renderer isolado, oito cenas e camada de menu verificados');
 
-  const frameId = await waitFor(async () => {
+  let frameId = await waitFor(async () => {
     const { frameTree } = await session.send('Page.getFrameTree');
     const iframe = frameTree.childFrames?.find((frame) => new URL(frame.frame.url).pathname === '/');
     return iframe?.frame.id;
   }, 'frame da prévia real');
-  const frameContext = await waitFor(() => session.contexts.get(frameId), 'contexto isolado do jogo');
+  let frameContext = await waitFor(() => session.contexts.get(frameId), 'contexto isolado do jogo');
+  async function waitForReloadedFrame(previousContext, label) {
+    return waitFor(async () => {
+      const { frameTree } = await session.send('Page.getFrameTree');
+      const frame = frameTree.childFrames?.find((entry) => new URL(entry.frame.url).pathname === '/');
+      if (!frame) return null;
+      const context = session.contexts.get(frame.frame.id);
+      if (!context || context === previousContext) return null;
+      frameId = frame.frame.id;
+      return context;
+    }, label);
+  }
   try {
     await waitFor(() => session.evaluate(`document.querySelector('.canvas-statusbar')?.innerText.includes('Modo de edição')`), 'protocolo da prévia', 5000);
   } catch (error) {
@@ -202,7 +217,30 @@ try {
   }
   assert.equal(await session.evaluate(`fetch('/docs/STUDIO_ARCHITECTURE.md').then(r=>r.status)`, frameContext), 404,
     'A prévia publicou um arquivo interno.');
+  assert.equal(await session.evaluate(`fetch('/__studio/scenes.json').then(r=>r.status)`, frameContext), 404,
+    'O catálogo de cenas foi servido sem a origem e a sessão de teste.');
   report('prévia real carregada e arquivos internos bloqueados');
+
+  async function selectScene(id, expression, label, screenshotName) {
+    await session.evaluate(`document.querySelector('[data-scene-id="${id}"]').click()`);
+    await waitFor(() => session.evaluate(expression, frameContext), label);
+    if (screenshotName) {
+      await mkdir(sceneScreenshotRoot, { recursive: true });
+      const captured = await session.send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
+      await writeFile(join(sceneScreenshotRoot, screenshotName), Buffer.from(captured.data, 'base64'));
+    }
+  }
+
+  await selectScene('menu', `!document.querySelector('#menu-screen').hidden && document.querySelector('#game-screen').hidden`, 'menu', 'Trindade-Studio-menu.png');
+  await selectScene('combat', `document.querySelector('#menu-screen').hidden && !document.querySelector('#game-screen').hidden && document.querySelector('#end-screen').hidden && document.querySelector('#enemy-hp').textContent === '100 / 100'`, 'combate sem iniciar partida', 'Trindade-Studio-combate.png');
+  await selectScene('battle-win', `!document.querySelector('#end-screen').hidden && document.querySelector('#end-title').textContent === 'Você venceu o combate!'`, 'resultado de vitória no combate', 'Trindade-Studio-resultado-combate.png');
+  await selectScene('reward', `document.querySelector('#end-summary').textContent.includes('Luck Block: Cura!') && document.querySelector('#use-heal strong').textContent === '1'`, 'recompensa determinística', 'Trindade-Studio-recompensa.png');
+  await selectScene('match-win', `document.querySelector('#end-title').textContent === 'Você venceu a partida!' && document.querySelector('#end-summary').textContent.includes('10 × 4')`, 'vitória da partida');
+  await selectScene('match-loss', `document.querySelector('#end-title').textContent === 'O inimigo venceu a partida!' && document.querySelector('#end-summary').textContent.includes('6 × 10')`, 'derrota da partida');
+  await selectScene('timeout-loss', `document.querySelector('#end-summary').textContent.includes('perdeu por inatividade') && document.querySelector('#missed-count').textContent === '3 / 3 faltas'`, 'derrota por inatividade');
+  await selectScene('battle-loss', `document.querySelector('#end-title').textContent === 'O inimigo venceu o combate!'`, 'derrota no combate');
+  await selectScene('menu', `!document.querySelector('#menu-screen').hidden && document.querySelector('#game-screen').hidden`, 'retorno ao menu');
+  report('menu, combate, resultados/recompensa e retorno ao menu navegados no Electron real');
 
   await session.evaluate(`document.querySelector('[data-editor-id="game.title"]').dispatchEvent(new MouseEvent('click',{bubbles:true}))`, frameContext);
   await waitFor(() => session.evaluate(`document.querySelector('.selected-element-card')?.innerText.includes('game.title')`), 'seleção direta no canvas');
@@ -225,6 +263,7 @@ try {
   await waitFor(() => session.evaluate(`document.querySelector('[data-editor-id="game.title"]').textContent === ${JSON.stringify(newTitle)}`, frameContext), 'refazer na prévia');
   report('undo/redo verificados');
 
+  await selectScene('combat', `!document.querySelector('#game-screen').hidden && document.querySelector('#end-screen').hidden`, 'retorno ao estado de combate');
   await session.evaluate(`document.querySelector('[data-editor-id="arena.background"]').dispatchEvent(new MouseEvent('click',{bubbles:true}))`, frameContext);
   await waitFor(() => session.evaluate(`document.querySelector('.selected-element-card')?.innerText.includes('arena.background')`), 'seleção do elemento de cor');
   await session.evaluate(`(() => {
@@ -263,7 +302,10 @@ try {
 
   await session.evaluate(`document.querySelector('button.button-test').click()`);
   await waitFor(() => session.evaluate(`document.querySelector('.canvas-statusbar')?.innerText.includes('Modo de teste')`), 'modo de teste');
+  frameContext = await waitForReloadedFrame(frameContext, 'prévia real recarregada em modo teste');
   await waitFor(() => session.evaluate(`document.documentElement.dataset.studioMode === 'test'`, frameContext), 'confirmação do modo de teste na prévia');
+  assert.equal(await session.evaluate(`!document.querySelector('#menu-screen').hidden && document.querySelector('#game-screen').hidden`, frameContext), true,
+    'O modo Testar deve iniciar no menu real do jogo, sem fixture de cena.');
   const match = await session.evaluate(`(async () => {
     const frame = document.querySelector('iframe');
     const deadline = Date.now() + 10000;
@@ -322,7 +364,17 @@ try {
 
   await session.evaluate(`document.querySelector('button.button-test').click()`);
   await waitFor(() => session.evaluate(`document.querySelector('.canvas-statusbar')?.innerText.includes('Modo de edição')`), 'retorno ao modo de edição');
+  frameContext = await waitForReloadedFrame(frameContext, 'prévia real recarregada no modo de edição');
   await waitFor(() => session.evaluate(`document.documentElement.dataset.studioMode === 'edit'`, frameContext), 'retorno da prévia ao modo de edição');
+  let editReturnState = {};
+  try { await waitFor(async () => {
+    const uiState = await session.evaluate(`({dirty:document.querySelector('.save-state').classList.contains('is-dirty'), asset:document.getElementById('property-hands.player.image.assetId')?.value})`);
+    const previewAsset = await session.evaluate(`document.querySelector('[data-editor-id="hands.player.image"]').getAttribute('src')`, frameContext);
+    const previewScene = await session.evaluate(`document.querySelector('#menu-screen').hidden && !document.querySelector('#game-screen').hidden && document.querySelector('#end-screen').hidden`, frameContext);
+    editReturnState = { uiState, previewAsset, previewScene, previewMode: await session.evaluate(`document.documentElement.dataset.studioMode`, frameContext), previewErrors: session.consoleErrors.slice(-3) };
+    return uiState.dirty && uiState.asset === 'hands.paper' && previewAsset === './assets/images/hand-paper.png' && previewScene;
+  }, 'preservação das alterações não salvas ao retornar de Testar'); }
+  catch (error) { throw new Error(`${error.message}; estado após retorno: ${JSON.stringify(editReturnState)}`); }
   await session.evaluate(`document.querySelector('button.save-button').click()`);
   await waitFor(() => readFile(join(fixture, 'config/visual.json'), 'utf8').then((raw) => JSON.parse(raw).elements['game.title'].base.text === newTitle), 'salvamento persistente');
   assert.equal(await readFile(join(fixture, 'config/visual.json.bak'), 'utf8').then((raw) => JSON.parse(raw).elements['game.title'].base.text), 'Pedra, papel e tesoura', 'O backup não preservou a configuração anterior.');

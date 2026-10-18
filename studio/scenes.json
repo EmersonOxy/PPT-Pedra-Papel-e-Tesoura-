@@ -1,0 +1,69 @@
+{
+  "version": 1,
+  "scenes": [
+    {
+      "id": "menu",
+      "label": "Menu inicial",
+      "description": "Menu inicial real do jogo.",
+      "screen": "menu",
+      "elementIds": ["game.title"],
+      "fixture": { "kind": "menu" }
+    },
+    {
+      "id": "combat",
+      "label": "Combate",
+      "description": "Arena em uma jogada normal, antes do resultado.",
+      "screen": "game",
+      "elementIds": ["arena.background", "hands.enemy.image", "hands.player.image", "hud.enemy.health", "hud.player.health", "controls.move.rock", "controls.move.paper", "controls.move.scissors"],
+      "fixture": { "kind": "combat", "playerPoints": 0, "enemyPoints": 0, "battle": 1, "playerHp": 100, "enemyHp": 100, "playerSign": "rock", "enemySign": "rock", "misses": 0, "power": null }
+    },
+    {
+      "id": "battle-win",
+      "label": "Resultado · vitória no combate",
+      "description": "Resultado exibido após vencer um combate.",
+      "screen": "game",
+      "elementIds": ["arena.background", "hands.enemy.image", "hands.player.image", "hud.enemy.health", "hud.player.health", "controls.move.rock", "controls.move.paper", "controls.move.scissors"],
+      "fixture": { "kind": "battle-result", "winner": "player", "playerPoints": 1, "enemyPoints": 0, "battle": 1, "playerHp": 80, "enemyHp": 0, "playerSign": "paper", "enemySign": "rock", "misses": 0 }
+    },
+    {
+      "id": "battle-loss",
+      "label": "Resultado · derrota no combate",
+      "description": "Resultado exibido após perder um combate.",
+      "screen": "game",
+      "elementIds": ["arena.background", "hands.enemy.image", "hands.player.image", "hud.enemy.health", "hud.player.health", "controls.move.rock", "controls.move.paper", "controls.move.scissors"],
+      "fixture": { "kind": "battle-result", "winner": "enemy", "playerPoints": 0, "enemyPoints": 1, "battle": 1, "playerHp": 0, "enemyHp": 80, "playerSign": "scissors", "enemySign": "rock", "misses": 0 }
+    },
+    {
+      "id": "reward",
+      "label": "Recompensa desbloqueada",
+      "description": "Resultado de combate com prêmio determinístico de Cura, como no terceiro ponto.",
+      "screen": "game",
+      "elementIds": ["arena.background", "hands.enemy.image", "hands.player.image", "hud.enemy.health", "hud.player.health", "controls.move.rock", "controls.move.paper", "controls.move.scissors"],
+      "fixture": { "kind": "battle-result", "winner": "player", "playerPoints": 3, "enemyPoints": 1, "battle": 4, "playerHp": 60, "enemyHp": 0, "playerSign": "paper", "enemySign": "rock", "misses": 0, "power": "heal" }
+    },
+    {
+      "id": "match-win",
+      "label": "Resultado · vitória na partida",
+      "description": "Estado final após alcançar dez pontos.",
+      "screen": "game",
+      "elementIds": ["arena.background", "hands.enemy.image", "hands.player.image", "hud.enemy.health", "hud.player.health", "controls.move.rock", "controls.move.paper", "controls.move.scissors"],
+      "fixture": { "kind": "match-result", "winner": "player", "reason": "points", "playerPoints": 10, "enemyPoints": 4, "battle": 14, "playerHp": 80, "enemyHp": 0, "playerSign": "paper", "enemySign": "rock", "misses": 0 }
+    },
+    {
+      "id": "match-loss",
+      "label": "Resultado · derrota na partida",
+      "description": "Estado final após o inimigo alcançar dez pontos.",
+      "screen": "game",
+      "elementIds": ["arena.background", "hands.enemy.image", "hands.player.image", "hud.enemy.health", "hud.player.health", "controls.move.rock", "controls.move.paper", "controls.move.scissors"],
+      "fixture": { "kind": "match-result", "winner": "enemy", "reason": "points", "playerPoints": 6, "enemyPoints": 10, "battle": 16, "playerHp": 0, "enemyHp": 80, "playerSign": "scissors", "enemySign": "rock", "misses": 0 }
+    },
+    {
+      "id": "timeout-loss",
+      "label": "Resultado · derrota por inatividade",
+      "description": "Estado final real após três turnos sem escolha.",
+      "screen": "game",
+      "elementIds": ["arena.background", "hands.enemy.image", "hands.player.image", "hud.enemy.health", "hud.player.health", "controls.move.rock", "controls.move.paper", "controls.move.scissors"],
+      "fixture": { "kind": "match-result", "winner": "enemy", "reason": "timeout", "playerPoints": 2, "enemyPoints": 3, "battle": 6, "playerHp": 100, "enemyHp": 100, "playerSign": "rock", "enemySign": "rock", "misses": 3 }
+    }
+  ]
+}

@@ -12,9 +12,10 @@ O runtime do jogo continua em JavaScript modular e sem dependência de React, Ty
 | --- | --- |
 | `studio/electron/main.cjs` | Ciclo da aplicação, janela, template/projeto aberto, menu e validação de remetente IPC. |
 | `studio/electron/preload.cjs` | API nomeada e estreita para abrir projeto, salvar visual.json, estado de alterações, histórico e fechamento. |
-| `studio/src/` | Interface React/TypeScript: lista de elementos, prévia, inspetor, histórico, modo de teste e avisos. |
+| `studio/src/` | Interface React/TypeScript: navegador de telas/estados, lista de camadas registradas, prévia, inspetor, histórico, modo de teste e avisos. |
 | `studio/electron/project-service.cjs` | Allowlist de arquivos, validação de catálogo/configuração, caminhos seguros e salvamento atômico com `.bak`. |
-| `studio/electron/preview-server.cjs` | Servidor GET/HEAD de loopback com allowlist para o runtime modular real, sem IPC. |
+| `studio/electron/preview-server.cjs` | Servidor GET/HEAD de loopback com allowlist para o runtime modular real, catálogo estático de cenas autenticado e sem IPC. |
+| `studio/scenes.json` | Inventário versionado das oito telas/estados demonstráveis, alvos editáveis por estado e fixtures determinísticas limitadas à prévia. |
 | `studio/electron/renderer-server.cjs` | Servidor local do renderer empacotado e política CSP. |
 | `studio/scripts/prepare-game-template.mjs` | Copia somente os 14 arquivos aprovados do jogo para o bundle de distribuição. |
 | `studio/package.json` / `studio/pnpm-lock.yaml` | Dependências exatas, ferramentas e instalador NSIS x64 por usuário. |
@@ -38,6 +39,20 @@ docs/
 ```
 
 O fluxo de build web do jogo usa sua allowlist existente e não inclui `studio/`.
+
+## Navegador de telas e estados
+
+O catálogo `studio/scenes.json` lista somente estados que existem em `index.html`, `game-ui.js`, `game-view.js` e `core/rules.js`: menu, arena em combate, resultado de vitória/derrota de combate, recompensa, resultado de vitória/derrota da partida e derrota por inatividade. O Studio carrega o mesmo JSON no painel acessível **Telas** e serve uma cópia somente leitura à prévia por rota autenticada com origem e sessão do Studio.
+
+Em modo Editar, o adaptador do bridge modifica somente o DOM da prévia para apresentar valores determinísticos. Ele não altera o objeto de jogo nem chama regras competitivas. As camadas listadas são os IDs reais `data-editor-id` permitidos pelo catálogo e declarados para cada estado. A seleção pelo canvas e pela lista valida esse conjunto. Estados futuros sem alvos exibem mensagem explícita e não inventam controles.
+
+Ao entrar em Testar, o iframe é recarregado com `studioMode=test`, sem fixture, e começa no menu real com as mecânicas normais. Voltar a Editar reinicializa a prévia e reaplica cena/configuração; configuração não salva, seleção de tela e histórico ficam no renderer pai e sobrevivem à troca. Fixtures permanecem no catálogo do Studio e nunca entram na allowlist web nem são importadas pelo núcleo do jogo.
+
+Para adicionar uma cena/estado demonstrável, confirme primeiro que ele existe no runtime, forneça fixture reproduzível, IDs registrados por estado e testes de compatibilidade do catálogo. Não altere regras para facilitar a navegação, nem anuncie como editável um alvo que não existe no DOM.
+
+## Fronteiras para evolução futura
+
+O navegador atual não é um editor de cenas com geometria livre. `scenes.json` apenas descreve estados existentes, camadas registradas e dados de prévia. Próximos incrementos devem separar documentos e APIs para composição de objetos, timeline/animações, mecânicas/poderes e eventos visuais (eventos, condições e ações); a representação por nós e extensões JavaScript ficam atrás de interfaces versionadas e permissões próprias. Esses sistemas não existem nesta etapa e não devem ser simulados por propriedades arbitrárias ou por mudanças nas regras competitivas.
 
 ## Instalação Windows
 

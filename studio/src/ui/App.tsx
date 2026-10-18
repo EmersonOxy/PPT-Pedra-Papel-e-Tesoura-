@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { EditorElement, EditorProperty, ProjectPayload, VisualConfig } from '../types';
 import { ASSETS, ELEMENT_LABELS, KIND_LABELS, PROPERTY_LABELS, configSnapshot, validateClientConfig, validateClientValue } from './schema';
+import { STUDIO_SCENES } from './scenes';
 
 type Mode = 'edit' | 'test';
 type Device = 'desktop' | 'mobile';
@@ -28,6 +29,7 @@ export function App() {
   const [config, setConfig] = useState<VisualConfig | null>(null);
   const [savedSnapshot, setSavedSnapshot] = useState('');
   const [selectedId, setSelectedId] = useState('game.title');
+  const [selectedSceneId, setSelectedSceneId] = useState('menu');
   const [mode, setMode] = useState<Mode>('edit');
   const [device, setDevice] = useState<Device>('desktop');
   const [previewReady, setPreviewReady] = useState(false);
@@ -38,6 +40,8 @@ export function App() {
   const [historyVersion, setHistoryVersion] = useState(0);
   const undoStack = useRef<VisualConfig[]>([]);
   const redoStack = useRef<VisualConfig[]>([]);
+  const selectedIdRef = useRef(selectedId);
+  selectedIdRef.current = selectedId;
   const lastEdit = useRef<{ key: string; at: number } | null>(null);
   const previewFrame = useRef<HTMLIFrameElement>(null);
   const toastTimeout = useRef<number | undefined>(undefined);
@@ -46,9 +50,17 @@ export function App() {
   const catalog = project?.catalog;
   const elements = catalog?.elements ?? [];
   const selectedElement = elements.find((element) => element.id === selectedId) ?? null;
+  const selectedScene = STUDIO_SCENES.find((scene) => scene.id === selectedSceneId) ?? STUDIO_SCENES[0];
+  const sceneElements = useMemo(() => elements.filter((element) => selectedScene.elementIds.includes(element.id)), [elements, selectedScene]);
   const canUndo = undoStack.current.length > 0;
   const canRedo = redoStack.current.length > 0;
   const previewOrigin = project?.previewUrl ? new URL(project.previewUrl).origin : '';
+  const previewSrc = useMemo(() => {
+    if (!project?.previewUrl) return '';
+    const url = new URL(project.previewUrl);
+    url.searchParams.set('studioMode', mode);
+    return url.href;
+  }, [mode, project?.previewUrl]);
 
   const showToast = useCallback((kind: Toast['kind'], text: string) => {
     setToast({ kind, text });
@@ -71,6 +83,7 @@ export function App() {
     setConfig(clone(payload.config));
     setSavedSnapshot(configSnapshot(payload.config));
     setSelectedId(payload.catalog.elements[0]?.id ?? '');
+    setSelectedSceneId('menu');
     setPreviewReady(false);
     setMode('edit');
     setDrafts({});
@@ -137,7 +150,7 @@ export function App() {
       if (message.type === 'PREVIEW_READY') {
         setPreviewReady(true);
         showToast('success', 'Prévia real do jogo pronta.');
-      } else if (message.type === 'ELEMENT_SELECTED' && typeof message.id === 'string' && elements.some((element) => element.id === message.id)) {
+      } else if (message.type === 'ELEMENT_SELECTED' && typeof message.id === 'string' && sceneElements.some((element) => element.id === message.id)) {
         setSelectedId(message.id);
       } else if (message.type === 'PREVIEW_ERROR' && typeof message.message === 'string') {
         showToast('error', `Prévia: ${message.message}`);
@@ -146,7 +159,15 @@ export function App() {
     window.addEventListener('message', onMessage);
     sendPreview('HELLO');
     return () => window.removeEventListener('message', onMessage);
-  }, [elements, previewOrigin, project, sendPreview, showToast]);
+  }, [previewOrigin, project, sceneElements, sendPreview, showToast]);
+
+  useEffect(() => {
+    if (!previewReady || !config || !selectedScene) return;
+    sendPreview('SET_SCENE', { id: selectedScene.id });
+    // Reapply pending edits after a fixture has restored the runtime's original DOM state.
+    sendPreview('APPLY_CONFIG', { config });
+    sendPreview('SET_SELECTION', { id: mode === 'edit' && sceneElements.some((element) => element.id === selectedIdRef.current) ? selectedIdRef.current : null });
+  }, [mode, previewReady, sceneElements, selectedScene.id, sendPreview]);
 
   const rememberCurrent = useCallback((key: string, current: VisualConfig) => {
     const previous = lastEdit.current;
@@ -252,6 +273,12 @@ export function App() {
 
   const title = useMemo(() => project?.name || 'Nenhum projeto aberto', [project?.name]);
   const canSave = dirty && !saving;
+  const selectScene = (sceneId: string) => {
+    const scene = STUDIO_SCENES.find((entry) => entry.id === sceneId);
+    if (!scene || mode !== 'edit') return;
+    setSelectedSceneId(scene.id);
+    setSelectedId(scene.elementIds[0] || '');
+  };
 
   return (
     <div className="studio-shell">
@@ -284,16 +311,26 @@ export function App() {
       </header>
 
       <main className="workspace">
-        <aside className="panel layers-panel" aria-label="Elementos do jogo">
+        <aside className="panel layers-panel" aria-label="Navegador de telas e elementos do jogo">
           <div className="panel-heading">
-            <div><span className="eyebrow">PROJETO</span><h1>Elementos</h1></div>
-            <span className="count-pill">{elements.length}</span>
+            <div><span className="eyebrow">CENAS DO JOGO</span><h1>Telas</h1></div>
+            <span className="count-pill">{STUDIO_SCENES.length}</span>
           </div>
-          <p className="panel-intro">Selecione um item aqui ou clique nele diretamente na prévia.</p>
-          {elements.length > 0 ? (
-            <div className="layer-list" role="listbox" aria-label="Elementos registrados">
-              {elements.map((element, index) => (
-                <button key={element.id} className={`layer-item ${selectedId === element.id ? 'selected' : ''}`} onClick={() => { setSelectedId(element.id); setMode('edit'); }} role="option" aria-selected={selectedId === element.id}>
+          <p className="panel-intro">Escolha uma tela ou estado real do jogo para abrir no canvas.</p>
+          <div className="scene-list" role="listbox" aria-label="Telas e estados do jogo">
+            {STUDIO_SCENES.map((scene, index) => (
+              <button key={scene.id} data-scene-id={scene.id} className={`scene-item ${selectedScene.id === scene.id ? 'selected' : ''}`} onClick={() => selectScene(scene.id)} role="option" aria-selected={selectedScene.id === scene.id} disabled={mode === 'test'} title={scene.description}>
+                <span className="scene-index">{String(index + 1).padStart(2, '0')}</span>
+                <span className="layer-copy"><strong>{scene.label}</strong><small>{scene.screen === 'menu' ? 'Tela inicial' : scene.fixture.kind === 'combat' ? 'Estado de combate' : scene.fixture.kind === 'battle-result' ? 'Resultado de combate' : 'Resultado da partida'}</small></span>
+              </button>
+            ))}
+          </div>
+          <div className="layer-subheading"><span className="eyebrow">ELEMENTOS DA TELA</span><span className="count-pill">{sceneElements.length}</span></div>
+          <p className="scene-description">{selectedScene.description}</p>
+          {sceneElements.length > 0 ? (
+            <div className="layer-list" role="listbox" aria-label={`Elementos editáveis em ${selectedScene.label}`}>
+              {sceneElements.map((element, index) => (
+                <button key={element.id} data-element-id={element.id} className={`layer-item ${selectedId === element.id ? 'selected' : ''}`} onClick={() => { setSelectedId(element.id); setMode('edit'); }} role="option" aria-selected={selectedId === element.id} disabled={mode === 'test'}>
                   <span className={`layer-icon kind-${element.kind}`} aria-hidden="true">{element.kind === 'text' ? 'T' : element.kind === 'image' ? '▧' : element.kind === 'button' ? '▰' : element.kind === 'meter' ? '▥' : '▢'}</span>
                   <span className="layer-copy"><strong>{prettyName(element)}</strong><small>{KIND_LABELS[element.kind] || element.kind}</small></span>
                   <span className="layer-index">{String(index + 1).padStart(2, '0')}</span>
@@ -301,14 +338,16 @@ export function App() {
               ))}
             </div>
           ) : (
-            <div className="empty-panel"><div className="empty-icon">▱</div><strong>Abra um projeto</strong><p>Escolha a pasta do jogo para carregar os elementos editáveis.</p><button className="text-button" onClick={() => void openProject()}>Selecionar pasta</button></div>
+            project?.ok
+              ? <div className="empty-panel"><div className="empty-icon">◈</div><strong>Estado sem alvos editáveis</strong><p>Esta tela pode ser visualizada, mas ainda não possui elementos com suporte a edição.</p></div>
+              : <div className="empty-panel"><div className="empty-icon">▱</div><strong>Abra um projeto</strong><p>Escolha a pasta do jogo para carregar as telas e os elementos editáveis.</p><button className="text-button" onClick={() => void openProject()}>Selecionar pasta</button></div>
           )}
-          <div className="layers-footnote"><span className="dot dot-violet" />Os elementos seguem o catálogo oficial do projeto.</div>
+          <div className="layers-footnote"><span className="dot dot-violet" />Elementos editáveis vêm do catálogo oficial.</div>
         </aside>
 
         <section className="canvas-column" aria-label="Prévia do jogo">
           <div className="canvas-toolbar">
-            <div className="canvas-title"><span className="canvas-title-icon">◫</span><div><strong>Pré-visualização</strong><small>{mode === 'edit' ? 'Clique no jogo para selecionar' : 'Jogue normalmente nesta prévia'}</small></div></div>
+            <div className="canvas-title"><span className="canvas-title-icon">◫</span><div><strong>{mode === 'edit' ? selectedScene.label : 'Modo Testar'}</strong><small>{mode === 'edit' ? 'Fixture demonstrativa · selecione elementos registrados' : 'Jogo real reiniciado para uma partida de teste'}</small></div></div>
             <div className="device-toggle" role="group" aria-label="Tamanho da prévia">
               <button className={device === 'desktop' ? 'active' : ''} onClick={() => setDevice('desktop')} aria-pressed={device === 'desktop'} title="Visualização desktop"><span aria-hidden="true">▱</span><span>Desktop</span></button>
               <button className={device === 'mobile' ? 'active' : ''} onClick={() => setDevice('mobile')} aria-pressed={device === 'mobile'} title="Visualização celular"><span aria-hidden="true">▯</span><span>Celular</span></button>
@@ -320,10 +359,10 @@ export function App() {
                 <div className="preview-frame-header"><div className="window-dots"><i /><i /><i /></div><span>{device === 'mobile' ? '390 × 844' : 'Jogo modular · prévia local'}</span><span className="secure-tag"><i />Local</span></div>
                 <iframe
                   ref={previewFrame}
-                  key={project.session}
+                  key={`${project.session}-${mode}`}
                   className={`game-preview ${mode === 'edit' ? 'editing' : 'testing'}`}
                   title="Prévia interativa do jogo Pedra, Papel e Tesoura"
-                  src={project.previewUrl}
+                  src={previewSrc}
                   sandbox="allow-scripts allow-same-origin"
                   referrerPolicy="no-referrer"
                   onLoad={() => {
