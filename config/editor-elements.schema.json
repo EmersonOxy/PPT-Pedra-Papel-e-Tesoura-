@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "version": 1,
+  "breakpoints": {
+    "mobile": { "maxWidth": 600 },
+    "tablet": { "minWidth": 601, "maxWidth": 750 }
+  },
+  "propertyTypes": ["text", "color", "imageAsset"],
+  "elements": [
+    {
+      "id": "game.title",
+      "kind": "text",
+      "labelKey": "editor.elements.gameTitle",
+      "target": { "attribute": "data-editor-id" },
+      "properties": [{ "key": "text", "type": "text", "default": "Pedra, papel e tesoura", "binding": { "operation": "textContent" }, "maxLength": 80, "responsive": false }]
+    },
+    {
+      "id": "arena.background",
+      "kind": "container",
+      "labelKey": "editor.elements.arenaBackground",
+      "target": { "attribute": "data-editor-id" },
+      "properties": [{ "key": "backgroundColor", "type": "color", "default": "#fafaf7", "binding": { "operation": "styleVariable", "name": "--arena-background" }, "responsive": false }]
+    },
+    {
+      "id": "hands.player.image",
+      "kind": "image",
+      "labelKey": "editor.elements.playerHand",
+      "target": { "attribute": "data-editor-id" },
+      "properties": [{ "key": "assetId", "type": "imageAsset", "default": "hands.rock", "binding": { "operation": "imageSource" }, "responsive": false }]
+    },
+    {
+      "id": "hands.enemy.image",
+      "kind": "image",
+      "labelKey": "editor.elements.enemyHand",
+      "target": { "attribute": "data-editor-id" },
+      "properties": [{ "key": "assetId", "type": "imageAsset", "default": "hands.rock", "binding": { "operation": "imageSource" }, "responsive": false }]
+    },
+    {
+      "id": "hud.player.health",
+      "kind": "meter",
+      "labelKey": "editor.elements.playerHealth",
+      "target": { "attribute": "data-editor-id" },
+      "properties": [{ "key": "fillColor", "type": "color", "default": "#638773", "binding": { "operation": "firstChildBackground" }, "responsive": false }]
+    },
+    {
+      "id": "hud.enemy.health",
+      "kind": "meter",
+      "labelKey": "editor.elements.enemyHealth",
+      "target": { "attribute": "data-editor-id" },
+      "properties": [{ "key": "fillColor", "type": "color", "default": "#b87165", "binding": { "operation": "firstChildBackground" }, "responsive": false }]
+    },
+    {
+      "id": "controls.move.rock",
+      "kind": "button",
+      "labelKey": "editor.elements.rockButton",
+      "target": { "attribute": "data-editor-id" },
+      "properties": [{ "key": "backgroundColor", "type": "color", "default": "#fafaf7", "binding": { "operation": "styleVariable", "name": "--move-button-background" }, "responsive": false }]
+    },
+    {
+      "id": "controls.move.paper",
+      "kind": "button",
+      "labelKey": "editor.elements.paperButton",
+      "target": { "attribute": "data-editor-id" },
+      "properties": [{ "key": "backgroundColor", "type": "color", "default": "#fafaf7", "binding": { "operation": "styleVariable", "name": "--move-button-background" }, "responsive": false }]
+    },
+    {
+      "id": "controls.move.scissors",
+      "kind": "button",
+      "labelKey": "editor.elements.scissorsButton",
+      "target": { "attribute": "data-editor-id" },
+      "properties": [{ "key": "backgroundColor", "type": "color", "default": "#fafaf7", "binding": { "operation": "styleVariable", "name": "--move-button-background" }, "responsive": false }]
+    }
+  ]
+}

@@ -1,6 +1,6 @@
 # Arquitetura e contrato de extensibilidade do Trindade Studio
 
-Status: proposta aprovada para o Marco 1; guia obrigatório para implementação futura. O editor completo não faz parte deste marco.
+Status: arquitetura proposta aprovada no Marco 1 e base inicial de extensibilidade implementada no Marco 2. O editor completo e sua UI continuam fora do Marco 2.
 
 ## Decisões
 
@@ -13,6 +13,14 @@ Status: proposta aprovada para o Marco 1; guia obrigatório para implementação
 | Persistência | JSON validado, gravação atômica e backup recuperável | Arquivo inválido ou versão futura não pode sobrescrever dados existentes. |
 | Preview | Instância do jogo em fronteira isolada | Mensagens tipadas e verificadas; sem acesso direto do preview a arquivos ou IPC. |
 | Gameplay | Configuração local de sandbox separada | Valores competitivos permanecem read-only e mantêm defaults conhecidos. |
+
+## Integração existente no runtime modular
+
+`index.html` marca nove alvos iniciais com `data-editor-id`. `config/editor-elements.schema.json` cataloga esses elementos, propriedades e vínculos; `config/visual.json` contém seus valores externos versionados. `src/game/ui/visual-config.js` valida IDs, tipos, valores, vínculos e assets contra allowlists antes de aplicar texto simples, cores hexadecimais e três IDs de imagem local. O adaptador não interpreta HTML, CSS, JavaScript ou URL remota.
+
+Os breakpoints publicados são `mobile` (até 600 px) e `tablet` (601 a 750 px). Uma propriedade só aceita override quando seu registro declara `responsive: true`; o runtime reavalia os valores ao mudar de breakpoint. Os elementos deste primeiro catálogo ainda não usam overrides responsivos, pois os valores atuais já são definidos pelo CSS do jogo.
+
+Se catálogo/configuração estiver ausente, inválido ou em versão não suportada, o jogo mantém os defaults do HTML/CSS e registra uma mensagem no console. A configuração de gameplay sandbox é apenas um arquivo reservado e ainda não é carregada pelo runtime.
 
 React e TypeScript atendem à complexidade dos painéis, seleção, histórico e estados de salvamento. Vite compila apenas a aplicação do Studio. O runtime do jogo continua vanilla JavaScript modular para preservar a entrada simples e permitir testes de regras sem framework.
 
@@ -28,7 +36,7 @@ Configuração alvo do Electron: `contextIsolation: true`, `sandbox: true`, `nod
 
 ## Contrato de elemento editável
 
-Toda funcionalidade nova que queira expor opções visuais deve registrar os elementos e propriedades no mesmo PR/alteração da funcionalidade. O registro é a fonte de verdade; o editor não descobre nem modifica seletores arbitrários.
+Toda funcionalidade nova que queira expor opções visuais deve registrar os elementos e propriedades no mesmo PR/alteração da funcionalidade. O registro é a fonte de verdade; o editor não descobre nem modifica seletores arbitrários. O runtime usa operações genéricas de vínculo declaradas no catálogo. Um novo elemento que use uma operação já suportada precisa apenas registrar o ID, target, propriedades e valores padrão; não requer lógica de aplicação específica por ID. Uma operação nova exige implementação e validação no runtime.
 
 Campos obrigatórios por elemento:
 
@@ -38,7 +46,7 @@ Campos obrigatórios por elemento:
 | `kind` | Tipo conhecido pelo editor: `text`, `image`, `container`, `button`, `meter` ou extensão previamente aprovada. |
 | `labelKey` | Chave de tradução para o nome acessível no painel de camadas. |
 | `target` | Identificação por `data-editor-id="<id>"` ou adaptador de runtime registrado; nunca CSS/JS arbitrário escrito pelo usuário. |
-| `properties` | Lista explícita e não vazia, cada propriedade com `key`, `type`, `default`, limites/unidades quando aplicável e adaptador permitido. |
+| `properties` | Lista explícita e não vazia, cada propriedade com `key`, `type`, `default`, operação `binding` suportada, limites/unidades quando aplicável. |
 | `responsive` | Indica se aceita valor em `base` e overrides dos breakpoints oficiais. |
 | `version` | Versão do contrato de registro; mudanças incompatíveis requerem migração. |
 
@@ -70,12 +78,14 @@ Exemplo conceitual (não conectado ao jogo neste marco):
 Ao criar um poder, tela, HUD ou animação editável, o Codex deverá:
 
 1. Criar um ID novo, estável e único; confirmar unicidade no validador.
-2. Marcar o elemento no runtime com `data-editor-id` ou implementar adaptador já previsto.
+2. Marcar o elemento no runtime com `data-editor-id` e selecionar uma operação `binding` já suportada para cada propriedade.
 3. Registrar apenas propriedades seguras, com tipo, default, unidade, limites e breakpoint aplicáveis.
 4. Adicionar chaves de tradução para o nome no painel e ajuda contextual.
-5. Atualizar o esquema/versionamento e a migração, se necessário.
+5. Se uma operação necessária ainda não existir, propor e implementar um vínculo genérico seguro, atualizar o schema/versionamento e incluir migração, se necessário.
 6. Adicionar testes de catálogo, validação, renderização e compatibilidade visual/responsiva.
 7. Atualizar guia e documentação técnica quando o contrato ou o fluxo mudar.
+
+No Marco 2, `node scripts/validate-config.mjs` confere unicidade de IDs, targets no HTML, allowlist de tipos e referências/defaults da configuração. Ao conectar o editor, acrescente validação semântica do schema, testes de fallback e migrações.
 
 Registro incompleto falha na validação de build/teste. Elemento sem registro continua funcionando no jogo, mas não é anunciado como editável no Studio. O Studio mostra somente elementos e propriedades registrados.
 

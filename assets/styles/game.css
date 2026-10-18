@@ -1,0 +1,242 @@
+
+:root{color-scheme:light;font-family:Arial,Helvetica,sans-serif;color:#292b2b;background:#eeede9}*{box-sizing:border-box}body{margin:0}button{font:inherit;cursor:pointer;color:inherit}button:focus-visible{outline:3px solid #426d59;outline-offset:4px}button:disabled{cursor:default}.game{max-width:780px;margin:auto;padding:28px 24px}header{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;gap:16px}h1{font-size:19px;font-weight:600;margin:0;letter-spacing:-.4px}.restart{font-size:12px;border:1px solid #cccfc7;border-radius:6px;background:transparent;padding:8px 12px}.restart:hover:not(:disabled){background:#e0e1db}.arena{height:420px;position:relative;isolation:isolate;overflow:hidden;border:1px solid #d7d9d0;border-radius:12px;background:var(--arena-background,#fafaf7)}.hud{position:absolute;left:24px;width:152px;z-index:2}.enemy-hud{top:25px}.player-hud{bottom:25px}.health-label{display:flex;justify-content:space-between;font-size:11px;margin-bottom:8px}.health-label strong{font-weight:600}.health-label span{color:#6b7069;font-variant-numeric:tabular-nums}.health-track{height:6px;overflow:hidden;background:#e4e6df;border-radius:4px}.health-track>div{height:100%;width:100%;background:#b87165;transition:width .16s linear}.player-hud .health-track>div{background:#638773}.enemy-position{position:absolute;width:310px;height:310px;top:-109px;left:calc(50% - 160px);pointer-events:none}.player-position{position:absolute;width:370px;height:370px;right:5%;bottom:-74px;pointer-events:none}.hand{position:relative;width:100%;height:100%;will-change:transform;transform:translate3d(0,0,0)}.hand img{display:block;width:100%;height:100%;object-fit:contain;user-select:none;-webkit-user-drag:none}.enemy-position img{transform:rotate(180deg)}#message{text-align:center;font-size:13px;line-height:1.5;min-height:20px;margin:20px 0 15px}#message.win{color:#38634e}#message.loss{color:#a1483c}.buttons{display:flex;justify-content:center;gap:12px}.buttons button{display:flex;align-items:center;justify-content:center;gap:12px;width:174px;padding:10px 15px;border:1px solid #d2d5cc;border-radius:9px;background:var(--move-button-background,#fafaf7);transition:background .15s,border-color .15s}.buttons button:hover:not(:disabled){background:#e5ebe2;border-color:#8da28e}.buttons button.selected{border-color:#6b8971;background:#e6ede2}.buttons button:disabled{cursor:default}.buttons button span{font-size:13px;white-space:nowrap}kbd{font:11px Arial,sans-serif;color:#777e73;margin-right:5px}.hand-thumbnail{display:block;width:49px;height:55px;flex:0 0 49px;overflow:hidden}.hint{text-align:center;color:#777c73;font-size:10px;line-height:1.6;margin:17px 0 0}.end-screen{position:absolute;inset:0;z-index:4;background:#fafaf7ed;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px}.end-screen[hidden]{display:none}.end-screen h2{font-size:28px;font-weight:500;margin:0}.end-screen button{background:#466c56;color:white;border:0;border-radius:7px;padding:12px 22px;font-size:13px}@media(max-width:600px){.game{padding:20px 14px}h1{font-size:17px}header{margin-bottom:14px}.arena{height:400px}.hud{left:16px;width:118px}.enemy-hud{top:19px}.player-hud{bottom:19px}.enemy-position{width:260px;height:260px;left:calc(50% - 92px);top:-75px}.player-position{width:320px;height:320px;right:-40px;bottom:-54px}.buttons{gap:8px}.buttons button{width:33.333%;padding:10px 5px;gap:4px;flex-direction:column}.buttons button span{font-size:12px}.hand-thumbnail{width:45px;height:51px;flex-basis:51px}#message{font-size:12px;margin:17px 0 13px}.hint{font-size:9px}}@media(prefers-reduced-motion:reduce){.health-track>div,.buttons button{transition:none}}
+
+/* Jogador embaixo à esquerda; adversário em cima à direita. */
+.player-position{left:-16px;right:auto;bottom:-25px}
+.enemy-position{left:auto;right:18px;top:-65px}
+.hud{width:180px;padding:10px 12px;background:#fafaf7f5;border-radius:6px}
+.player-hud{left:24px;bottom:16px}
+.enemy-hud{left:auto;right:24px;top:16px}
+@media(max-width:600px){
+  .player-position{left:-54px;right:auto;bottom:-14px;width:300px;height:300px}
+  .enemy-position{left:auto;right:-22px;top:-20px;width:240px;height:240px}
+  .hud{width:144px;padding:9px 10px}
+  .player-hud{left:12px;bottom:12px}
+  .enemy-hud{left:auto;right:12px;top:12px}
+}
+/* A imagem termina antes do HUD, para a barra não cortar o braço. */
+.player-position{clip-path:inset(0 0 90px 0)}
+.enemy-position{clip-path:inset(130px 0 0 0)}
+@media(max-width:600px){.player-position{clip-path:inset(0 0 78px 0)}.enemy-position{clip-path:inset(86px 0 0 0)}}
+
+/* O placar registra apenas combates encerrados por nocaute. */
+.scoreboard{display:flex;align-items:center;justify-content:center;gap:24px;margin:-3px 0 15px;padding:12px 18px;border:1px solid #d7d9d0;border-radius:10px;background:#fafaf7}
+.score-team{display:flex;align-items:baseline;gap:9px;min-width:110px;justify-content:center}
+.score-team span{font-size:12px;color:#626960}
+.score-team strong{font-size:24px;font-weight:600;font-variant-numeric:tabular-nums;color:#426d59}
+.score-team.enemy-score strong{color:#a45b4f}
+.score-separator{font-size:15px;color:#9b9e95}
+.score-draws{font-size:11px;color:#74796e;margin-left:2px;white-space:nowrap}
+.end-summary{margin:-9px 0 0;font-size:13px;color:#566158;text-align:center}
+@media(max-width:600px){.scoreboard{gap:8px;padding:10px 7px}.score-team{min-width:0;gap:6px;flex:1}.score-team span{font-size:11px}.score-team strong{font-size:22px}.score-draws{font-size:10px;margin:0 3px}}
+
+/* Uma cura de uso único é liberada a cada três pontos conquistados. */
+.ability-bar{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:-5px 0 15px}
+.ability-card{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 12px;border:1px solid #d7d9d0;border-radius:9px;background:#fafaf7;min-height:54px}
+.ability-info{display:flex;flex-direction:column;gap:4px;min-width:0}
+.ability-info span{font-size:11px;font-weight:600;color:#515b51}
+.ability-info strong{font-size:11px;font-weight:400;color:#737c72;font-variant-numeric:tabular-nums}
+.heal-action{white-space:nowrap;background:#466c56;color:#fff;border:1px solid #466c56;border-radius:6px;font-size:11px;padding:9px 10px;transition:background .15s}
+.heal-action:hover:not(:disabled){background:#355742}
+.heal-action:disabled{background:#ecede9;border-color:#dde0d8;color:#858b80}
+.heal-action.ready{background:#466c56;border-color:#466c56;color:#fff}
+.heal-action.ready:disabled{background:#e3eae0;border-color:#b9c9ba;color:#426d59}
+.enemy-ability-status{font-size:11px;color:#777e73;text-align:right}
+.enemy-ability-status.ready{color:#a45b4f;font-weight:600}
+@media(max-width:600px){.ability-bar{grid-template-columns:1fr;gap:6px;margin-bottom:12px}.ability-card{min-height:46px;padding:7px 10px}.heal-action{padding:8px 10px}}
+
+/* Relógio por jogada: reinicia após cada animação, nunca durante a resolução. */
+.turn-timer{max-width:570px;margin:15px auto 5px;padding:10px 15px 9px;border:1px solid #d7d9d0;border-radius:9px;background:#fafaf7}
+.turn-timer-top,.timer-help{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.turn-timer-top{font-size:12px;color:#49584c}
+.turn-timer-top strong{font-size:16px;font-variant-numeric:tabular-nums;min-width:44px;text-align:right}
+.timer-track{height:6px;margin:8px 0;background:#e3e6df;border-radius:10px;overflow:hidden}
+.timer-track>div{width:100%;height:100%;background:#638773;transition:width .05s linear,background .1s}
+.turn-timer.urgent .timer-track>div{background:#b87165}
+.turn-timer.urgent .turn-timer-top strong{color:#a1483c}
+.turn-timer.paused .timer-track>div{background:#aeb5ab}
+.timer-help{font-size:10px;color:#777c73}
+.timer-help strong{font-size:10px;font-weight:600;font-variant-numeric:tabular-nums}
+#message{margin-top:12px}
+@media(max-width:600px){.turn-timer{padding:9px 11px;margin:12px 0 5px}.timer-help{font-size:9px}.timer-help strong{font-size:9px}}
+@media(prefers-reduced-motion:reduce){.timer-track>div{transition:none}}
+
+/* Luck Block e poderes: acumuláveis, transferíveis, de uso único. */
+.luck-guide{display:flex;align-items:center;gap:12px;margin:-5px 0 14px;padding:8px 12px;border:1px solid #e2d4aa;border-radius:10px;background:#f7f3e7}
+.luck-cube{width:36px;height:36px;flex:0 0 36px;display:grid;place-items:center;border:2px solid #a88949;border-radius:8px;background:linear-gradient(130deg,#f3d986,#edbe57);box-shadow:3px 3px 0 #dfcf9b;font-size:24px;font-weight:800;color:#705222;text-shadow:0 1px #fff9}
+.luck-cube.reveal{animation:luck-pop .65s cubic-bezier(.19,.88,.25,1.3)}
+@keyframes luck-pop{0%{transform:scale(.5) rotate(-20deg)}40%{transform:scale(1.3) rotate(10deg)}100%{transform:scale(1) rotate(0)}}
+.luck-copy{display:flex;flex-direction:column;gap:4px}.luck-copy strong{font-size:11px;letter-spacing:1.1px;color:#756035}.luck-copy span{font-size:11px;color:#675d47}
+.power-card{display:flex;align-items:stretch;flex-direction:column;justify-content:flex-start;gap:8px;min-height:112px}
+.power-card .ability-info{gap:4px}.power-card .ability-info strong{font-size:10px;line-height:1.4}
+.power-controls{display:flex;gap:5px;flex-wrap:wrap}.power-controls .heal-action{flex:1;white-space:nowrap;min-width:91px;padding:7px 4px;font-size:10px}
+.power-card small{display:block;margin-top:auto;line-height:1.3;font-size:10px;color:#757e74}
+.enemy-powers{display:flex;flex-wrap:wrap;gap:5px}.enemy-powers span{font-size:10px;border:1px solid #d5d9d2;border-radius:5px;padding:6px 7px;color:#9a554b;background:#f6eeea}
+.enemy-speech{position:fixed;z-index:9;top:18px;right:18px;width:max-content;max-width:min(265px,calc(100vw - 32px));padding:12px 16px;background:#2e3f36;border:1px solid #4c6857;color:#fff;border-radius:14px 14px 2px 14px;box-shadow:0 10px 25px #17291c22;pointer-events:none;animation:speech-in .23s ease-out}
+.enemy-speech[hidden]{display:none}.enemy-speech::after{content:'';position:absolute;bottom:-9px;right:0;border-left:11px solid transparent;border-top:10px solid #2e3f36}
+.speech-tone{display:block;font-size:9px;font-weight:700;letter-spacing:1.2px;color:#afc4b4}
+.enemy-speech p{margin:5px 0 0;font-size:13px;line-height:1.45}
+.enemy-speech[data-tone="taunt"]{background:#533b37;border-color:#79554e}.enemy-speech[data-tone="taunt"]::after{border-top-color:#533b37}
+.enemy-speech[data-tone="surprised"]{background:#485069;border-color:#667392}.enemy-speech[data-tone="surprised"]::after{border-top-color:#485069}
+@keyframes speech-in{from{opacity:0;transform:translateY(-12px) scale(.96)}to{opacity:1;transform:translateY(0) scale(1)}}
+@media(max-width:600px){.luck-guide{padding:8px;margin-bottom:11px}.power-card{min-height:0}.power-controls .heal-action{flex:1}.enemy-speech{top:8px;right:8px;max-width:205px;padding:9px 12px}.enemy-speech p{font-size:11px}}
+@media(prefers-reduced-motion:reduce){.luck-cube.reveal,.enemy-speech{animation:none}}
+
+
+
+/* Layout compacto: HUD de poderes DENTRO da arena, sem painéis empilhados. */
+body{background:#111}
+.game{max-width:1150px;padding:18px 20px 25px;margin:0 auto}
+header{margin-bottom:12px}
+h1{color:#e6e8e4}
+.restart{color:#dce2dc;border-color:#757e75}
+.restart:hover:not(:disabled){background:#282e29}
+#message{color:#cbd4cc}
+#message.win{color:#80b99a}
+#message.loss{color:#e0a097}
+.hint{color:#abb3a9}
+.top-bar{display:grid;grid-template-columns:minmax(0,1fr) 278px;gap:12px;margin-bottom:12px}
+.scoreboard{margin:0;padding:10px 18px;min-height:57px;justify-content:flex-start;gap:22px}
+.luck-guide{min-width:0;margin:0;max-width:none;padding:6px 10px;gap:9px}
+.luck-cube{width:33px;height:33px;flex-basis:33px;font-size:22px}
+.luck-copy{min-width:0}.luck-copy span{font-size:10px;line-height:1.3}
+
+.arena{height:480px;width:100%;margin:0;position:relative;overflow:hidden}
+.end-screen{z-index:12}
+/* Cada círculo pertence ao próprio duelo, e não a um painel fora da arena. */
+.ability-bar{position:absolute;inset:0;z-index:5;margin:0;padding:0;height:auto;display:block;pointer-events:none}
+.power-stack{position:absolute;top:120px;width:77px;display:flex;flex-direction:column;align-items:center;gap:8px;pointer-events:none}
+.player-stack{left:12px;right:auto}.enemy-stack{right:12px;left:auto}
+.power-meta{background:none;border:0;box-shadow:none;padding:0;min-height:0;max-width:77px;text-align:center}
+.power-meta strong{display:block;font-size:11px;font-weight:600;color:#536258;margin:0}
+.enemy-stack .power-meta strong{color:#9b6059}
+.power-meta span,.power-meta small{display:none}
+.power-orbs,.enemy-orbs{display:flex;flex-direction:column;flex-wrap:nowrap;align-items:center;gap:9px}
+.power-orb{width:62px;height:62px;flex:0 0 62px;border:1px solid #d7d9d0;border-radius:50%;background:#f5f7f3;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;padding:0;text-align:center;pointer-events:auto;box-shadow:0 4px 14px #26392816;transition:background .12s,border-color .12s,transform .12s}
+.power-orb .orb-name{font-size:9px;line-height:1.05;color:#536458}
+.power-orb strong{font-size:18px;line-height:1.1;color:#304a3a}
+.power-orb em{font-size:9px;font-style:normal;color:#708277}
+.power-orb:disabled{cursor:default;opacity:.65}
+.power-orb.ready{background:#e2f0e5;border-color:#739b7c}
+button.power-orb:hover:not(:disabled){background:#d8eadc;transform:translateY(-2px)}
+.enemy-orb{background:#f7eeeb;pointer-events:none}
+.enemy-orb strong{color:#95594f}.enemy-orb .orb-name{color:#996158}
+
+/* Hands have free room between the two icon columns. */
+.player-position{left:clamp(72px,13%,170px);right:auto;bottom:-44px}
+.enemy-position{right:clamp(80px,15%,180px);left:auto;top:-70px}
+.hud{z-index:3}
+.player-hud{left:104px;bottom:18px}
+.enemy-hud{left:auto;right:104px;top:18px}
+
+/* Small rotating countdown, top-left, inside the same scene. */
+.corner-timer{position:absolute;z-index:8;top:12px;left:14px;width:77px;max-width:none;margin:0;padding:0;background:transparent;border:0}
+.timer-dial{--ratio:1;width:64px;height:64px;border-radius:50%;position:relative;display:grid;place-items:center;background:conic-gradient(#638773 calc(var(--ratio)*1turn),#d9ddd6 0);box-shadow:0 4px 15px #25352816}
+.timer-dial::before{content:'';inset:6px;position:absolute;border-radius:50%;background:#fafaf7;border:1px solid #d7d9d0}
+.timer-dial span{position:relative;z-index:1;font-size:18px;font-weight:600;color:#31443a}
+.turn-timer.urgent .timer-dial{background:conic-gradient(#b87165 calc(var(--ratio)*1turn),#e3d8d4 0)}
+.turn-timer.paused .timer-dial{background:conic-gradient(#adb4ab calc(var(--ratio)*1turn),#dbded9 0)}
+.timer-caption{text-align:center;margin-top:5px}
+.timer-caption span,.timer-caption strong{display:block;font-size:9px;color:#777c73;line-height:1.3}
+.timer-caption strong{font-weight:600}
+
+#message{max-width:670px;margin:10px auto 2px;min-height:26px}
+.buttons{max-width:670px;margin:8px auto 0;gap:10px}
+.buttons button{flex:1;width:auto;max-width:220px}
+.hint{max-width:780px;margin:12px auto 0}
+
+/* Starting menu */
+.menu-screen{position:fixed;inset:0;display:grid;place-items:center;padding:18px;background:#0009;z-index:20}
+.menu-screen[hidden]{display:none}
+.menu-card{width:min(360px,100%);padding:24px 22px;border:1px solid #d7d9d0;border-radius:14px;text-align:center;background:#fafaf7;box-shadow:0 18px 40px #0004}
+.menu-card h2{font-size:24px;font-weight:600;margin:0 0 10px}
+.menu-card p{font-size:13px;line-height:1.5;color:#626960;margin:0 0 18px}
+.start-button{font-size:14px;color:white;background:#466c56;border:0;border-radius:8px;padding:12px 26px}
+.start-button:hover{background:#355742}
+
+@media(max-width:750px){
+ .game{padding:14px 11px 24px}
+ header{margin-bottom:9px}
+ .top-bar{grid-template-columns:1fr;gap:6px;margin-bottom:9px}
+ .scoreboard{min-height:51px;padding:8px 10px;margin:0;gap:8px;justify-content:center}
+ .luck-guide{padding:5px 9px;max-width:none}
+ .luck-cube{width:29px;height:29px;flex-basis:29px;font-size:20px}
+ .luck-copy{flex-direction:row;align-items:center;gap:9px}
+ .luck-copy strong{white-space:nowrap}.luck-copy span{font-size:10px}
+ .arena{height:440px}
+ .power-stack{top:122px;width:57px;gap:5px}
+ .player-stack{left:5px}.enemy-stack{right:5px}
+ .power-meta{max-width:57px}
+ .power-orbs{gap:6px}
+ .power-orb{width:49px;height:49px;flex-basis:49px;gap:0}
+ .power-orb .orb-name{font-size:8px}.power-orb strong{font-size:15px}.power-orb em{font-size:8px}
+ .player-position{left:4px;bottom:-14px;width:300px;height:300px}
+ .enemy-position{right:-12px;top:-19px;width:240px;height:240px}
+ .player-hud{left:66px;bottom:13px;width:140px}
+ .enemy-hud{right:65px;top:14px;width:135px}
+ .corner-timer{top:9px;left:9px;width:64px}
+ .timer-dial{width:53px;height:53px}.timer-dial span{font-size:16px}
+ #message{margin:9px auto 2px;min-height:25px}
+ .buttons{gap:6px}
+ .buttons button{padding:8px 4px;gap:4px}
+}
+@media(max-width:390px){
+ .arena{height:418px}
+ .player-position{left:-10px}.enemy-position{right:-25px}
+ .hud{width:125px}
+ .player-hud{left:56px}.enemy-hud{right:58px}
+}
+@media(prefers-reduced-motion:reduce){.power-orb{transition:none}}
+
+/* Tela inicial isolada, sem a partida aparecendo atrás. */
+html{background:#111}body{background:#111;min-height:100dvh}
+.game[hidden],.menu-screen[hidden]{display:none!important}
+.menu-screen{
+  position:fixed;inset:0;z-index:50;display:flex;justify-content:center;align-items:center;
+  min-height:100dvh;padding:24px;background:#f5f5f1;overflow:auto;
+}
+.menu-card{
+  display:flex;flex-direction:column;align-items:center;gap:32px;
+  width:min(460px,100%);padding:22px;background:transparent;border:0;
+  box-shadow:none;border-radius:0;text-align:center;
+}
+.menu-card h1{margin:0;color:#2b312d;font-size:clamp(24px,4.5vw,34px);font-weight:600;letter-spacing:-.65px;line-height:1.2}
+.menu-card .start-button{min-width:160px;padding:14px 28px;border-radius:9px;font-size:15px}
+
+/* Barra superior da página removida. O placar é o primeiro elemento. */
+.game{padding-top:14px}
+.scoreboard{position:relative;padding-right:44px}
+.scoreboard-reset{position:absolute;top:50%;right:11px;transform:translateY(-50%);
+  padding:0;display:grid;place-items:center;width:30px;height:30px;
+  color:#69766c;background:transparent;border:1px solid #ccd2ca;
+  border-radius:7px;font-size:23px;line-height:1}
+.scoreboard-reset:hover:not(:disabled){background:#e8ede7;color:#3d654d}
+.scoreboard-reset:disabled{opacity:.5}
+
+/* Status stays screen-reader accessible but occupies no visual space. */
+#message{position:absolute!important;width:1px!important;height:1px!important;
+  padding:0!important;margin:-1px!important;overflow:hidden!important;
+  clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important}
+.buttons{margin-top:12px;margin-bottom:0}
+.hint{display:none!important}
+@media(max-width:750px){
+ .game{padding-top:10px}
+ .scoreboard{padding-right:40px}
+ .scoreboard-reset{right:7px;width:29px;height:29px}
+ .buttons{margin-top:10px}
+}
+
+
+/* Placar aproveita a largura disponível após a remoção da faixa do Luck Block. */
+.top-bar{grid-template-columns:minmax(0,1fr)}
+.scoreboard{width:100%}
+
+/* Duas subidas: a primeira cobre o menu, a segunda revela o jogo. */
+.transition-curtain{position:fixed;inset:0;z-index:100;
+  background:#090909;transform:translateY(100%);pointer-events:auto;will-change:transform}
+.transition-curtain[hidden]{display:none!important}
+@media(prefers-reduced-motion:reduce){.transition-curtain{will-change:auto}}
+
+@keyframes prize-received{0%{box-shadow:0 0 0 0 #cfaa56a1}65%{box-shadow:0 0 0 9px #cfaa5600}100%{box-shadow:0 4px 14px #26392816}}
+.power-orb.prize-received{animation:prize-received .75s ease-out}
+@media(prefers-reduced-motion:reduce){.power-orb.prize-received{animation:none}}

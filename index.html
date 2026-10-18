@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="pt-BR">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#eeede9"><title>Pedra, papel e tesoura</title><link rel="stylesheet" href="./assets/styles/game.css"></head>
+<body>
+<section id="menu-screen" class="menu-screen" aria-label="Menu inicial">
+  <div class="menu-card">
+    <h1 data-editor-id="game.title">Pedra, papel e tesoura</h1>
+    <button id="start-game" class="start-button" type="button">Jogar</button>
+  </div>
+</section>
+<div id="transition-curtain" class="transition-curtain" aria-hidden="true" hidden></div>
+<aside id="enemy-speech" class="enemy-speech" aria-live="polite" aria-atomic="true" data-tone="neutral" hidden><span id="speech-tone" class="speech-tone">OBSERVANDO</span><p id="speech-text"></p></aside>
+<main class="game" id="game-screen" hidden>
+
+  <div class="top-bar">
+  <div class="scoreboard" aria-label="Placar da partida até 10 pontos" role="status" aria-live="polite">
+    <button id="restart" class="restart scoreboard-reset" type="button" aria-label="Reiniciar partida" title="Reiniciar partida">↻</button>
+    <div class="score-team"><span>Você</span><strong id="player-points">0</strong></div>
+    <span class="score-separator" aria-hidden="true">×</span>
+    <div class="score-team enemy-score"><strong id="enemy-points">0</strong><span>Inimigo</span></div>
+    <span class="score-draws">Combate <span id="battle-number">1</span> · meta: 10</span>
+  </div>
+  </div>
+  <section class="arena" data-editor-id="arena.background" aria-label="Duelo de mãos">
+  <div class="ability-bar" aria-label="Efeitos de uso único que passam ao vencedor do combate">
+    <div class="power-stack player-stack">
+      <div class="power-meta"><strong>Você</strong><span id="player-power-progress">Próximo bloco em 3 vitórias</span><small id="active-buff">Efeitos não usados passam ao vencedor do combate.</small></div>
+      <div class="power-orbs">
+        <button type="button" id="use-heal" class="power-orb" title="Cura"></button>
+        <button type="button" id="use-defense" class="power-orb" title="Defesa"></button>
+        <button type="button" id="use-critical" class="power-orb" title="Crítico"></button>
+      </div>
+    </div>
+    <div class="power-stack enemy-stack">
+      <div class="power-meta"><strong>Inimigo</strong><span id="enemy-power-progress">Próximo bloco em 3 vitórias</span><small>Os efeitos guardados passam ao vencedor.</small></div>
+      <div class="power-orbs enemy-orbs">
+        <span id="enemy-heal" class="power-orb enemy-orb" aria-label="Curas do inimigo"></span>
+        <span id="enemy-defense" class="power-orb enemy-orb" aria-label="Defesas do inimigo"></span>
+        <span id="enemy-critical" class="power-orb enemy-orb" aria-label="Críticos do inimigo"></span>
+      </div>
+    </div>
+  </div>
+    <div class="turn-timer corner-timer" aria-label="Tempo para escolher uma jogada">
+      <div id="timer-dial" class="timer-dial" role="progressbar" aria-label="Tempo restante" aria-valuemin="0" aria-valuemax="5" aria-valuenow="5">
+        <span id="time-left" aria-live="off">5</span>
+      </div>
+      <div class="timer-caption"><span id="turn-status">Sua vez</span><strong id="missed-count">0 / 3</strong></div>
+    </div>
+    <div class="hud enemy-hud"><div class="health-label"><strong>Inimigo</strong><span id="enemy-hp">100 / 100</span></div><div class="health-track" role="progressbar" aria-label="Vida do inimigo" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100" id="enemy-health" data-editor-id="hud.enemy.health"><div id="enemy-fill"></div></div></div>
+    <div class="enemy-position"><div id="enemy" class="hand"><img id="enemy-hand" data-editor-id="hands.enemy.image" src="./assets/images/hand-rock.png" alt="Mão do inimigo"></div></div>
+    <div class="player-position"><div id="player" class="hand"><img id="player-hand" data-editor-id="hands.player.image" src="./assets/images/hand-rock.png" alt="Sua mão: pedra"></div></div>
+    <div class="hud player-hud"><div class="health-label"><strong>Você</strong><span id="player-hp">100 / 100</span></div><div class="health-track" role="progressbar" aria-label="Sua vida" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100" id="player-health" data-editor-id="hud.player.health"><div id="player-fill"></div></div></div>
+    <div class="end-screen" id="end-screen" hidden><h2 id="end-title"></h2><p class="end-summary" id="end-summary"></p><button id="again">Próximo combate</button></div>
+  </section>
+    <p id="message" role="status" aria-live="polite">Escolha sua jogada.</p>
+  <div class="buttons" aria-label="Escolha sua jogada">
+    <button data-sign="rock" data-editor-id="controls.move.rock"><svg class="hand-thumbnail" viewBox="190 130 170 165" aria-hidden="true"><image href="./assets/images/hand-rock.png" width="500" height="500"/></svg><span><kbd>1</kbd> Pedra</span></button>
+    <button data-sign="paper" data-editor-id="controls.move.paper"><svg class="hand-thumbnail" viewBox="175 50 230 245" aria-hidden="true"><image href="./assets/images/hand-paper.png" width="500" height="500"/></svg><span><kbd>2</kbd> Papel</span></button>
+    <button data-sign="scissors" data-editor-id="controls.move.scissors"><svg class="hand-thumbnail" viewBox="195 50 210 245" aria-hidden="true"><image href="./assets/images/hand-scissors.png" width="500" height="500"/></svg><span><kbd>3</kbd> Tesoura</span></button>
+  </div>
+</main>
+<div hidden aria-hidden="true"><img data-player-sign="rock" src="./assets/images/hand-rock.png" alt=""><img data-player-sign="paper" src="./assets/images/hand-paper.png" alt=""><img data-player-sign="scissors" src="./assets/images/hand-scissors.png" alt=""></div>
+<script type="module" src="./src/game/main.js"></script>
+</body></html>

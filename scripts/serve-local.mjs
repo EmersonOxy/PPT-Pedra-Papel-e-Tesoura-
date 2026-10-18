@@ -35,7 +35,7 @@ const server = createServer(async (request, response) => {
     return;
   }
 
-  const relativePath = pathname === '/' ? '/Jogar-Trindade-transicao-preta.html' : pathname;
+  const relativePath = pathname === '/' ? '/index.html' : pathname;
   if (relativePath.split('/').some((part) => part.startsWith('.'))) {
     response.writeHead(404).end('Not found');
     return;

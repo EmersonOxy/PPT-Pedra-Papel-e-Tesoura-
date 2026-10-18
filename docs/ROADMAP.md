@@ -4,17 +4,17 @@ Este roadmap não aprova nem implementa mudanças. As prioridades consideram imp
 
 ## Sequência aprovada do Trindade Studio
 
-Esta sequência de entrega foi aprovada por Émerson em 17/10/2026. A aprovação autoriza somente o Marco 1; cada marco seguinte requer decisão própria.
+Esta sequência de entrega foi aprovada por Émerson em 17/10/2026 e atualizada em 18/10/2026. O baseline inicial está publicado em `origin/main` no commit `00a5a3c18764e6dcc8e4773a06c52fcc0fbfadeb`; a implementação do Marco 2 foi concluída e validada na branch `feature/marco-2-modularizacao`.
 
 | Etapa | Estado | Limite |
 |---|---|---|
 | Preparação dos agentes | Concluída | Perfis e skills orientam análises/implementações futuras. |
 | Auditoria estática | Concluída | Documentada em `AUDITORIA_COMPLETA.md` e documentos relacionados. |
-| Marco 1 — Arquitetura e baseline | Trabalho autorizado e preparado para revisão | Referência, caracterização, servidor local e protótipo de launcher; primeiro commit aguarda aprovação separada. |
-| Marco 2 — Refatoração modular | Aguardando aprovação | Não iniciar antes de aprovação expressa. Preservar regras e comparar com o baseline. |
+| Marco 1 — Arquitetura e baseline | Concluído e publicado | Baseline aprovado e publicado em `main`; referência SHA preservada. |
+| Marco 2 — Refatoração modular | Implementado e commitado localmente | Nova entrada modular, CSS/assets separados, núcleo e UI JS modular, testes diferenciais e contrato visual inicial. Push e merge aguardam autorização separada. |
 | Marco 3 — Editor visual | Planejado | Experiência visual semelhante ao Canva para editar elementos registrados, visualizar, salvar e testar. |
 
-Marcos posteriores devem entregar: (a) modularização somente após Marco 2 aprovado; (b) editor e contrato de extensibilidade somente após escopo do Marco 3 aprovado; (c) exes de produção e fluxo Git após aceitação do shell; (d) documentação revisada junto das funcionalidades.
+Marcos posteriores devem entregar: (a) concluir e revisar a modularização autorizada; (b) implementar editor e experiência visual semelhante ao Canva somente após escopo do Marco 3 aprovado; (c) exes de produção e fluxo Git após aceitação do shell; (d) documentação revisada junto das funcionalidades.
 
 ## Prioridades iniciais
 

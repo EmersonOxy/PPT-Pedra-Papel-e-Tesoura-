@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "elements": {
+    "game.title": { "base": { "text": "Pedra, papel e tesoura" } },
+    "arena.background": { "base": { "backgroundColor": "#fafaf7" } },
+    "hands.player.image": { "base": { "assetId": "hands.rock" } },
+    "hands.enemy.image": { "base": { "assetId": "hands.rock" } },
+    "hud.player.health": { "base": { "fillColor": "#638773" } },
+    "hud.enemy.health": { "base": { "fillColor": "#b87165" } },
+    "controls.move.rock": { "base": { "backgroundColor": "#fafaf7" } },
+    "controls.move.paper": { "base": { "backgroundColor": "#fafaf7" } },
+    "controls.move.scissors": { "base": { "backgroundColor": "#fafaf7" } }
+  }
+}

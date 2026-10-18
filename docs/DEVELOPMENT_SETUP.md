@@ -1,12 +1,12 @@
 # Configuração de desenvolvimento
 
-Auditoria e configuração preparadas em 17/10/2026 para o projeto de Pedra, Papel e Tesoura.
+Auditoria iniciada em 17/10/2026; atualização de estado em 18/10/2026. O baseline aprovado já foi publicado no GitHub e a implementação do Marco 2 foi concluída em branch própria.
 
 ## Diagnóstico do ambiente
 
 - Ambiente de trabalho: Windows 10 Pro 10.0.19045, PowerShell, pasta `C:\Users\canal\OneDrive\Documentos\PPT`.
 - Aplicativo Codex para Windows: pacote `26.1013.4894.0`. Codex CLI: `codex-cli 0.163.0-alpha.10.2`. O comando `codex features list` confirmou `apps`, `browser_use` e `multi_agent` habilitados.
-- Antes da configuração inicial, o diretório não era um repositório Git e não continha `AGENTS.md`, dependências ou estrutura de projeto.
+- Antes da configuração inicial em 17/10/2026, o diretório não era um repositório Git e não continha `AGENTS.md`, dependências ou estrutura de projeto.
 - O jogo está em `Jogar-Trindade-transicao-preta.html`, com aproximadamente 1,24 MB, CSS e um bloco JavaScript embutidos. A auditoria não encontrou scripts externos, imports, links de estilo externos, framework ou API de rede no bloco de jogo. Não há pacote npm, bundler ou testes do projeto disponíveis.
 - Ferramentas visíveis: Codex CLI, Git, PowerShell, Node.js fornecido pelo runtime do Codex, browser use e captura de tela via ferramentas Codex. O comando `python` resolve para o alias da Microsoft Store e não encontra uma instalação executável. `npm` não foi encontrado no PATH.
 - MCPs configurados na CLI: `cua_repl` e `node_repl` habilitados; `code-review` e `codex_app` aparecem como desabilitados com motivo `Unsupported` nesta CLI. As ferramentas integradas do aplicativo desktop continuam visíveis nesta sessão.
@@ -49,7 +49,7 @@ O agente principal pode acionar somente os especialistas necessários. Em mudan�
 
 ## Qualidade e testes
 
-Hoje não há runner de testes, build ou framework de browser automation configurado no projeto. O Codex dispõe de browser use e captura de tela. Para tarefas que peçam validação, defina critérios antes, faça checks proporcionais ao escopo e declare com precisão o que foi executado. Não adicione infraestrutura de teste sem que a tarefa a peça ou dependa dela.
+O runtime do jogo usa módulos nativos do navegador e não tem dependências npm ou build step. Existem 14 cenários diferenciais de caracterização, smoke test do servidor HTTP, validador de configuração e validador de assets; os comandos estão em `docs/BUILD_AND_TEST.md`. O screenshot foi comparado com Edge headless, usando os mesmos estados e viewports. O Studio e sua automação de UI continuam sem build/testes porque não foram implementados.
 
 Para futuras tarefas de multiplayer, exija uma proposta antes de infraestrutura: servidor autoritativo, validação de jogadas e tempo, sincronização do estado, reconexão e prevenção de trapaças. Nenhuma infraestrutura online foi criada nesta etapa.
 
@@ -64,15 +64,15 @@ Para futuras tarefas de multiplayer, exija uma proposta antes de infraestrutura:
 - `codex exec` registrou avisos não bloqueantes de ícones fora da pasta `assets/` nos metadados de interface de um plugin. As skills e plugins continuaram carregados.
 - O SHA-256 final do HTML é idêntico ao hash da auditoria inicial; o jogo não foi alterado.
 
-## Configuração local do Git para auditoria (17/10/2026)
+## Baseline Git publicado (18/10/2026)
 
 - `origin` aponta para `https://github.com/EmersonOxy/PPT-Pedra-Papel-e-Tesoura-.git`.
 - A identidade Git está configurada somente neste repositório via `git config --local`; os valores pessoais não são reproduzidos nesta documentação.
-- O comando read-only `git ls-remote --heads origin` terminou com código 0 e não listou referências. Não foi feito fetch, commit ou push.
-- Git foi inicializado sem commits; a branch de trabalho atual é `audit/comprehensive-game-audit`. `main` permanece definida como branch estável, mas o remoto não tem refs/base observável e ainda não há commit/ref local que materialize a branch.
-- No Marco 1 foi criada uma referência recuperável em `reference/`; hash original e referência devem continuar idênticos. Nenhum commit ou push foi feito.
+- O commit de baseline `00a5a3c18764e6dcc8e4773a06c52fcc0fbfadeb` está publicado em `origin/main`; `main` é a branch padrão do GitHub. A branch `audit/comprehensive-game-audit` permanece preservada.
+- O Marco 2 está em `feature/marco-2-modularizacao`, criada a partir do commit aprovado. O commit local registra a implementação aprovada; publicação e merge dependem de autorização separada.
+- A referência em `reference/` e o HTML autocontido mantêm SHA-256 `C6011DB78BC72E7932959AD1FCD81EF7EA2D0D353FE58FA391AD72B1B07DF843`.
 - Node.js `v24.19.0` ficou disponível nesta execução, junto do Node bundled do Codex; `npm`, `dotnet`, compiladores C#/C++ e Electron continuam ausentes no PATH. Veja `BUILD_AND_TEST.md` para o servidor HTTP e testes nativos já criados.
-- `origin` foi consultado com `git ls-remote --heads`; o comando concluiu com código 0 e não retornou branches. A primeira proposta de stage/commit será revisada com Émerson; não criar commit nem push antes das aprovações separadas.
+- Histórico: antes da publicação inicial, `origin` não anunciava refs e o repositório local ainda não tinha commit. O baseline foi aprovado e publicado depois pelo usuário; não use o estado histórico como status atual.
 
 ## Fontes oficiais consultadas
 

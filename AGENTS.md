@@ -4,7 +4,7 @@
 
 Este projeto é um jogo web de Pedra, Papel e Tesoura, com partidas rápidas, apresentação competitiva e evolução gradual. Preserve as regras, os estados de partida, os recursos visuais, as animações, os controles e a compatibilidade atuais enquanto não houver uma decisão aprovada para alterá-los.
 
-O ponto de entrada executável atual é `Jogar-Trindade-transicao-preta.html`: um arquivo HTML autocontido com CSS, imagens e JavaScript embutidos. A referência imutável está em `reference/Jogar-Trindade-transicao-preta.baseline.html`. O SHA-256 esperado para ambos é `C6011DB78BC72E7932959AD1FCD81EF7EA2D0D353FE58FA391AD72B1B07DF843`. O repositório Git local já foi inicializado, mas ainda não tem commit e o `origin` observado não anuncia refs. Consulte `docs/BUILD_AND_TEST.md` e `docs/GIT_WORKFLOW.md` para o estado atualizado do ambiente.
+O baseline original está em `Jogar-Trindade-transicao-preta.html` e sua referência imutável em `reference/Jogar-Trindade-transicao-preta.baseline.html`; ambos mantêm SHA-256 `C6011DB78BC72E7932959AD1FCD81EF7EA2D0D353FE58FA391AD72B1B07DF843`. O commit aprovado `00a5a3c18764e6dcc8e4773a06c52fcc0fbfadeb` foi publicado em `origin/main`, que é a branch padrão do GitHub. A modularização autorizada do Marco 2 está em `feature/marco-2-modularizacao`; `index.html` é a nova entrada modular, enquanto o HTML autocontido continua disponível como referência executável.
 
 ## Escopo e decisões
 
@@ -63,19 +63,21 @@ Delegue em paralelo apenas perguntas independentes. Não permita que agentes edi
 - Para uma proposta de multiplayer, desenhe protocolo e fluxo de reconexão antes da implementação. O servidor deve validar jogadas, relógios, resultados e transições de estado.
 - Só adicione testes, ferramentas ou infraestrutura quando isso fizer parte da tarefa ou for necessário para satisfazer seus critérios de aceitação.
 
-## Marco 1 — baseline e fronteiras aprovadas
+## Marco 2 — baseline, compatibilidade e runtime modular
 
-- O escopo autorizado deste Marco 1 é baseline, arquitetura, documentação, testes de caracterização, servidor local de desenvolvimento e protótipos técnicos isolados.
-- Até aprovação expressa do Marco 2, não refatore, edite, reordene ou regenere `Jogar-Trindade-transicao-preta.html`; não altere mecânicas. Confirme SHA-256 do original e da cópia antes/depois de qualquer tarefa de baseline.
-- Não substitua nem atualize a referência para fazer teste passar. Mecânicas só mudam com solicitação/aprovação própria.
-- Use `node scripts/serve-local.mjs` para abrir o jogo em HTTP local; servidor deve permanecer somente leitura, em loopback, sem CORS e contido à raiz. Não contorne políticas de `file://`, browser ou segurança do sistema.
-- `node tests/characterization/run-baseline.mjs` é a suíte de caracterização atual. Toda mudança de runtime futura deve comparar resultados do mesmo conjunto de cenários com a cópia de referência; diferenças de regra exigem autorização.
+- O Marco 1 foi concluído e o Marco 2 foi autorizado. Trabalhe somente em `feature/marco-2-modularizacao`; não altere `main` nem a branch de auditoria.
+- Preserve `Jogar-Trindade-transicao-preta.html` e `reference/Jogar-Trindade-transicao-preta.baseline.html` byte a byte. Confirme o SHA-256 dos dois em qualquer validação final.
+- O runtime modular começa em `index.html`; regras puras ficam em `src/game/core/`, integração DOM em `src/game/ui/`, recursos em `assets/` e opções visuais validadas em `config/visual.json`. Não importe código do jogo para o Studio.
+- Faça mudanças pequenas e valide cada etapa com os comandos em `docs/BUILD_AND_TEST.md`. A suíte diferencial deve executar as mesmas entradas/RNG na referência e no núcleo modular; divergência de regras interrompe o avanço até ser explicada e corrigida.
+- Use `node scripts/serve-local.mjs` para abrir `http://127.0.0.1:4173/`; o servidor permanece somente leitura, em loopback, sem CORS e contido à raiz. Não contorne políticas de `file://`, browser ou segurança do sistema.
+- Não substitua nem atualize a referência para fazer teste passar. Mecânicas só mudam com solicitação/aprovação própria. Não inicie o Marco 3.
 - Não instale ferramentas ou dependências globais sem necessidade demonstrada e decisão apresentada. Para o Studio, Electron/React/TypeScript/Vite são a stack de UI aprovada como proposta; o runtime do jogo continua em JavaScript modular sem framework imposto.
 
 ## Contrato obrigatório para elementos editáveis no Studio
 
 - Toda funcionalidade nova que queira ser editável deve registrar elemento com ID estável, único e não traduzido, tipo conhecido, nome acessível/traduzido, target por `data-editor-id`/adaptador registrado e allowlist de propriedades com tipos, defaults, unidades, limites e responsividade.
 - O registro e seu schema versionado são o contrato entre jogo e Studio. A funcionalidade que introduz elemento deve atualizar catálogo, migrações quando necessárias, testes e documentação na mesma mudança.
+- O catálogo inicial usado pelo jogo está em `config/editor-elements.schema.json`; os elementos publicados precisam ter um target real em `index.html`, `binding` suportado pelo runtime e valores padrão/configurados em `config/visual.json`. Prefira operações genéricas já suportadas para que o Studio descubra novos alvos sem lógica específica por ID.
 - Nunca expor HTML, JavaScript, CSS arbitrário, selector executável, comando de sistema, asset remoto ou propriedade não validada no editor.
 - Valores visuais ficam em `config/visual.json`; experimentos de regra ficam em `config/gameplay.local.json` isolados. Parâmetros competitivos permanecem somente leitura até aprovação explícita.
 - Mudança incompatível de ID, tipo, default, unidade ou semântica requer incremento de versão, migração determinística, backup e teste de compatibilidade. Versões futuras não podem ser sobrescritas por cliente antigo.
@@ -102,5 +104,6 @@ Uma mudança está pronta quando respeita o escopo aprovado, preserva os fluxos 
 - Não reescreva histórico existente sem autorização explícita. Nunca use force push neste projeto.
 - Não publique nem faça push automaticamente. Envie alterações ao remoto somente após aprovação de Émerson.
 - O primeiro commit do baseline também exige aprovação após revisão da lista staged, verificação de segredos, diff/checks e integridade/hash. Push exige aprovação separada; não use force push.
-- O fato de um Marco estar autorizado não autoriza avançar para o próximo. Respeite as etapas e peça aprovação do Marco 2 após entregar e revisar o Marco 1.
+- A autorização de Marco 2 não autoriza iniciar o Marco 3. Conclua as etapas e peça aprovação para qualquer próximo Marco.
+- Não crie commit, push ou merge sem aprovação expressa de Émerson após a revisão da entrega. Não use force push.
 - Use a identidade Git local já configurada neste repositório; não copie nome/email pessoal para a documentação nem propague a configuração para o Git global.
