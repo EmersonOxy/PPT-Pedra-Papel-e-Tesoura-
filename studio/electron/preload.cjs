@@ -5,6 +5,14 @@ const subscriptions = new Set();
 const api = Object.freeze({
   getProject: () => ipcRenderer.invoke('studio:get-project'),
   openProject: () => ipcRenderer.invoke('studio:open-project'),
+  getHomeState: () => ipcRenderer.invoke('studio:get-home-state'),
+  chooseProjectParent: () => ipcRenderer.invoke('studio:choose-project-parent'),
+  createProject: (request) => ipcRenderer.invoke('studio:create-project', request),
+  openRecentProject: (root) => ipcRenderer.invoke('studio:open-recent-project', root),
+  removeRecentProject: (root) => ipcRenderer.invoke('studio:remove-recent-project', root),
+  checkForUpdates: () => ipcRenderer.invoke('studio:check-updates'),
+  openReleasePage: (url) => ipcRenderer.invoke('studio:open-release-page', url),
+  requestHome: () => ipcRenderer.invoke('studio:request-home'),
   saveVisualConfig: (config) => ipcRenderer.invoke('studio:save-visual-config', config),
   setDirty: (dirty) => ipcRenderer.invoke('studio:set-dirty', dirty === true),
   respondToClose: (choice) => ipcRenderer.invoke('studio:respond-to-close', choice),
@@ -15,6 +23,7 @@ const api = Object.freeze({
   onCloseRequest: (callback) => {
     return subscribe('studio:close-request', callback);
   },
+  onReturnHomeRequest: (callback) => subscribe('studio:return-home-request', callback),
 });
 
 function subscribe(channel, callback) {

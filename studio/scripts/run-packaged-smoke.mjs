@@ -13,6 +13,7 @@ const packageRoot = join(studioRoot, 'release');
 const executable = process.env.TRINDADE_STUDIO_TEST_EXE || join(packageRoot, 'win-unpacked', 'Trindade Studio.exe');
 const screenshotPath = join(packageRoot, 'Trindade-Studio-proof.png');
 const sceneScreenshotRoot = join(packageRoot, 'scene-browser');
+const projectCenterScreenshotRoot = join(packageRoot, 'project-center');
 const require = createRequire(import.meta.url);
 const allowedFiles = require('../electron/project-service.cjs').allowedFiles;
 
@@ -47,7 +48,7 @@ function taskkillTree(pid) {
   }
 }
 
-async function launch(exe, profile, fixture, debugPort) {
+async function launch(exe, profile, fixture, debugPort, extraEnvironment = {}) {
   const child = spawn(exe, [`--user-data-dir=${profile}`, `--remote-debugging-port=${debugPort}`], {
     windowsHide: false,
     stdio: ['ignore', 'pipe', 'pipe'],
@@ -57,6 +58,7 @@ async function launch(exe, profile, fixture, debugPort) {
       TRINDADE_STUDIO_TEST_MODE: '1',
       TRINDADE_STUDIO_DEBUG_PORT: String(debugPort),
       TRINDADE_STUDIO_TEST_USER_DATA: join(profile, 'app-data'),
+      ...extraEnvironment,
     },
   });
   const output = [];
@@ -183,7 +185,7 @@ try {
   assert.equal(studio.layers, 1, `O menu deve listar somente seu alvo editável: ${JSON.stringify(studio)}`);
   assert.match(studio.preview, /^http:\/\/127\.0\.0\.1:/, 'A prévia não usa servidor local isolado.');
   assert.deepEqual(studio.nodeAccess, ['undefined', 'undefined'], 'O renderer recebeu acesso Node inesperado.');
-  assert.deepEqual(studio.api.sort(), ['closeStudio', 'getProject', 'onCloseRequest', 'onHistoryCommand', 'onOpenProjectRequest', 'onSaveRequest', 'openProject', 'respondToClose', 'saveVisualConfig', 'setDirty'].sort());
+  assert.deepEqual(studio.api.sort(), ['checkForUpdates', 'chooseProjectParent', 'closeStudio', 'createProject', 'getHomeState', 'getProject', 'onCloseRequest', 'onHistoryCommand', 'onOpenProjectRequest', 'onReturnHomeRequest', 'onSaveRequest', 'openProject', 'openRecentProject', 'openReleasePage', 'removeRecentProject', 'requestHome', 'respondToClose', 'saveVisualConfig', 'setDirty'].sort());
   report('renderer isolado, oito cenas e camada de menu verificados');
 
   let frameId = await waitFor(async () => {
@@ -405,7 +407,100 @@ try {
   await waitFor(() => new Promise((resolvePromise) => child.exitCode !== null ? resolvePromise(true) : setTimeout(() => resolvePromise(false), 100)), 'fechamento normal após reabertura');
   session.socket.close();
   session = null;
-  process.stdout.write(`Studio Windows smoke: 9 elementos, seleção direta, prévia ao vivo, undo/redo, partida, modo teste, mobile, salvamento/backup e reabertura aprovados. Falhas de rede não canceladas: 0. Screenshot: ${screenshotPath}\n`);
+
+  const homeProfile = join(temporary, 'project-center-profile');
+  const homeProjects = join(temporary, 'project-center-projects');
+  await mkdir(homeProfile, { recursive: true });
+  const homePort = await availablePort();
+  ({ child } = await launch(executable, homeProfile, fixture, homePort, {
+    TRINDADE_STUDIO_TEST_HOME: '1',
+    TRINDADE_STUDIO_TEST_PROJECTS_DIR: homeProjects,
+  }));
+  report('Central de Projetos aberta no Electron real');
+  const homeTarget = (await (await fetch(`http://127.0.0.1:${homePort}/json/list`)).json()).find((target) => target.type === 'page');
+  session = await attach(homeTarget);
+  await waitFor(() => session.evaluate(`Boolean(document.querySelector('.home-shell'))`), 'Central de Projetos');
+  await waitFor(() => session.evaluate(`document.querySelector('.home-version strong')?.textContent !== 'v—' && Boolean(document.querySelector('.projects-location strong')?.textContent)`), 'carregamento da versão e localização padrão');
+  const homeApi = await session.evaluate(`({api:Object.keys(window.trindadeStudio).sort(),version:document.querySelector('.home-version strong')?.textContent,location:document.querySelector('.projects-location strong')?.textContent})`);
+  assert.equal(homeApi.version, `v${JSON.parse(await readFile(join(studioRoot, 'package.json'), 'utf8')).version}`);
+  assert.equal(homeApi.location, homeProjects);
+  await mkdir(projectCenterScreenshotRoot, { recursive: true });
+  const saveHomeScreenshot = async (name) => {
+    const captured = await session.send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
+    await writeFile(join(projectCenterScreenshotRoot, name), Buffer.from(captured.data, 'base64'));
+  };
+  await saveHomeScreenshot('Trindade-Studio-central.png');
+  const newProjectButton = `document.querySelector('.home-create').click()`;
+  await session.evaluate(newProjectButton);
+  await waitFor(() => session.evaluate(`Boolean(document.querySelector('#new-project-name'))`), 'assistente de novo projeto');
+  await saveHomeScreenshot('Trindade-Studio-novo-projeto.png');
+  const typeProjectName = async (name) => {
+    await session.evaluate(`(() => {
+      const input = document.querySelector('#new-project-name');
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+      setter.call(input, ${JSON.stringify(name)});
+      input.dispatchEvent(new Event('input', {bubbles:true}));
+      input.dispatchEvent(new Event('change', {bubbles:true}));
+    })()`);
+    await session.evaluate(`([...document.querySelectorAll('button')].find((button) => button.innerText.trim() === 'Criar projeto')).click()`);
+    await waitFor(() => session.evaluate(`document.querySelector('.project-name')?.textContent === ${JSON.stringify(name)}`), `criação do projeto ${name}`);
+  };
+  await typeProjectName('Projeto Central Um');
+  const firstProjectRoot = join(homeProjects, 'Projeto Central Um');
+  await waitFor(() => readFile(join(firstProjectRoot, 'trindade.project.json'), 'utf8').then((raw) => JSON.parse(raw).projectFormatVersion === 1), 'manifesto versionado do primeiro projeto');
+  const firstTitle = 'Projeto Central Um — título independente';
+  await session.evaluate(`(() => {
+    const input = document.getElementById('property-game.title.text');
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+    setter.call(input, ${JSON.stringify(firstTitle)});
+    input.dispatchEvent(new Event('input', {bubbles:true}));
+    input.dispatchEvent(new Event('change', {bubbles:true}));
+  })()`);
+  await session.evaluate(`document.querySelector('button.save-button').click()`);
+  await waitFor(() => readFile(join(firstProjectRoot, 'config/visual.json'), 'utf8').then((raw) => JSON.parse(raw).elements['game.title'].base.text === firstTitle), 'salvamento no primeiro projeto');
+  await session.evaluate(`([...document.querySelectorAll('button')].find((button) => button.innerText.trim() === 'Projetos')).click()`);
+  await waitFor(() => session.evaluate(`Boolean(document.querySelector('.home-shell'))`), 'retorno limpo à Central de Projetos');
+  await session.evaluate(newProjectButton);
+  await waitFor(() => session.evaluate(`Boolean(document.querySelector('#new-project-name'))`), 'segundo assistente de projeto');
+  await typeProjectName('Projeto Central Dois');
+  const secondProjectRoot = join(homeProjects, 'Projeto Central Dois');
+  await waitFor(() => readFile(join(secondProjectRoot, 'trindade.project.json'), 'utf8').then((raw) => JSON.parse(raw).projectFormatVersion === 1), 'manifesto do segundo projeto');
+  assert.equal(JSON.parse(await readFile(join(secondProjectRoot, 'config/visual.json'), 'utf8')).elements['game.title'].base.text, 'Pedra, papel e tesoura', 'Projetos diferentes devem ter configurações independentes.');
+  await session.evaluate(`([...document.querySelectorAll('button')].find((button) => button.innerText.trim() === 'Projetos')).click()`);
+  await waitFor(() => session.evaluate(`document.querySelectorAll('.recent-project').length === 2`), 'lista de dois projetos recentes');
+  await saveHomeScreenshot('Trindade-Studio-recentes.png');
+  await session.evaluate(`([...document.querySelectorAll('.recent-project')].find((row) => row.innerText.includes('Projeto Central Um')).querySelector('.recent-open')).click()`);
+  await waitFor(() => session.evaluate(`document.querySelector('.project-name')?.textContent === 'Projeto Central Um'`), 'abertura do projeto pelos recentes');
+  assert.equal(await session.evaluate(`document.getElementById('property-game.title.text')?.value`), firstTitle, 'A abertura recente deve restaurar a configuração salva no projeto escolhido.');
+  await session.evaluate(`(() => {
+    const input = document.getElementById('property-game.title.text');
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+    setter.call(input, 'Título ainda não salvo');
+    input.dispatchEvent(new Event('input', {bubbles:true}));
+    input.dispatchEvent(new Event('change', {bubbles:true}));
+  })()`);
+  await session.evaluate(`([...document.querySelectorAll('button')].find((button) => button.innerText.trim() === 'Projetos')).click()`);
+  await waitFor(() => session.evaluate(`Boolean(document.querySelector('.confirm-modal'))`), 'proteção ao retornar com alterações não salvas');
+  await session.evaluate(`([...document.querySelectorAll('.modal-actions button')].find((button) => button.innerText.trim() === 'Cancelar')).click()`);
+  assert.equal(await session.evaluate(`Boolean(document.querySelector('.project-name'))`), true, 'Cancelar a navegação deve manter o projeto e as alterações no editor.');
+  await session.evaluate(`([...document.querySelectorAll('button')].find((button) => button.innerText.trim() === 'Projetos')).click()`);
+  await waitFor(() => session.evaluate(`Boolean(document.querySelector('.confirm-modal'))`), 'segunda proteção de saída');
+  await session.evaluate(`([...document.querySelectorAll('.modal-actions button')].find((button) => button.innerText.trim() === 'Descartar alterações')).click()`);
+  await waitFor(() => session.evaluate(`Boolean(document.querySelector('.home-shell'))`), 'retorno à Central após descarte explícito');
+  assert.equal(JSON.parse(await readFile(join(firstProjectRoot, 'config/visual.json'), 'utf8')).elements['game.title'].base.text, firstTitle, 'Descartar não deve gravar alterações.');
+  await session.evaluate(`([...document.querySelectorAll('.recent-project')].find((row) => row.innerText.includes('Projeto Central Um')).querySelector('.recent-remove')).click()`);
+  await waitFor(() => session.evaluate(`document.querySelectorAll('.recent-project').length === 1`), 'remoção da lista recente');
+  await access(join(firstProjectRoot, 'index.html'));
+  await session.evaluate(`document.querySelector('.update-check-button').click()`);
+  await waitFor(() => session.evaluate(`!document.querySelector('.update-check-button').disabled && Boolean(document.querySelector('.update-status')?.innerText) && !document.querySelector('.update-status').innerText.includes('Verificando')`), 'retorno da consulta de versão', 12000);
+  await saveHomeScreenshot('Trindade-Studio-atualizacoes.png');
+  assert.deepEqual(session.consoleErrors, [], `Console da Central de Projetos: ${session.consoleErrors.join('; ')}`);
+  report('criação de dois projetos, recentes, configurações independentes e retorno com alterações pendentes verificados');
+  await session.evaluate('setTimeout(() => window.trindadeStudio.closeStudio(), 200); true');
+  await waitFor(() => new Promise((resolvePromise) => child.exitCode !== null ? resolvePromise(true) : setTimeout(() => resolvePromise(false), 100)), 'fechamento normal da Central de Projetos');
+  session.socket.close();
+  session = null;
+  process.stdout.write(`Studio Windows smoke: editor, oito cenas, partida, salvamento/backup, Central de Projetos, criação, recentes e independência de projetos aprovados. Captura: ${screenshotPath}\n`);
 } finally {
   try { session?.socket.close(); } catch {}
   if (child && child.exitCode === null) {

@@ -45,11 +45,58 @@ export interface ProjectPayload {
   previewUrl?: string;
   session?: string;
   protocol?: number;
+  root?: string;
+}
+
+export interface RecentProject {
+  id: string;
+  name: string;
+  root: string;
+  projectFormatVersion: number;
+  lastOpenedAt: string;
+  unavailable?: boolean;
+  needsImport?: boolean;
+}
+
+export interface ProjectTemplate {
+  id: string;
+  label: string;
+  description: string;
+  version: string;
+  engineId: string;
+  available: boolean;
+}
+
+export interface StudioHomeState {
+  appVersion: string;
+  projectsDirectory: string;
+  recentProjects: RecentProject[];
+  templates: ProjectTemplate[];
+  updateChannel: 'stable';
+}
+
+export interface UpdateCheckResult {
+  state: 'up-to-date' | 'available' | 'local-ahead' | 'offline' | 'error';
+  currentVersion: string;
+  latestVersion?: string;
+  notes?: string;
+  pageUrl?: string;
+  installerName?: string;
+  publishedAt?: string | null;
+  message?: string;
 }
 
 export interface TrindadeStudioApi {
   getProject: () => Promise<ProjectPayload>;
   openProject: () => Promise<ProjectPayload>;
+  getHomeState: () => Promise<StudioHomeState>;
+  chooseProjectParent: () => Promise<{ canceled?: boolean; path?: string }>;
+  createProject: (request: { name: string; templateId: string }) => Promise<ProjectPayload>;
+  openRecentProject: (root: string) => Promise<ProjectPayload>;
+  removeRecentProject: (root: string) => Promise<{ ok: boolean; recentProjects: RecentProject[] }>;
+  checkForUpdates: () => Promise<UpdateCheckResult>;
+  openReleasePage: (url: string) => Promise<{ ok: boolean }>;
+  requestHome: () => Promise<{ ok: boolean }>;
   saveVisualConfig: (config: VisualConfig) => Promise<{ ok: boolean; config?: VisualConfig; backupName?: string }>;
   setDirty: (dirty: boolean) => Promise<{ ok: boolean }>;
   respondToClose: (choice: 'save' | 'discard' | 'cancel') => Promise<{ ok: boolean; needsSave?: boolean }>;
@@ -58,6 +105,7 @@ export interface TrindadeStudioApi {
   onOpenProjectRequest: (callback: () => void) => () => void;
   onHistoryCommand: (callback: (command: 'undo' | 'redo') => void) => () => void;
   onCloseRequest: (callback: () => void) => () => void;
+  onReturnHomeRequest: (callback: () => void) => () => void;
 }
 
 declare global {

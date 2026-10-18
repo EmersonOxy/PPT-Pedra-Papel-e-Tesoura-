@@ -10,10 +10,12 @@ O runtime do jogo continua em JavaScript modular e sem dependência de React, Ty
 
 | Componente | Responsabilidade |
 | --- | --- |
-| `studio/electron/main.cjs` | Ciclo da aplicação, janela, template/projeto aberto, menu e validação de remetente IPC. |
-| `studio/electron/preload.cjs` | API nomeada e estreita para abrir projeto, salvar visual.json, estado de alterações, histórico e fechamento. |
+| `studio/electron/main.cjs` | Ciclo do app, Central, seleção de projeto, janela, menu, atualização e validação do remetente IPC. |
+| `studio/electron/preload.cjs` | API nomeada e estreita para projetos/modelos, release estável, salvar visual.json, histórico e fechamento. |
 | `studio/src/` | Interface React/TypeScript: navegador de telas/estados, lista de camadas registradas, prévia, inspetor, histórico, modo de teste e avisos. |
 | `studio/electron/project-service.cjs` | Allowlist de arquivos, validação de catálogo/configuração, caminhos seguros e salvamento atômico com `.bak`. |
+| `studio/electron/project-library.cjs` | Registro de modelos existentes, criação/importação segura, manifesto e lista recente em dados do usuário. |
+| `studio/electron/update-service.cjs` | Consulta metadados da última release estável do repositório oficial; valida origem/versão/instalador e não instala. |
 | `studio/electron/preview-server.cjs` | Servidor GET/HEAD de loopback com allowlist para o runtime modular real, catálogo estático de cenas autenticado e sem IPC. |
 | `studio/scenes.json` | Inventário versionado das oito telas/estados demonstráveis, alvos editáveis por estado e fixtures determinísticas limitadas à prévia. |
 | `studio/electron/renderer-server.cjs` | Servidor local do renderer empacotado e política CSP. |
@@ -36,6 +38,7 @@ studio/
 docs/
   STUDIO_ARCHITECTURE.md
   STUDIO_USER_GUIDE.md
+  STUDIO_PROJECTS_AND_UPDATES.md
 ```
 
 O fluxo de build web do jogo usa sua allowlist existente e não inclui `studio/`.
@@ -54,11 +57,23 @@ Para adicionar uma cena/estado demonstrável, confirme primeiro que ele existe n
 
 O navegador atual não é um editor de cenas com geometria livre. `scenes.json` apenas descreve estados existentes, camadas registradas e dados de prévia. Próximos incrementos devem separar documentos e APIs para composição de objetos, timeline/animações, mecânicas/poderes e eventos visuais (eventos, condições e ações); a representação por nós e extensões JavaScript ficam atrás de interfaces versionadas e permissões próprias. Esses sistemas não existem nesta etapa e não devem ser simulados por propriedades arbitrárias ou por mudanças nas regras competitivas.
 
+## Central multiprojeto e compatibilidade
+
+O Studio é a interface de criação e gerenciamento. Trindade Engine é o limite arquitetural destinado a capacidades reutilizáveis de execução; modelos descrevem estruturas iniciais; projetos guardam o jogo concreto. A separação começa com serviços e metadados, sem transformar o runtime atual em uma engine genérica nem alterar mecânicas.
+
+`project-library.cjs` mantém catálogo independente da UI. O catálogo atual contém somente `pedra-papel-tesoura-web` v1.0.0, o primeiro modelo real; a Central renderiza os itens do catálogo e não contém opções falsas para projeto vazio, puzzle ou RPG. O diretório de cada jogo é independente e guarda o runtime, configuração, assets, scripts e regras daquele projeto.
+
+Cada raiz de projeto contém `trindade.project.json`: UUID, `manifestVersion`, `projectFormatVersion`, modelo/versão e engine/versões de compatibilidade. A Central guarda recents em `app.getPath('userData')/studio-settings.json`, nunca dentro dos recursos empacotados. Remover item recente só remove a referência da Central, não os arquivos. Um projeto legado sem manifesto só é importado depois de confirmação e snapshot allowlisted recuperável. Um projeto dentro de Git oferece abrir ou criar cópia independente; a operação de cópia não leva `.git`.
+
+O aplicativo rejeita um manifesto de formato futuro ou cuja versão mínima da Trindade Engine ultrapassa a suportada. O update checker e a atualização do Studio não gravam dados de projetos. Migração futura deve ser uma operação separada e iniciada explicitamente: fazer backup validado, planejar a transformação determinística, validar o resultado e manter recuperação se qualquer gravação falhar. Não executar migrações durante abertura ou atualização do Studio.
+
+As fronteiras futuras podem acrescentar extensões JavaScript e grafos/eventos de condições e ações, cada qual com contrato versionado e permissões delimitadas. Nenhum plugin, sistema de nós, event visual scripting ou modelo além do RPS é implementado neste incremento.
+
 ## Instalação Windows
 
 O artefato de entrega é um instalador NSIS por usuário criado pelo `electron-builder` já usado no projeto. O instalador cria atalhos no desktop e menu Iniciar, executa sem Node.js e mantém os dados do usuário ao desinstalar. O EXE portable foi rejeitado como canal principal porque não completou o teste de inicialização automatizado neste ambiente. Não existe assinatura de código nesta etapa; não desative SmartScreen nem antivírus para contornar avisos.
 
-O código roda em um único aplicativo Electron. O projeto de jogo selecionado é canonicalizado e carregado a partir da pasta escolhida; os recursos do Studio ficam no pacote do aplicativo. O salvamento altera somente `config/visual.json` dentro da raiz selecionada e preserva `.bak` antes da substituição atômica. Configurações do aplicativo ficam em `app.getPath('userData')`, separadas dos projetos. Desinstalar não apaga a pasta de projetos, configurações visuais nem backups. O Studio não chama Vercel nem faz publicação automática.
+O código roda em um único aplicativo Electron. O projeto de jogo selecionado é canonicalizado e carregado a partir da pasta escolhida; os recursos/modelos do Studio ficam no pacote do aplicativo e são copiados para uma pasta de projeto novo. O salvamento altera somente os arquivos allowlisted dentro da raiz selecionada e preserva `.bak` antes da substituição atômica. Configurações e lista recente do aplicativo ficam em `app.getPath('userData')`, separadas dos projetos. Desinstalar não apaga projetos, configurações visuais nem backups. O Studio não chama Vercel nem faz publicação automática.
 
 ## Contrato de extensibilidade do editor
 
@@ -80,17 +95,18 @@ Para novas telas, poderes ou animações, o Codex deve primeiro escolher os cont
 
 Salvar valida novamente o catálogo e o documento, grava `config/visual.json.bak` com a versão anterior e substitui a configuração com um temporário sincronizado. Se a troca falhar, mantém a versão anterior. A interface mantém undo/redo em memória e pergunta antes de descartar alterações ao fechar ou abrir outro projeto.
 
-O Studio inicializa uma cópia local do runtime modelo em `Documentos/Trindade Studio/Projetos/Pedra-Papel-e-Tesoura`, em vez de editar o checkout de desenvolvimento implicitamente. O usuário pode abrir uma pasta de projeto compatível. Nesta etapa o Studio ainda não tem integração Git, sincronização remota, publicação ou gerenciamento de vários projetos.
+O Studio começa na Central. Projetos novos são criados sob `Documentos/TrindadeProjetos`, podendo o usuário escolher outra pasta. Projetos recentes podem ser abertos ou removidos da lista sem apagar dados. Não há integração Git, sincronização remota ou publicação web; o suporte a múltiplos projetos é local e não depende de jogos específicos na UI da Central.
 
 ## Decisões, alternativas e riscos
 
 - **Electron + React + TypeScript + Vite** permanece a escolha de UI aprovada. O runtime do jogo não usa esse framework. A janela única reúne as três ações futuras; não há três aplicativos ou cópias independentes.
-- **Instalador NSIS por usuário x64**, criado com o `electron-builder` já usado no projeto. A prova do wrapper portable falhou na inicialização, enquanto o executável instalado completou o smoke de uso; por isso o instalador é o canal desta fase. O app incorpora o runtime Electron e o modelo allowlisted, não requer Node.js instalado pelo usuário e preserva os dados do projeto ao desinstalar. Não é assinado, então o Windows SmartScreen pode exibir aviso de editor desconhecido. Distribuição pública requer assinatura e política de atualização aprovadas.
+- **Instalador NSIS por usuário x64**, criado com o `electron-builder` já usado no projeto. O app incorpora o runtime Electron e o único modelo implementado, não requer Node.js instalado pelo usuário e preserva dados ao desinstalar. O build não é assinado e pode gerar aviso do Windows. O verificador de release é informativo e abre a página oficial para instalação manual; não há download/execução automática, e a assinatura/publicação de releases permanece pendente.
 - **pnpm com lockfile** fixa versões de dependência. `studio/pnpm-workspace.yaml` aprova apenas os scripts revisados de `electron` (download do runtime necessário) e `electron-winstaller` (seleção do binário 7-Zip interno); o restante de scripts de dependência continua negado por padrão.
 - **Servidor de prévia de loopback** foi escolhido para manter origem isolada e o jogo modular funcionando com módulos ES. Somente `127.0.0.1`, GET/HEAD e 14 caminhos são expostos. Ainda é necessário endurecer e revisar a proteção contra CSRF para qualquer feature que altere a superfície de escrita.
 - **Risco de assets:** o catálogo atual só escolhe três imagens registradas, não importa novas imagens. Um fluxo de importação exigirá validação real de MIME/conteúdo, tamanho, extensão e caminho, plus sanitização e backup.
-- **Risco de plataforma:** a prova de empacotamento é Windows x64 e depende dos navegadores/sistema suportados pelo Electron atual. macOS/Linux e atualização automática estão fora do escopo.
-- **Compatibilidade de dados:** o app aceita schema 1 e rejeita versões futuras; backups `.bak` são cópias simples para restauração manual, sem interface de histórico de versões.
+- **Risco de plataforma:** o empacotamento é Windows x64 e depende dos sistemas suportados pelo Electron atual. macOS/Linux e instalação automática estão fora do escopo.
+- **Compatibilidade de projeto:** o manifesto atual é v1 e declara formato 1, engine 1.0.0 e modelo RPS 1.0.0. Versões de manifesto/formato futuras e engine mínima superior são recusadas sem mutação. Não há migração de projeto nesta etapa.
+- **Integridade de cópia:** criar projeto começa em pasta nova, copia somente a allowlist e remove a pasta recém-criada se a cópia falhar; duplicação e importação mantêm backup allowlisted ou removem apenas o destino que a operação acabou de criar em caso de falha.
 
 ## Compatibilidade
 

@@ -1,6 +1,6 @@
 {
   "name": "trindade-studio",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Editor visual local para o jogo Pedra, Papel e Tesoura do Trindade",
   "author": "Trindade",
   "private": true,
@@ -13,7 +13,7 @@
     "prepare:game-template": "node scripts/prepare-game-template.mjs",
     "build:windows": "pnpm run typecheck && pnpm run build:renderer && pnpm run prepare:game-template && electron-builder --win nsis --x64",
     "test": "node --test tests/*.test.cjs",
-    "test:browser": "node scripts/run-browser-smoke.mjs",
+    "test:browser": "node scripts/run-packaged-smoke.mjs",
     "test:package": "node scripts/run-packaged-smoke.mjs"
   },
   "dependencies": {

@@ -1,10 +1,14 @@
-const { app, BrowserWindow, Menu, dialog, ipcMain } = require('electron');
+const { app, BrowserWindow, Menu, dialog, ipcMain, shell } = require('electron');
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const { createPreviewServer } = require('./preview-server.cjs');
 const { createStaticServer, createContentSecurityPolicy } = require('./renderer-server.cjs');
-const { allowedFiles, loadProjectAt, saveVisualConfigAt } = require('./project-service.cjs');
+const { loadProjectAt, saveVisualConfigAt } = require('./project-service.cjs');
+const { TEMPLATES, addRecentProject, createDuplicate, createProject, ensureManifest, getTemplate, isGitWorkingTree, listRecentProjects, removeRecentProject } = require('./project-library.cjs');
+const { STABLE_RELEASE_PAGE, createUpdateService, isOfficialReleasePage } = require('./update-service.cjs');
+
+const updateService = createUpdateService();
 
 if (process.env.TRINDADE_STUDIO_TEST_USER_DATA) {
   app.setPath('userData', path.resolve(process.env.TRINDADE_STUDIO_TEST_USER_DATA));
@@ -13,7 +17,6 @@ const hasSingleInstanceLock = app.requestSingleInstanceLock();
 if (!hasSingleInstanceLock) app.quit();
 
 const studioDirectory = path.resolve(__dirname, '..');
-const projectTemplateFiles = [...allowedFiles];
 let mainWindow = null;
 let project = null;
 let projectRoot = null;
@@ -27,6 +30,7 @@ let viteServer = null;
 let staticServer = null;
 let previewServer = null;
 let startupMessage = null;
+let projectParentSelection = null;
 
 if (process.env.TRINDADE_STUDIO_DEBUG_PORT) app.commandLine.appendSwitch('remote-debugging-port', process.env.TRINDADE_STUDIO_DEBUG_PORT);
 
@@ -43,6 +47,7 @@ function makePayload() {
     previewUrl: `${previewOrigin}/?${query}`,
     session: previewSession,
     protocol: 1,
+    root: projectRoot,
   };
 }
 
@@ -56,79 +61,80 @@ function assertRenderer(event) {
 }
 
 async function canonicalProject(root) {
-  const loaded = await loadProjectAt(root);
-  return loaded;
-}
-
-async function copyProjectTemplate(templateRoot, destinationRoot) {
-  const root = path.resolve(destinationRoot);
-  if (root === path.parse(root).root) throw new Error('O destino do modelo não é válido.');
-  for (const relative of projectTemplateFiles) {
-    const source = path.resolve(templateRoot, relative);
-    const destination = path.resolve(root, relative);
-    if (!source.startsWith(path.resolve(templateRoot) + path.sep) || !destination.startsWith(root + path.sep)) {
-      throw new Error('O modelo contém um caminho fora da pasta do projeto.');
-    }
-    const sourceInfo = await fs.lstat(source);
-    if (sourceInfo.isSymbolicLink() || !sourceInfo.isFile()) throw new Error(`O modelo contém um arquivo inválido: ${relative}`);
-    await fs.mkdir(path.dirname(destination), { recursive: true });
-    await fs.copyFile(source, destination, require('node:fs').constants.COPYFILE_EXCL);
-  }
-}
-
-async function settingsPath() {
-  await fs.mkdir(app.getPath('userData'), { recursive: true });
-  return path.join(app.getPath('userData'), 'studio-settings.json');
-}
-
-async function readLastProject() {
-  try {
-    const settings = JSON.parse(await fs.readFile(await settingsPath(), 'utf8'));
-    return typeof settings.lastProjectRoot === 'string' ? settings.lastProjectRoot : null;
-  } catch {
-    return null;
-  }
-}
-
-async function rememberProject(root) {
-  const file = await settingsPath();
-  const temp = `${file}.${crypto.randomBytes(6).toString('hex')}.tmp`;
-  await fs.writeFile(temp, JSON.stringify({ lastProjectRoot: root }), { flag: 'wx', mode: 0o600 });
-  await fs.rename(temp, file);
+  return loadProjectAt(root);
 }
 
 async function locateStartupProject() {
+  if (process.env.TRINDADE_STUDIO_TEST_HOME === '1') return null;
   if (process.env.TRINDADE_STUDIO_TEST_MODE === '1' && process.env.TRINDADE_PROJECT_ROOT) {
     return process.env.TRINDADE_PROJECT_ROOT;
   }
-  if (!app.isPackaged) {
-    if (process.env.TRINDADE_PROJECT_ROOT) return process.env.TRINDADE_PROJECT_ROOT;
-    return path.resolve(studioDirectory, '..');
-  }
-  const lastRoot = await readLastProject();
-  if (lastRoot) return lastRoot;
-  const documents = app.getPath('documents');
-  const defaultRoot = path.join(documents, 'Trindade Studio', 'Projetos', 'Pedra-Papel-e-Tesoura');
-  try {
-    await fs.access(path.join(defaultRoot, 'index.html'));
-    return defaultRoot;
-  } catch {
-    const templateRoot = path.join(process.resourcesPath, 'game-template');
-    await copyProjectTemplate(templateRoot, defaultRoot);
-    return defaultRoot;
-  }
+  if (!app.isPackaged) return process.env.TRINDADE_PROJECT_ROOT || path.resolve(studioDirectory, '..');
+  return null;
 }
 
-async function setProject(root) {
+function projectsDirectory() {
+  if (process.env.TRINDADE_STUDIO_TEST_MODE === '1' && process.env.TRINDADE_STUDIO_TEST_PROJECTS_DIR) {
+    return path.resolve(process.env.TRINDADE_STUDIO_TEST_PROJECTS_DIR);
+  }
+  return path.join(app.getPath('documents'), 'TrindadeProjetos');
+}
+
+function templateDirectory() {
+  return app.isPackaged ? path.join(process.resourcesPath, 'game-template') : path.resolve(studioDirectory, '..');
+}
+
+async function setProject(root, manifest = null) {
   const next = await canonicalProject(root);
+  const projectManifest = manifest || await ensureManifest(next.root, { userData: app.getPath('userData') });
+  if (!projectManifest) throw new Error('O projeto precisa ser importado antes de abrir no Studio.');
   project = next;
+  project.manifest = projectManifest;
+  project.name = projectManifest.name || next.name;
   projectRoot = next.root;
   previewSession = crypto.randomBytes(32).toString('hex');
   previewServer?.setProjectRoot(projectRoot);
   isDirty = false;
   closePending = false;
-  if (rendererOrigin) await rememberProject(projectRoot).catch(() => {});
+  if (rendererOrigin) await addRecentProject(app.getPath('userData'), projectRoot, projectManifest, project.name).catch(() => {});
   return makePayload();
+}
+
+async function openProjectRoot(selectedRoot, { duplicateIfGit = false } = {}) {
+  const loaded = await canonicalProject(selectedRoot);
+  const inGit = await isGitWorkingTree(loaded.root);
+  let targetRoot = loaded.root;
+  let manifest = null;
+  if (inGit && duplicateIfGit) {
+    const defaultParent = projectsDirectory();
+    await fs.mkdir(defaultParent, { recursive: true });
+    const result = await createDuplicate({
+      sourceRoot: loaded.root,
+      parentDirectory: defaultParent,
+      name: loaded.name,
+      templateRoot: templateDirectory(),
+      userData: app.getPath('userData'),
+    });
+    targetRoot = result.root;
+    manifest = result.manifest;
+  } else {
+    const currentManifest = await ensureManifest(loaded.root, { userData: app.getPath('userData') });
+    if (!currentManifest) {
+      const answer = await dialog.showMessageBox(mainWindow, {
+        type: 'warning',
+        title: 'Importar projeto existente',
+        message: 'Esta pasta ainda não tem um manifesto do Trindade Studio.',
+        detail: 'O Studio criará uma cópia de segurança dos arquivos do jogo no perfil do usuário antes de adicionar o manifesto. Mecânicas e assets não serão alterados.',
+        buttons: ['Criar backup e importar', 'Cancelar'],
+        defaultId: 0,
+        cancelId: 1,
+        noLink: true,
+      });
+      if (answer.response !== 0) return { ok: false, canceled: true };
+      manifest = await ensureManifest(loaded.root, { userData: app.getPath('userData'), confirmImport: true });
+    } else manifest = currentManifest;
+  }
+  return setProject(targetRoot, manifest);
 }
 
 async function openProjectDialog() {
@@ -139,10 +145,48 @@ async function openProjectDialog() {
   });
   if (result.canceled || result.filePaths.length === 0) return { ok: false, canceled: true };
   try {
-    return await setProject(result.filePaths[0]);
+    const selectedRoot = result.filePaths[0];
+    const loaded = await canonicalProject(selectedRoot);
+    if (await isGitWorkingTree(loaded.root)) {
+      const answer = await dialog.showMessageBox(mainWindow, {
+        type: 'warning',
+        title: 'Pasta dentro de repositório Git',
+        message: 'Esta pasta pertence a um repositório Git ou worktree.',
+        detail: 'Editar o projeto original pode alterar arquivos rastreados. Você pode duplicar somente os arquivos do jogo para TrindadeProjetos e manter o repositório intacto.',
+        buttons: ['Duplicar para TrindadeProjetos', 'Abrir esta pasta', 'Cancelar'],
+        defaultId: 0,
+        cancelId: 2,
+        noLink: true,
+      });
+      if (answer.response === 2) return { ok: false, canceled: true };
+      return openProjectRoot(selectedRoot, { duplicateIfGit: answer.response === 0 });
+    }
+    return openProjectRoot(selectedRoot);
   } catch (error) {
     return { ok: false, error: `Não foi possível abrir essa pasta. ${error.message}` };
   }
+}
+
+async function chooseProjectParent() {
+  const defaultPath = projectParentSelection || projectsDirectory();
+  const result = await dialog.showOpenDialog(mainWindow, {
+    title: 'Escolher localização dos projetos',
+    defaultPath,
+    properties: ['openDirectory', 'createDirectory'],
+    buttonLabel: 'Usar esta pasta',
+  });
+  if (result.canceled || !result.filePaths[0]) return { canceled: true };
+  const root = await fs.realpath(result.filePaths[0]);
+  projectParentSelection = root;
+  return { canceled: false, path: root };
+}
+
+async function makeNewProject(name, templateId) {
+  const parent = projectParentSelection || projectsDirectory();
+  await fs.mkdir(parent, { recursive: true });
+  const result = await createProject({ name, parentDirectory: parent, templateRoot: templateDirectory(), templateId });
+  projectParentSelection = null;
+  return setProject(result.root, result.manifest);
 }
 
 async function installIpc() {
@@ -154,6 +198,68 @@ async function installIpc() {
   ipcMain.handle('studio:open-project', async (event) => {
     assertRenderer(event);
     return openProjectDialog();
+  });
+  ipcMain.handle('studio:get-home-state', async (event) => {
+    assertRenderer(event);
+    return {
+      appVersion: app.getVersion(),
+      projectsDirectory: projectsDirectory(),
+      recentProjects: await listRecentProjects(app.getPath('userData')),
+      templates: TEMPLATES,
+      updateChannel: 'stable',
+    };
+  });
+  ipcMain.handle('studio:choose-project-parent', async (event) => {
+    assertRenderer(event);
+    return chooseProjectParent();
+  });
+  ipcMain.handle('studio:create-project', async (event, request) => {
+    assertRenderer(event);
+    if (!request || !getTemplate(request.templateId)) throw new Error('O modelo de projeto selecionado não é suportado.');
+    return makeNewProject(request.name, request.templateId);
+  });
+  ipcMain.handle('studio:open-recent-project', async (event, root) => {
+    assertRenderer(event);
+    const recent = (await listRecentProjects(app.getPath('userData'))).find((entry) => entry.root === root);
+    if (!recent) throw new Error('O projeto não está na lista recente. Use Abrir projeto para selecionar uma pasta.');
+    try {
+      const loaded = await canonicalProject(recent.root);
+      if (await isGitWorkingTree(loaded.root)) {
+        const answer = await dialog.showMessageBox(mainWindow, {
+          type: 'warning',
+          title: 'Pasta dentro de repositório Git',
+          message: 'Este projeto recente pertence a um repositório Git ou worktree.',
+          detail: 'Você pode duplicar somente os arquivos do jogo para TrindadeProjetos e manter o repositório intacto.',
+          buttons: ['Duplicar para TrindadeProjetos', 'Abrir esta pasta', 'Cancelar'],
+          defaultId: 0,
+          cancelId: 2,
+          noLink: true,
+        });
+        if (answer.response === 2) return { ok: false, canceled: true };
+        return openProjectRoot(recent.root, { duplicateIfGit: answer.response === 0 });
+      }
+      return openProjectRoot(recent.root);
+    } catch (error) {
+      return { ok: false, error: `Não foi possível abrir o projeto recente. ${error.message}` };
+    }
+  });
+  ipcMain.handle('studio:remove-recent-project', async (event, root) => {
+    assertRenderer(event);
+    if (typeof root !== 'string') throw new Error('Entrada de projeto inválida.');
+    const recent = (await listRecentProjects(app.getPath('userData'))).find((entry) => entry.root === root);
+    if (!recent) return { ok: true, recentProjects: await listRecentProjects(app.getPath('userData')) };
+    await removeRecentProject(app.getPath('userData'), root);
+    return { ok: true, recentProjects: await listRecentProjects(app.getPath('userData')) };
+  });
+  ipcMain.handle('studio:check-updates', async (event) => {
+    assertRenderer(event);
+    return updateService.check(app.getVersion());
+  });
+  ipcMain.handle('studio:open-release-page', async (event, url) => {
+    assertRenderer(event);
+    if (!isOfficialReleasePage(url)) throw new Error('A página de atualização não pertence ao repositório oficial.');
+    await shell.openExternal(url);
+    return { ok: true };
   });
   ipcMain.handle('studio:save-visual-config', async (event, candidate) => {
     assertRenderer(event);
@@ -188,6 +294,11 @@ async function installIpc() {
     mainWindow?.close();
     return { ok: true };
   });
+  ipcMain.handle('studio:request-home', (event) => {
+    assertRenderer(event);
+    mainWindow?.webContents.send('studio:return-home-request');
+    return { ok: true };
+  });
 }
 
 function buildMenu() {
@@ -195,6 +306,7 @@ function buildMenu() {
     {
       label: 'Arquivo',
       submenu: [
+        { label: 'Central de projetos', accelerator: 'Ctrl+Shift+H', click: () => mainWindow?.webContents.send('studio:return-home-request') },
         { label: 'Abrir projeto…', accelerator: 'Ctrl+O', click: () => mainWindow?.webContents.send('studio:open-project-request') },
         { type: 'separator' },
         { label: 'Sair', accelerator: 'Alt+F4', click: () => mainWindow?.close() },
@@ -312,7 +424,6 @@ app.whenReady().then(async () => {
     await installIpc();
     buildMenu();
     await createWindow(rendererUrl);
-    if (projectRoot) await rememberProject(projectRoot).catch(() => {});
   } catch (error) {
     await dialog.showMessageBox({
       type: 'error',

@@ -86,6 +86,16 @@ Delegue em paralelo apenas perguntas independentes. Não permita que agentes edi
 - Antes de declarar pronto, execute testes unitários/negativos, typecheck, build renderer/Windows, caracterização diferencial e evidência da interface real. Declare falhas, limitações e testes que não puderam ser executados; não conte checks de HTTP como teste interativo.
 - Atualize `docs/STUDIO_ARCHITECTURE.md`, `docs/STUDIO_USER_GUIDE.md` e `docs/BUILD_AND_TEST.md` quando o contrato, suporte, execução ou riscos mudarem.
 
+### Central multiprojeto, engine e atualizações
+
+- Trindade Studio é a interface de criação; Trindade Engine contém capacidades reutilizáveis de runtime; modelos são catálogos versionados; cada jogo é um projeto independente. Não acople a Central a IDs, telas ou regras de Pedra, Papel e Tesoura.
+- Cada projeto tem `trindade.project.json` com UUID estável, versão do manifesto/formato, modelo e versão, ID da engine, versão testada e versão mínima compatível. Configuração, assets, scripts e regras pertencem à pasta do projeto; estado da Central (lista recente) fica nos dados do usuário, fora do app e dos projetos.
+- A Central lista apenas modelos realmente implementados. Neste incremento, somente `pedra-papel-tesoura-web` está disponível; não apresente projeto vazio, puzzle, RPG ou outras categorias como funcionais.
+- A atualização do Studio não pode modificar ou migrar projetos automaticamente. Formatos mais novos/incompatíveis devem ser recusados com mensagem; migração futura exige escolha explícita, validação, backup recuperável e testes antes de gravar.
+- Preserve fronteiras para extensões JavaScript e lógica visual por eventos/condições/ações versionadas, mas não implemente tais sistemas nem templates futuros sem escopo aprovado.
+- O verificador de atualização consulta somente a release estável do repositório oficial. Nesta etapa a instalação é manual e iniciada pelo usuário; não baixar/executar instaladores nem migrar projeto em background. Mudanças de canal ou origem exigem decisão explícita.
+- Não publique release para habilitar o verificador. Assinatura Authenticode, metadados de atualização assinados, download/instalação automática e rollback são trabalho futuro sujeito a validação própria.
+
 ## Contrato obrigatório para elementos editáveis no Studio
 
 - Toda funcionalidade nova que queira ser editável deve registrar elemento com ID estável, único e não traduzido, tipo conhecido, nome acessível/traduzido, target por `data-editor-id`/adaptador registrado e allowlist de propriedades com tipos, defaults, unidades, limites e responsividade.

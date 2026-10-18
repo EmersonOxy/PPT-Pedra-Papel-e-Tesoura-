@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { EditorElement, EditorProperty, ProjectPayload, VisualConfig } from '../types';
+import type { EditorElement, EditorProperty, ProjectPayload, RecentProject, StudioHomeState, UpdateCheckResult, VisualConfig } from '../types';
 import { ASSETS, ELEMENT_LABELS, KIND_LABELS, PROPERTY_LABELS, configSnapshot, validateClientConfig, validateClientValue } from './schema';
 import { STUDIO_SCENES } from './scenes';
 
 type Mode = 'edit' | 'test';
 type Device = 'desktop' | 'mobile';
-type Prompt = 'close' | 'open' | null;
+type Prompt = 'close' | 'open' | 'home' | null;
 
 interface Toast {
   kind: 'success' | 'error' | 'info';
@@ -26,6 +26,17 @@ function propertyValue(config: VisualConfig, elementId: string, property: Editor
 
 export function App() {
   const [project, setProject] = useState<ProjectPayload | null>(null);
+  const [view, setView] = useState<'home' | 'editor'>('home');
+  const [homeState, setHomeState] = useState<StudioHomeState | null>(null);
+  const [homeMessage, setHomeMessage] = useState('');
+  const [updateCheck, setUpdateCheck] = useState<UpdateCheckResult | null>(null);
+  const [checkingUpdates, setCheckingUpdates] = useState(false);
+  const [createDialog, setCreateDialog] = useState(false);
+  const [newProjectName, setNewProjectName] = useState('Meu jogo');
+  const [selectedTemplateId, setSelectedTemplateId] = useState('');
+  const [newProjectParent, setNewProjectParent] = useState('');
+  const [creatingProject, setCreatingProject] = useState(false);
+  const [busyProjectRoot, setBusyProjectRoot] = useState('');
   const [config, setConfig] = useState<VisualConfig | null>(null);
   const [savedSnapshot, setSavedSnapshot] = useState('');
   const [selectedId, setSelectedId] = useState('game.title');
@@ -47,6 +58,8 @@ export function App() {
   const toastTimeout = useRef<number | undefined>(undefined);
 
   const dirty = Boolean(config && configSnapshot(config) !== savedSnapshot);
+  const dirtyRef = useRef(dirty);
+  dirtyRef.current = dirty;
   const catalog = project?.catalog;
   const elements = catalog?.elements ?? [];
   const selectedElement = elements.find((element) => element.id === selectedId) ?? null;
@@ -80,6 +93,7 @@ export function App() {
       return false;
     }
     setProject(payload);
+    setView('editor');
     setConfig(clone(payload.config));
     setSavedSnapshot(configSnapshot(payload.config));
     setSelectedId(payload.catalog.elements[0]?.id ?? '');
@@ -94,23 +108,49 @@ export function App() {
     return true;
   }, [showToast]);
 
+  const refreshHomeState = useCallback(async () => {
+    try {
+      const value = await window.trindadeStudio.getHomeState();
+      setHomeState(value);
+      setNewProjectParent((current) => current || value.projectsDirectory);
+      setSelectedTemplateId((current) => current || value.templates.find((template) => template.available)?.id || '');
+    } catch (error) {
+      setHomeMessage(error instanceof Error ? error.message : 'Não foi possível carregar a Central de Projetos.');
+    }
+  }, []);
+
   useEffect(() => {
     let active = true;
     window.trindadeStudio.getProject().then((payload) => {
-      if (active) installProject(payload);
+      if (active) {
+        if (payload.ok) installProject(payload);
+        void refreshHomeState();
+      }
     }).catch((error: unknown) => {
       if (active) showToast('error', error instanceof Error ? error.message : 'Não foi possível abrir o projeto.');
     });
+    void refreshHomeState();
     const unsubscribeClose = window.trindadeStudio.onCloseRequest(() => setPrompt('close'));
     const unsubscribeSave = window.trindadeStudio.onSaveRequest(() => { void save(); });
     const unsubscribeOpen = window.trindadeStudio.onOpenProjectRequest(() => { void requestOpen(); });
     const unsubscribeHistory = window.trindadeStudio.onHistoryCommand((command) => command === 'undo' ? undo() : redo());
+    const unsubscribeHome = window.trindadeStudio.onReturnHomeRequest(() => {
+      if (dirtyRef.current) setPrompt('home');
+      else {
+        setView('home');
+        setProject(null);
+        setConfig(null);
+        void window.trindadeStudio.setDirty(false);
+        void refreshHomeState();
+      }
+    });
     return () => {
       active = false;
       unsubscribeClose();
       unsubscribeSave();
       unsubscribeOpen();
       unsubscribeHistory();
+      unsubscribeHome();
       window.clearTimeout(toastTimeout.current);
     };
   }, []);
@@ -230,10 +270,86 @@ export function App() {
     installProject(payload);
   }, [installProject]);
 
+  const goHome = useCallback(() => {
+    setView('home');
+    setProject(null);
+    setConfig(null);
+    setPreviewReady(false);
+    setMode('edit');
+    void window.trindadeStudio.setDirty(false);
+    void refreshHomeState();
+  }, [refreshHomeState]);
+
+  const requestHome = useCallback(() => {
+    if (dirty) setPrompt('home');
+    else goHome();
+  }, [dirty, goHome]);
+
   const requestOpen = useCallback(() => {
     if (dirty) setPrompt('open');
     else void openProject();
   }, [dirty, openProject]);
+
+  const openRecentProject = useCallback(async (recent: RecentProject) => {
+    setBusyProjectRoot(recent.root);
+    setHomeMessage('');
+    try {
+      const payload = await window.trindadeStudio.openRecentProject(recent.root);
+      installProject(payload);
+    } catch (error) {
+      setHomeMessage(error instanceof Error ? error.message : 'Não foi possível abrir o projeto recente.');
+    } finally {
+      setBusyProjectRoot('');
+      void refreshHomeState();
+    }
+  }, [installProject, refreshHomeState]);
+
+  const removeRecentProject = useCallback(async (recent: RecentProject) => {
+    const result = await window.trindadeStudio.removeRecentProject(recent.root);
+    if (homeState) setHomeState({ ...homeState, recentProjects: result.recentProjects });
+  }, [homeState]);
+
+  const chooseNewProjectParent = useCallback(async () => {
+    const result = await window.trindadeStudio.chooseProjectParent();
+    if (!result.canceled && result.path) setNewProjectParent(result.path);
+  }, []);
+
+  const createNewProject = useCallback(async () => {
+    setCreatingProject(true);
+    setHomeMessage('');
+    try {
+      const payload = await window.trindadeStudio.createProject({ name: newProjectName, templateId: selectedTemplateId });
+      if (installProject(payload)) setCreateDialog(false);
+      else if (payload.error) setHomeMessage(payload.error);
+    } catch (error) {
+      setHomeMessage(error instanceof Error ? error.message : 'Não foi possível criar o projeto.');
+    } finally {
+      setCreatingProject(false);
+      void refreshHomeState();
+    }
+  }, [installProject, newProjectName, refreshHomeState, selectedTemplateId]);
+
+  const checkUpdates = useCallback(async () => {
+    setCheckingUpdates(true);
+    setUpdateCheck({ state: 'error', currentVersion: homeState?.appVersion || '0.0.0', message: 'Verificando releases estáveis oficiais…' });
+    try {
+      setUpdateCheck(await window.trindadeStudio.checkForUpdates());
+    } catch (error) {
+      setUpdateCheck({ state: 'error', currentVersion: homeState?.appVersion || '0.0.0', message: error instanceof Error ? error.message : 'Não foi possível verificar atualizações.' });
+    } finally {
+      setCheckingUpdates(false);
+    }
+  }, [homeState?.appVersion]);
+
+  const openManualUpdate = useCallback(async () => {
+    if (!updateCheck?.pageUrl) return;
+    try {
+      await window.trindadeStudio.openReleasePage(updateCheck.pageUrl);
+      setHomeMessage('Página oficial aberta no navegador. Baixe o instalador da release e execute-o para atualizar. O Studio não instala arquivos sem assinatura verificada.');
+    } catch (error) {
+      setHomeMessage(error instanceof Error ? error.message : 'Não foi possível abrir a página oficial.');
+    }
+  }, [updateCheck?.pageUrl]);
 
   const answerPrompt = useCallback(async (choice: 'save' | 'discard' | 'cancel') => {
     if (prompt === 'close') {
@@ -243,11 +359,16 @@ export function App() {
       if (choice === 'cancel' || !result.ok) setPrompt(null);
       return;
     }
+    const requestedAction = prompt;
     setPrompt(null);
     if (choice === 'cancel') return;
     if (choice === 'save' && !(await save())) return;
+    if (requestedAction === 'home') {
+      goHome();
+      return;
+    }
     await openProject();
-  }, [openProject, prompt, save, showToast]);
+  }, [goHome, openProject, prompt, save, showToast]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -280,6 +401,83 @@ export function App() {
     setSelectedId(scene.elementIds[0] || '');
   };
 
+  if (view === 'home') {
+    const updateStatus = updateCheck?.state === 'available'
+      ? `A versão ${updateCheck.latestVersion} está disponível.`
+      : updateCheck?.state === 'up-to-date'
+        ? 'Você está usando a versão mais recente.'
+        : updateCheck?.state === 'local-ahead'
+          ? `A versão instalada (${updateCheck.currentVersion}) está à frente da release estável (${updateCheck.latestVersion}); nenhuma regressão será oferecida.`
+        : updateCheck?.state === 'offline'
+          ? 'Sem conexão. O Studio continua disponível offline.'
+          : updateCheck?.state === 'error'
+            ? updateCheck.message
+            : '';
+    return (
+      <div className="home-shell">
+        <header className="home-topbar">
+          <div className="brand-block"><div className="brand-mark" aria-hidden="true">T</div><div className="brand-name"><strong>Trindade</strong><span>STUDIO</span></div></div>
+          <div className="home-version"><span>Studio</span><strong>v{homeState?.appVersion || '—'}</strong></div>
+        </header>
+        <main className="home-content">
+          <section className="home-welcome">
+            <div><span className="eyebrow">ENGINE VISUAL PARA O JOGO</span><h1>O que vamos criar hoje?</h1><p>Abra um projeto recente ou comece um jogo em uma pasta sua.</p></div>
+            <div className="home-primary-actions">
+              <button className="button button-primary home-create" onClick={() => { setHomeMessage(''); setCreateDialog(true); }}><span aria-hidden="true">＋</span>Novo projeto</button>
+              <button className="button button-quiet" onClick={() => void openProject()}><span aria-hidden="true">▱</span>Abrir projeto</button>
+            </div>
+          </section>
+          <section className="home-columns">
+            <div className="home-card recent-card">
+              <div className="home-card-heading"><div><span className="eyebrow">CONTINUAR</span><h2>Projetos recentes</h2></div><button className="icon-button" onClick={() => void refreshHomeState()} title="Atualizar lista" aria-label="Atualizar lista">↻</button></div>
+              {homeState?.recentProjects.length ? (
+                <div className="recent-project-list">
+                  {homeState.recentProjects.map((recent) => (
+                    <article className={`recent-project ${recent.unavailable ? 'recent-unavailable' : ''}`} key={`${recent.root}-${recent.id}`}>
+                      <div className="recent-project-icon" aria-hidden="true">◈</div>
+                      <div className="recent-project-copy"><strong>{recent.name}</strong><span title={recent.root}>{recent.root}</span><small>{recent.needsImport ? 'Projeto legado · será solicitado backup ao abrir' : recent.unavailable ? 'Pasta ausente ou incompatível' : `Formato de projeto v${recent.projectFormatVersion} · ${recent.lastOpenedAt ? new Date(recent.lastOpenedAt).toLocaleString() : 'recentemente'}`}</small></div>
+                      <button className="button button-quiet recent-open" onClick={() => void openRecentProject(recent)} disabled={Boolean(recent.unavailable) || busyProjectRoot === recent.root}>{busyProjectRoot === recent.root ? 'Abrindo…' : 'Abrir'}</button>
+                      <button className="recent-remove" onClick={() => void removeRecentProject(recent)} title="Remover da lista sem apagar os arquivos" aria-label={`Remover ${recent.name} da lista`}>×</button>
+                    </article>
+                  ))}
+                </div>
+              ) : (
+                <div className="home-empty"><span aria-hidden="true">◈</span><strong>Nenhum projeto recente</strong><p>Crie um novo projeto ou abra uma pasta do jogo para começar.</p></div>
+              )}
+              <div className="projects-location"><span className="location-icon" aria-hidden="true">⌖</span><div><small>LOCALIZAÇÃO PADRÃO</small><strong title={homeState?.projectsDirectory}>{homeState?.projectsDirectory || 'Carregando…'}</strong></div></div>
+            </div>
+            <aside className="home-card update-card">
+              <div className="update-card-icon" aria-hidden="true">↻</div>
+              <span className="eyebrow">VERSÃO DO APLICATIVO</span><h2>Atualizações do Studio</h2>
+              <p>Versão instalada <strong>v{homeState?.appVersion || '—'}</strong> · canal estável do GitHub.</p>
+              <button className="button button-quiet update-check-button" onClick={() => void checkUpdates()} disabled={checkingUpdates}>{checkingUpdates ? <><span className="spinner spinner-violet" />Verificando…</> : 'Verificar atualizações'}</button>
+              {updateStatus && <div className={`update-status update-${updateCheck?.state || 'checking'}`} role="status"><span className="update-status-dot" />{updateStatus}</div>}
+              {updateCheck?.state === 'available' && <>
+                {updateCheck.publishedAt && <small className="release-date">Publicada em {new Date(updateCheck.publishedAt).toLocaleDateString()}</small>}
+                {updateCheck.notes && <pre className="release-notes">{updateCheck.notes}</pre>}
+                <button className="button button-primary manual-update-button" onClick={() => void openManualUpdate()}>Abrir release e baixar manualmente</button>
+                <small className="update-security-note">A instalação automática está desativada neste build sem assinatura digital do publicador.</small>
+              </>}
+              <div className="update-source"><span className="secure-dot" />Fonte verificada: <code>github.com/EmersonOxy/PPT-Pedra-Papel-e-Tesoura-</code></div>
+            </aside>
+          </section>
+          {homeMessage && <div className="home-message" role="status">{homeMessage}</div>}
+          <footer className="home-footer">Projetos e preferências ficam no seu perfil do Windows, separados da instalação do Studio.</footer>
+        </main>
+
+        {createDialog && <div className="modal-backdrop" role="presentation"><section className="confirm-modal project-wizard" role="dialog" aria-modal="true" aria-labelledby="new-project-title">
+          <div className="modal-icon">＋</div><span className="eyebrow">NOVO PROJETO</span><h2 id="new-project-title">Comece com um modelo</h2><p>Os arquivos serão copiados para uma pasta independente. Projetos existentes nunca são sobrescritos.</p>
+          <label className="wizard-label" htmlFor="new-project-name">Nome do projeto</label><input id="new-project-name" className="wizard-input" value={newProjectName} maxLength={50} onChange={(event) => setNewProjectName(event.target.value)} />
+          <label className="wizard-label" htmlFor="new-project-template">Modelo inicial</label><select id="new-project-template" className="wizard-input" value={selectedTemplateId} onChange={(event) => setSelectedTemplateId(event.target.value)}>{(homeState?.templates || []).filter((template) => template.available).map((template) => <option key={template.id} value={template.id}>{template.label}</option>)}</select>
+          <div className="wizard-location"><div><small>PASTA DOS PROJETOS</small><strong title={newProjectParent}>{newProjectParent || homeState?.projectsDirectory}</strong></div><button className="button button-quiet" onClick={() => void chooseNewProjectParent()}>Escolher…</button></div>
+          {homeMessage && <p className="wizard-error" role="alert">{homeMessage}</p>}
+          <div className="modal-actions"><button className="button button-quiet" onClick={() => setCreateDialog(false)} disabled={creatingProject}>Cancelar</button><button className="button button-primary" onClick={() => void createNewProject()} disabled={creatingProject || !newProjectName.trim()}>{creatingProject ? 'Criando…' : 'Criar projeto'}</button></div>
+        </section></div>}
+        {prompt && <div className="modal-backdrop" role="presentation"><section className="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="confirm-title"><div className="modal-icon">↗</div><h2 id="confirm-title">Há alterações não salvas</h2><p>Salve antes de voltar à Central de Projetos. Você também pode descartar as alterações ou continuar editando.</p><div className="modal-actions"><button className="button button-quiet" onClick={() => void answerPrompt('cancel')}>Continuar editando</button><button className="button button-quiet" onClick={() => void answerPrompt('discard')}>Descartar</button><button className="button button-primary" onClick={() => void answerPrompt('save')}>Salvar e voltar</button></div></section></div>}
+      </div>
+    );
+  }
+
   return (
     <div className="studio-shell">
       <header className="topbar">
@@ -292,6 +490,7 @@ export function App() {
           <div className={`save-state ${dirty ? 'is-dirty' : ''}`}><i />{dirty ? 'Alterações não salvas' : 'Tudo salvo'}</div>
         </div>
         <div className="top-actions">
+          <button className="button button-quiet" onClick={requestHome} title="Voltar à Central de Projetos">Projetos</button>
           <button className="button button-quiet" onClick={requestOpen} title="Abrir uma pasta de projeto">
             <span className="button-icon" aria-hidden="true">▱</span><span>Abrir projeto</span>
           </button>
@@ -431,7 +630,7 @@ export function App() {
 
       {toast && <div className={`toast toast-${toast.kind}`} role="status"><span className="toast-mark">{toast.kind === 'error' ? '!' : toast.kind === 'success' ? '✓' : 'i'}</span>{toast.text}<button onClick={() => setToast(null)} aria-label="Fechar aviso">×</button></div>}
 
-      {prompt && <div className="modal-backdrop" role="presentation"><section className="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="confirm-title"><div className="modal-icon">{prompt === 'close' ? '↗' : '▱'}</div><h2 id="confirm-title">{prompt === 'close' ? 'Há alterações não salvas' : 'Salvar antes de abrir outro projeto?'}</h2><p>{prompt === 'close' ? 'Suas últimas mudanças ainda não foram gravadas no projeto.' : 'Você pode salvar as alterações atuais antes de escolher outra pasta.'}</p><div className="modal-actions"><button className="button button-quiet" onClick={() => void answerPrompt('cancel')}>{prompt === 'close' ? 'Continuar editando' : 'Cancelar'}</button><button className="button button-quiet" onClick={() => void answerPrompt('discard')}>{prompt === 'close' ? 'Descartar' : 'Descartar alterações'}</button><button className="button button-primary" onClick={() => void answerPrompt('save')}>Salvar</button></div></section></div>}
+      {prompt && <div className="modal-backdrop" role="presentation"><section className="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="confirm-title"><div className="modal-icon">{prompt === 'close' ? '↗' : '▱'}</div><h2 id="confirm-title">{prompt === 'close' ? 'Há alterações não salvas' : prompt === 'home' ? 'Salvar antes de voltar à Central?' : 'Salvar antes de abrir outro projeto?'}</h2><p>{prompt === 'close' ? 'Suas últimas mudanças ainda não foram gravadas no projeto.' : prompt === 'home' ? 'Você pode salvar as alterações atuais antes de voltar à Central de Projetos.' : 'Você pode salvar as alterações atuais antes de escolher outra pasta.'}</p><div className="modal-actions"><button className="button button-quiet" onClick={() => void answerPrompt('cancel')}>{prompt === 'close' ? 'Continuar editando' : 'Cancelar'}</button><button className="button button-quiet" onClick={() => void answerPrompt('discard')}>{prompt === 'close' ? 'Descartar' : 'Descartar alterações'}</button><button className="button button-primary" onClick={() => void answerPrompt('save')}>Salvar{prompt === 'home' ? ' e voltar' : ''}</button></div></section></div>}
     </div>
   );
 }
