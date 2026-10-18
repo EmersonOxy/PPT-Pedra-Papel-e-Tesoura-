@@ -1,0 +1,2 @@
+# Preserve the shipped HTML and its recovery reference byte-for-byte.
+*.html -text

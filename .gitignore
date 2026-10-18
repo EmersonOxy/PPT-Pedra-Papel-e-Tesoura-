@@ -1,0 +1,15 @@
+# Dependências e saídas geradas
+node_modules/
+dist/
+release/
+out/
+*.log
+
+# Configuração pessoal e segredos
+.env
+.env.*
+!.env.example
+.codex/config.toml
+
+# Provas locais descartáveis
+.codex/marco1-*/
