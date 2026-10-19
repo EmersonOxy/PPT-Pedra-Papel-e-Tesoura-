@@ -14,6 +14,8 @@ const api = Object.freeze({
   openReleasePage: (url) => ipcRenderer.invoke('studio:open-release-page', url),
   requestHome: () => ipcRenderer.invoke('studio:request-home'),
   saveVisualConfig: (config) => ipcRenderer.invoke('studio:save-visual-config', config),
+  importImage: () => ipcRenderer.invoke('studio:import-image'),
+  getAssetPreview: (assetId) => ipcRenderer.invoke('studio:get-asset-preview', assetId),
   setDirty: (dirty) => ipcRenderer.invoke('studio:set-dirty', dirty === true),
   respondToClose: (choice) => ipcRenderer.invoke('studio:respond-to-close', choice),
   closeStudio: () => ipcRenderer.invoke('studio:request-close'),

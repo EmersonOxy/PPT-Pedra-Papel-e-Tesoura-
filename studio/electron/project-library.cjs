@@ -125,6 +125,30 @@ async function copyRuntimeFiles(sourceRoot, destinationRoot) {
   }
 }
 
+async function copyRegisteredAssets(sourceRoot, destinationRoot, assets) {
+  if (!assets.length) return;
+  for (const asset of assets) {
+    const source = path.resolve(sourceRoot, ...asset.file.split('/'));
+    const destination = path.resolve(destinationRoot, ...asset.file.split('/'));
+    if (!source.startsWith(path.resolve(sourceRoot) + path.sep) || !destination.startsWith(path.resolve(destinationRoot) + path.sep)) {
+      throw new Error('O asset registrado aponta para fora da pasta do projeto.');
+    }
+    let cursor = path.resolve(sourceRoot);
+    for (const segment of asset.file.split('/')) {
+      cursor = path.join(cursor, segment);
+      const info = await fs.lstat(cursor);
+      if (info.isSymbolicLink()) throw new Error(`Links simbólicos não são aceitos nos assets do projeto: ${asset.name}`);
+    }
+    await fs.mkdir(path.dirname(destination), { recursive: true });
+    await fs.copyFile(source, destination, require('node:fs').constants.COPYFILE_EXCL);
+  }
+  const registry = path.resolve(sourceRoot, 'assets/manifest.json');
+  const destination = path.resolve(destinationRoot, 'assets/manifest.json');
+  const info = await fs.lstat(registry);
+  if (info.isSymbolicLink() || !info.isFile()) throw new Error('O manifesto de imagens do projeto não é seguro.');
+  await fs.copyFile(registry, destination, require('node:fs').constants.COPYFILE_EXCL);
+}
+
 async function createProject({ name, parentDirectory, templateRoot, templateId = TEMPLATE_ID }) {
   if (typeof name !== 'string' || !PROJECT_NAME_PATTERN.test(name.trim())) throw new Error('Use um nome de até 50 letras, números, espaços, hífens ou sublinhados.');
   const template = getTemplate(templateId);
@@ -147,6 +171,7 @@ async function createProject({ name, parentDirectory, templateRoot, templateId =
 
 async function createDuplicate({ sourceRoot, parentDirectory, name, templateRoot, userData }) {
   const source = await canonicalDirectory(sourceRoot);
+  const validatedSource = await loadProjectAt(source);
   const baseName = projectNameFromPath(name);
   let candidate = baseName;
   let suffix = 2;
@@ -169,6 +194,7 @@ async function createDuplicate({ sourceRoot, parentDirectory, name, templateRoot
       const destinationFile = path.join(result.root, relative);
       await fs.copyFile(sourceFile, destinationFile);
     }
+    await copyRegisteredAssets(source, result.root, validatedSource.assets);
     const manifest = { ...result.manifest, name: candidate };
     await atomicJsonWrite(path.join(result.root, PROJECT_MANIFEST), manifest);
     return { root: result.root, manifest };
@@ -180,6 +206,7 @@ async function createDuplicate({ sourceRoot, parentDirectory, name, templateRoot
 
 async function makeImportBackup(projectRoot, userData) {
   const root = await canonicalDirectory(projectRoot);
+  const validated = await loadProjectAt(root);
   const backupRoot = path.join(userData, 'import-backups', `${Date.now()}-${crypto.randomBytes(6).toString('hex')}`);
   await fs.mkdir(backupRoot, { recursive: true });
   for (const relative of allowedFiles) {
@@ -194,6 +221,7 @@ async function makeImportBackup(projectRoot, userData) {
     await fs.mkdir(path.dirname(target), { recursive: true });
     await fs.copyFile(source, target);
   }
+  await copyRegisteredAssets(root, backupRoot, validated.assets);
   return backupRoot;
 }
 

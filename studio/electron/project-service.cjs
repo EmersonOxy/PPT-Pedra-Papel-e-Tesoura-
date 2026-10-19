@@ -2,6 +2,7 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const { validateGeometry } = require('./geometry.cjs');
+const { importImageAt, readAssetManifestAt, readRegisteredAssetAt } = require('./asset-service.cjs');
 
 const allowedFiles = new Set([
   'index.html',
@@ -31,12 +32,12 @@ function isRecord(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
 
-function validateValue(property, value) {
+function validateValue(property, value, permittedAssetIds = assetIds) {
   if (property.type === 'text') {
     return typeof value === 'string' && value.length <= (property.maxLength || 80);
   }
   if (property.type === 'color') return typeof value === 'string' && colorPattern.test(value);
-  if (property.type === 'imageAsset') return typeof value === 'string' && assetIds.has(value);
+  if (property.type === 'imageAsset') return typeof value === 'string' && permittedAssetIds.has(value);
   if (property.type === 'fontFamily' || property.type === 'textAlign') return typeof value === 'string' && property.options?.includes(value) === true;
   if (property.type === 'fontSize' || property.type === 'opacity') {
     if (typeof value !== 'number' || !Number.isFinite(value) || value < property.min || value > property.max) return false;
@@ -128,11 +129,12 @@ function validateCatalog(catalog, html) {
   return elements;
 }
 
-function validateVisualConfig(catalog, config) {
+function validateVisualConfig(catalog, config, registeredAssetIds = []) {
   if (!isRecord(config) || config.schemaVersion !== catalog?.version || !isRecord(config.elements)) {
     throw new Error('A configuração visual tem uma versão ou formato incompatível.');
   }
   const definitions = new Map(catalog.elements.map((element) => [element.id, element]));
+  const permittedAssetIds = new Set([...assetIds, ...registeredAssetIds]);
   for (const [id, entry] of Object.entries(config.elements)) {
     const definition = definitions.get(id);
     if (!definition || !isRecord(entry) || Object.keys(entry).some((key) => !['base', 'responsive', ...(catalog.version >= 2 ? ['geometry'] : [])].includes(key))) {
@@ -142,7 +144,7 @@ function validateVisualConfig(catalog, config) {
     const properties = new Map(definition.properties.map((property) => [property.key, property]));
     for (const [key, value] of Object.entries(entry.base || {})) {
       const property = properties.get(key);
-      if (!property || !validateBinding(property) || !validateValue(property, value)) {
+      if (!property || !validateBinding(property) || !validateValue(property, value, permittedAssetIds)) {
         throw new Error(`Valor inválido em ${id}.${key}.`);
       }
     }
@@ -151,7 +153,7 @@ function validateVisualConfig(catalog, config) {
       if (!breakpoints.has(breakpoint) || !isRecord(values)) throw new Error(`Breakpoint inválido em ${id}.`);
       for (const [key, value] of Object.entries(values)) {
         const property = properties.get(key);
-        if (!property?.responsive || !validateBinding(property) || !validateValue(property, value)) {
+        if (!property?.responsive || !validateBinding(property) || !validateValue(property, value, permittedAssetIds)) {
           throw new Error(`Valor responsivo inválido em ${id}.${key}.`);
         }
       }
@@ -204,13 +206,15 @@ async function loadProjectAt(root) {
   const html = (await readAllowedFile(normalizedRoot, 'index.html')).toString('utf8');
   const catalog = JSON.parse((await readAllowedFile(normalizedRoot, 'config/editor-elements.schema.json')).toString('utf8'));
   const rawConfig = JSON.parse((await readAllowedFile(normalizedRoot, 'config/visual.json')).toString('utf8'));
+  const assets = await readAssetManifestAt(normalizedRoot);
   validateCatalog(catalog, html);
-  validateVisualConfig(catalog, rawConfig);
+  validateVisualConfig(catalog, rawConfig, assets.map((asset) => asset.id));
   return {
     root: normalizedRoot,
     name: path.basename(normalizedRoot),
     catalog,
     config: completeConfig(catalog, rawConfig),
+    assets,
   };
 }
 
@@ -225,9 +229,10 @@ async function writeSynced(filePath, contents) {
 }
 
 async function saveVisualConfigAt(root, catalog, candidate, options = {}) {
-  validateVisualConfig(catalog, candidate);
-  const config = completeConfig(catalog, candidate);
   const normalizedRoot = await fs.realpath(root);
+  const registeredAssets = await readAssetManifestAt(normalizedRoot);
+  validateVisualConfig(catalog, candidate, registeredAssets.map((asset) => asset.id));
+  const config = completeConfig(catalog, candidate);
   const configDirectory = path.join(normalizedRoot, 'config');
   const directoryInfo = await fs.lstat(configDirectory);
   const resolvedDirectory = await fs.realpath(configDirectory);
@@ -268,7 +273,10 @@ module.exports = {
   allowedFiles,
   completeConfig,
   loadProjectAt,
+  importImageAt,
   readAllowedFile,
+  readAssetManifestAt,
+  readRegisteredAssetAt,
   saveVisualConfigAt,
   validateCatalog,
   validateVisualConfig,

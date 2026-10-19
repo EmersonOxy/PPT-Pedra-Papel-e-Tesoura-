@@ -59,10 +59,30 @@ export interface ProjectPayload {
   name?: string;
   catalog?: EditorCatalog;
   config?: VisualConfig;
+  assets?: ImageAsset[];
   previewUrl?: string;
   session?: string;
   protocol?: number;
   root?: string;
+}
+
+export interface ImageAsset {
+  id: string;
+  name: string;
+  file: string;
+  mimeType: 'image/png' | 'image/jpeg' | 'image/webp';
+  size: number;
+  width: number;
+  height: number;
+  sha256: string;
+}
+
+export interface ImportImageResult {
+  ok: boolean;
+  canceled?: boolean;
+  asset?: ImageAsset;
+  assets?: ImageAsset[];
+  reused?: boolean;
 }
 
 export interface RecentProject {
@@ -115,6 +135,8 @@ export interface TrindadeStudioApi {
   openReleasePage: (url: string) => Promise<{ ok: boolean }>;
   requestHome: () => Promise<{ ok: boolean }>;
   saveVisualConfig: (config: VisualConfig) => Promise<{ ok: boolean; config?: VisualConfig; backupName?: string }>;
+  importImage: () => Promise<ImportImageResult>;
+  getAssetPreview: (assetId: string) => Promise<string>;
   setDirty: (dirty: boolean) => Promise<{ ok: boolean }>;
   respondToClose: (choice: 'save' | 'discard' | 'cancel') => Promise<{ ok: boolean; needsSave?: boolean }>;
   closeStudio: () => Promise<{ ok: boolean }>;

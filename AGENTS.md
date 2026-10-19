@@ -115,6 +115,10 @@ Delegue em paralelo apenas perguntas independentes. Não permita que agentes edi
 - O preview roda isolado, sem IPC, com origem/canal e payload verificados. Não habilitar combinações amplas de sandbox que coloquem preview e editor na mesma origem privilegiada.
 - Salvamento valida JSON e assets, grava atomicamente e mantém backup. Importação rejeita traversal, links fora da raiz, MIME/extensão incompatíveis e conteúdo ativo não sanitizado.
 - Segredos nunca entram na configuração, logs ou Git. Git usa helper de credenciais existente e stage explícito.
+- Cada sessão de preview é validada contra o identificador ativo mantido pelo processo principal e a origem exata do renderer; validar somente o formato do identificador não basta. Troca de projeto invalida a sessão anterior.
+- Assets próprios devem ser adicionados pela operação nomeada e pelo seletor nativo. PNG/JPEG/WebP estáticos passam por validação de conteúdo, formato, dimensão e tamanho; SVG, animações, URLs externas e conteúdo ativo não são assets. A biblioteca fica em `assets/manifest.json` + `assets/imported/`, usa IDs internos estáveis e não guarda o caminho original.
+- O servidor da prévia só entrega assets listados e verificados no manifesto do projeto ativo; rejeita symlinks, traversal e sessão/origem incorretas. Limites atuais: 5 MiB, 4096 px por dimensão, 16 MP e 500 imagens. Atualize testes e documentação junto com mudanças nesses limites/formatos.
+- Projetos schema 1, 2 e 3 não devem ser migrados ao abrir. Biblioteca de assets é opcional; duplicação/backup deve incluir todos os recursos registrados. Migrações futuras precisam de confirmação explícita e backup validado.
 
 ## Publicação Web e Vercel
 

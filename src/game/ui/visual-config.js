@@ -1,10 +1,11 @@
 const catalogUrl = new URL('../../../config/editor-elements.schema.json', import.meta.url);
 const visualUrl = new URL('../../../config/visual.json', import.meta.url);
-const assetPaths = Object.freeze({
+const builtInAssetPaths = Object.freeze({
   'hands.rock': './assets/images/hand-rock.png',
   'hands.paper': './assets/images/hand-paper.png',
   'hands.scissors': './assets/images/hand-scissors.png',
 });
+let assetPaths = { ...builtInAssetPaths };
 const colorPattern = /^#[0-9a-f]{6}$/i;
 const breakpoints = Object.freeze({
   mobile: '(max-width: 600px)',
@@ -241,11 +242,50 @@ export function applyVisualConfiguration(catalog, config, targetDocument = docum
   return apply;
 }
 
+export async function refreshProjectAssets() {
+  const session = new URLSearchParams(window.location.search).get('studioSession');
+  const editorOrigin = new URLSearchParams(window.location.search).get('studioParent');
+  const paths = { ...builtInAssetPaths };
+  if (!session || !/^[a-f0-9]{64}$/.test(session)) {
+    assetPaths = paths;
+    return assetPaths;
+  }
+  const registryUrl = new URL('/assets/manifest.json', window.location.href);
+  registryUrl.searchParams.set('studioSession', session);
+  if (editorOrigin) registryUrl.searchParams.set('studioParent', editorOrigin);
+  const response = await fetch(registryUrl, { credentials: 'omit', cache: 'no-store' });
+  if (response.status === 404) {
+    assetPaths = paths;
+    return assetPaths;
+  }
+  if (!response.ok) throw new Error('A biblioteca de imagens do projeto está indisponível.');
+  const manifest = await response.json();
+  if (!manifest || manifest.version !== 1 || !Array.isArray(manifest.assets) || manifest.assets.length > 500) throw new Error('Manifesto de imagens inválido.');
+  const ids = new Set();
+  for (const asset of manifest.assets) {
+    const extension = asset?.mimeType === 'image/png' ? '.png' : asset?.mimeType === 'image/jpeg' ? '.jpg' : asset?.mimeType === 'image/webp' ? '.webp' : '';
+    if (!extension || !/^img_[a-f0-9]{32}$/.test(asset.id) || ids.has(asset.id)
+      || asset.file !== `assets/imported/${asset.id}${extension}` || !Number.isInteger(asset.size) || asset.size < 1 || asset.size > 5 * 1024 * 1024
+      || !Number.isInteger(asset.width) || !Number.isInteger(asset.height) || asset.width < 1 || asset.height < 1 || asset.width > 4096 || asset.height > 4096 || asset.width * asset.height > 16_000_000
+      || typeof asset.sha256 !== 'string' || !new RegExp(`^${asset.id.slice(4)}[a-f0-9]{32}$`).test(asset.sha256)) {
+      throw new Error('Um recurso da biblioteca não corresponde aos limites de imagem permitidos.');
+    }
+    ids.add(asset.id);
+    const assetUrl = new URL(`/assets/imported/${asset.id}`, window.location.href);
+    assetUrl.searchParams.set('studioSession', session);
+    if (editorOrigin) assetUrl.searchParams.set('studioParent', editorOrigin);
+    paths[asset.id] = assetUrl.href;
+  }
+  assetPaths = paths;
+  return assetPaths;
+}
+
 export async function loadVisualConfig() {
   try {
     const [catalogResponse, visualResponse] = await Promise.all([fetch(catalogUrl), fetch(visualUrl)]);
     if (!catalogResponse.ok || !visualResponse.ok) throw new Error('Arquivos de configuração visual indisponíveis.');
     const [catalog, config] = await Promise.all([catalogResponse.json(), visualResponse.json()]);
+    await refreshProjectAssets();
     validateConfig(catalog, config);
     const apply = applyVisualConfiguration(catalog, config);
     for (const query of Object.values(breakpoints)) window.matchMedia(query).addEventListener('change', apply);

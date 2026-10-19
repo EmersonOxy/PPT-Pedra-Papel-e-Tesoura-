@@ -4,6 +4,7 @@ const fs = require('node:fs/promises');
 const os = require('node:os');
 const path = require('node:path');
 const { allowedFiles } = require('../electron/project-service.cjs');
+const { importImageAt, readAssetManifestAt } = require('../electron/asset-service.cjs');
 const {
   PROJECT_MANIFEST,
   addRecentProject,
@@ -119,9 +120,15 @@ test('rejects unsupported project and engine compatibility versions', () => {
 test('duplicates a selected project into a separate folder without copying repository metadata', async (t) => {
   const sandbox = await makeSandbox(t);
   const source = await createProject({ name: 'Projeto fonte', parentDirectory: sandbox.projects, templateRoot: sandbox.template });
+  const imageSource = path.join(sandbox.root, 'imagem.png');
+  await fs.copyFile(path.join(repositoryRoot, 'assets/images/hand-paper.png'), imageSource);
+  const imported = await importImageAt(source.root, imageSource);
   await fs.mkdir(path.join(source.root, '.git'));
   const duplicate = await createDuplicate({ sourceRoot: source.root, parentDirectory: sandbox.projects, name: 'Projeto fonte', templateRoot: sandbox.template, userData: sandbox.userData });
   assert.notEqual(duplicate.manifest.id, source.manifest.id);
   assert.equal(await fs.readFile(path.join(duplicate.root, 'index.html'), 'utf8'), await fs.readFile(path.join(source.root, 'index.html'), 'utf8'));
+  assert.deepEqual(await readAssetManifestAt(duplicate.root), imported.assets, 'A duplicação deve copiar a biblioteca validada do projeto.');
+  assert.deepEqual(await fs.readFile(path.join(duplicate.root, imported.asset.file)), await fs.readFile(path.join(source.root, imported.asset.file)));
+  assert.notEqual(await fs.stat(path.join(duplicate.root, imported.asset.file)).then((info) => info.ino), await fs.stat(path.join(source.root, imported.asset.file)).then((info) => info.ino), 'A cópia deve ter arquivo independente.');
   await assert.rejects(fs.access(path.join(duplicate.root, '.git')));
 });

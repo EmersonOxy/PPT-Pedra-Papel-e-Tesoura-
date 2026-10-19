@@ -27,6 +27,8 @@ async function makeProject(t) {
 
 test('loads the modular project and all registered editable elements', async (t) => {
   const { projectRoot } = await makeProject(t);
+  const catalogBefore = await fs.readFile(path.join(projectRoot, 'config', 'editor-elements.schema.json'));
+  const configBefore = await fs.readFile(path.join(projectRoot, 'config', 'visual.json'));
   const project = await loadProjectAt(projectRoot);
   assert.equal(project.name, 'project');
   assert.equal(project.catalog.elements.length, 11);
@@ -34,6 +36,9 @@ test('loads the modular project and all registered editable elements', async (t)
   assert.equal(project.config.elements['game.title'].base.text, 'Pedra, papel e tesoura');
   assert.equal(project.catalog.version, 3);
   assert.equal(project.config.elements['game.title'].base.fontFamily, undefined, 'Novas propriedades não devem ser materializadas como overrides ao abrir.');
+  assert.deepEqual(project.assets, [], 'Assets importados são opcionais e não presumidos em schema 3.');
+  assert.deepEqual(await fs.readFile(path.join(projectRoot, 'config', 'editor-elements.schema.json')), catalogBefore);
+  assert.deepEqual(await fs.readFile(path.join(projectRoot, 'config', 'visual.json')), configBefore, 'Abrir schema 3 também não deve regravar nem migrar arquivos.');
 });
 
 test('keeps schema 2 projects editable without rewriting their files', async (t) => {

@@ -11,6 +11,7 @@
   let scenes = null;
   let activeScene = null;
   let applyConfig = null;
+  let refreshAssets = null;
   let currentConfig = null;
   let geometryBreakpoint = 'desktop';
   let visualBreakpointOverride = null;
@@ -375,6 +376,18 @@
       } catch (error) {
         post('PREVIEW_ERROR', { message: error instanceof Error ? error.message : 'Não foi possível aplicar a prévia.' });
       }
+      return;
+    }
+    if (message.type === 'ASSETS_UPDATED') {
+      try {
+        if (!refreshAssets || !catalog || !applyConfig) throw new Error('A biblioteca de imagens ainda está carregando.');
+        await refreshAssets();
+        if (currentConfig) applyConfig(catalog, currentConfig, document, mode === 'edit' ? visualBreakpointOverride : null);
+        updateOverlay();
+        post('ASSETS_APPLIED');
+      } catch (error) {
+        post('PREVIEW_ERROR', { message: error instanceof Error ? error.message : 'Não foi possível atualizar a biblioteca de imagens.' });
+      }
     }
   });
 
@@ -396,6 +409,7 @@
     catalog = loadedCatalog;
     scenes = loadedScenes;
     applyConfig = visualConfig.applyVisualConfiguration;
+    refreshAssets = visualConfig.refreshProjectAssets;
     return waitForGameUi().then(() => {
       isReady = true;
       document.documentElement.dataset.studioMode = mode;

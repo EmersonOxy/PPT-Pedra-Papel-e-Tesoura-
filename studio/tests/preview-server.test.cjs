@@ -1,19 +1,30 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs/promises');
+const os = require('node:os');
 const path = require('node:path');
 const { createPreviewServer } = require('../electron/preview-server.cjs');
-const { allowedFiles } = require('../electron/project-service.cjs');
+const { allowedFiles, importImageAt } = require('../electron/project-service.cjs');
+const { createContentSecurityPolicy } = require('../electron/renderer-server.cjs');
 
 const projectRoot = path.resolve(__dirname, '..', '..');
 const editorOrigin = 'http://127.0.0.1:45678';
+let activeSession = 'a'.repeat(64);
 const session = 'a'.repeat(64);
 
+test('renderer CSP permits data thumbnails but no arbitrary origins', () => {
+  const csp = createContentSecurityPolicy('http://127.0.0.1:4173');
+  const imageDirective = csp.split(';').find((directive) => directive.trim().startsWith('img-src'));
+  assert.equal(imageDirective?.trim(), "img-src 'self' data:");
+});
+
 test('serves the actual modular runtime with a strict frame boundary and a session-bound bridge', async (t) => {
-  const server = createPreviewServer(projectRoot, () => editorOrigin);
+  const server = createPreviewServer(projectRoot, () => editorOrigin, () => activeSession);
   const origin = await server.listen();
   t.after(() => server.close());
 
-  const page = await fetch(`${origin}/?studioSession=${session}`);
+  const parent = encodeURIComponent(editorOrigin);
+  const page = await fetch(`${origin}/?studioParent=${parent}&studioSession=${session}`);
   assert.equal(page.status, 200);
   assert.equal(page.headers.get('content-type'), 'text/html; charset=utf-8');
   assert.equal(page.headers.get('access-control-allow-origin'), null);
@@ -23,7 +34,7 @@ test('serves the actual modular runtime with a strict frame boundary and a sessi
   assert.match(html, /__studio\/preview-bridge\.js\?studioParent=http%3A/);
 
   for (const file of allowedFiles) {
-    const query = file === 'index.html' ? `?studioSession=${session}` : '';
+    const query = file === 'index.html' ? `?studioParent=${parent}&studioSession=${session}` : '';
     const response = await fetch(`${origin}/${file}${query}`);
     assert.equal(response.status, 200, `${file} deve estar disponível à prévia local.`);
   }
@@ -57,5 +68,40 @@ test('serves the actual modular runtime with a strict frame boundary and a sessi
   assert.equal((await fetch(`${origin}/docs/BUILD_AND_TEST.md`)).status, 404);
   assert.equal((await fetch(`${origin}/.git/config`)).status, 404);
   assert.equal((await fetch(`${origin}/%2e%2e%2fAGENTS.md`)).status, 404);
+  assert.equal((await fetch(`${origin}/`)).status, 404, 'A rota da prévia exige sessão e origem ativas.');
+  assert.equal((await fetch(`${origin}/?studioParent=${parent}&studioSession=${'b'.repeat(64)}`)).status, 404, 'Uma sessão de outro projeto deve ser recusada.');
+  const staleBridge = new URL(validBridge);
+  staleBridge.searchParams.set('studioSession', 'b'.repeat(64));
+  assert.equal((await fetch(staleBridge)).status, 404, 'O bridge deve recusar uma sessão antiga.');
+  const missingBridgeOrigin = new URL(validBridge);
+  missingBridgeOrigin.searchParams.delete('studioParent');
+  assert.equal((await fetch(missingBridgeOrigin)).status, 404, 'O bridge exige a origem exata do Studio.');
+  assert.equal((await fetch(`${origin}/assets/manifest.json?studioSession=${session}`)).status, 404, 'A biblioteca exige a origem e a sessão ativas.');
+  assert.equal((await fetch(`${origin}/assets/manifest.json?studioParent=${parent}&studioSession=${session}`)).status, 200, 'Projetos sem biblioteca continuam válidos com manifesto vazio.');
+  assert.equal((await fetch(`${origin}/assets/imported/img_${'0'.repeat(32)}?studioParent=${parent}&studioSession=${session}`)).status, 404, 'Um asset não registrado não deve ser servido.');
   assert.equal((await fetch(`${origin}/`, { method: 'POST' })).status, 405);
+
+  const temporary = await fs.mkdtemp(path.join(os.tmpdir(), 'trindade-preview-session-'));
+  t.after(() => fs.rm(temporary, { recursive: true, force: true }));
+  const secondProject = path.join(temporary, 'second-project');
+  await fs.mkdir(secondProject, { recursive: true });
+  for (const relative of allowedFiles) {
+    const source = path.join(projectRoot, relative);
+    const destination = path.join(secondProject, relative);
+    await fs.mkdir(path.dirname(destination), { recursive: true });
+    await fs.copyFile(source, destination);
+  }
+  const imported = await importImageAt(secondProject, path.join(projectRoot, 'assets/images/hand-rock.png'));
+  server.setProjectRoot(secondProject);
+  activeSession = 'c'.repeat(64);
+  const oldProjectAssetUrl = `${origin}/assets/imported/${imported.asset.id}?studioParent=${parent}&studioSession=${session}`;
+  assert.equal((await fetch(oldProjectAssetUrl)).status, 404, 'Uma sessão antiga não pode buscar assets de outro projeto.');
+  const activeManifest = await fetch(`${origin}/assets/manifest.json?studioParent=${parent}&studioSession=${activeSession}`);
+  assert.equal(activeManifest.status, 200);
+  assert.equal((await activeManifest.json()).assets[0].id, imported.asset.id);
+  const activeImage = await fetch(`${origin}/assets/imported/${imported.asset.id}?studioParent=${parent}&studioSession=${activeSession}`);
+  assert.equal(activeImage.status, 200);
+  assert.equal(activeImage.headers.get('content-type'), 'image/png');
+  assert.equal(Buffer.from(await activeImage.arrayBuffer()).length, imported.asset.size);
+  assert.equal((await fetch(`${origin}/assets/imported/${imported.asset.id}?studioParent=${parent}&studioSession=${'d'.repeat(64)}`)).status, 404);
 });

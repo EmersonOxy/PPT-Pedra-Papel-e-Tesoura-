@@ -1,7 +1,7 @@
 const http = require('node:http');
 const fs = require('node:fs/promises');
 const path = require('node:path');
-const { allowedFiles, loadProjectAt, readAllowedFile } = require('./project-service.cjs');
+const { allowedFiles, loadProjectAt, readAllowedFile, readAssetManifestAt, readRegisteredAssetAt } = require('./project-service.cjs');
 
 const contentTypes = new Map([
   ['.html', 'text/html; charset=utf-8'],
@@ -9,6 +9,9 @@ const contentTypes = new Map([
   ['.css', 'text/css; charset=utf-8'],
   ['.json', 'application/json; charset=utf-8'],
   ['.png', 'image/png'],
+  ['.jpg', 'image/jpeg'],
+  ['.jpeg', 'image/jpeg'],
+  ['.webp', 'image/webp'],
 ]);
 const sceneCatalogPath = path.resolve(__dirname, '..', 'scenes.json');
 
@@ -23,8 +26,16 @@ function send(response, status, headers = {}, body = '') {
   response.end(body);
 }
 
-function createPreviewServer(projectRoot, getEditorOrigin) {
+function createPreviewServer(projectRoot, getEditorOrigin, getActiveSession = () => '') {
   const bridgePath = path.join(__dirname, 'preview-bridge.js');
+  function isActiveSession(session) {
+    const active = getActiveSession();
+    return typeof session === 'string' && /^[a-f0-9]{64}$/.test(session)
+      && typeof active === 'string' && /^[a-f0-9]{64}$/.test(active) && session === active;
+  }
+  function isEditorRequest(query, editorOrigin) {
+    return Boolean(editorOrigin && query.get('studioParent') === editorOrigin && isActiveSession(query.get('studioSession')));
+  }
   const server = http.createServer(async (request, response) => {
     if (!['GET', 'HEAD'].includes(request.method || '')) {
       response.setHeader('Allow', 'GET, HEAD');
@@ -42,9 +53,7 @@ function createPreviewServer(projectRoot, getEditorOrigin) {
 
     if (pathname === '/__studio/preview-bridge.js') {
       const editorOrigin = getEditorOrigin();
-      const session = query.get('studioSession');
-      const parentOrigin = query.get('studioParent');
-      if (!editorOrigin || !session || session.length < 32 || parentOrigin !== editorOrigin) return send(response, 404);
+      if (!isEditorRequest(query, editorOrigin)) return send(response, 404);
       try {
         const script = await fs.readFile(bridgePath, 'utf8');
         return send(response, 200, {
@@ -58,9 +67,7 @@ function createPreviewServer(projectRoot, getEditorOrigin) {
 
     if (pathname === '/__studio/scenes.json') {
       const editorOrigin = getEditorOrigin();
-      const session = query.get('studioSession');
-      const parentOrigin = query.get('studioParent');
-      if (!editorOrigin || !session || session.length < 32 || parentOrigin !== editorOrigin) return send(response, 404);
+      if (!isEditorRequest(query, editorOrigin)) return send(response, 404);
       try {
         const scenes = await fs.readFile(sceneCatalogPath);
         return send(response, 200, {
@@ -69,6 +76,32 @@ function createPreviewServer(projectRoot, getEditorOrigin) {
         }, request.method === 'HEAD' ? '' : scenes);
       } catch {
         return send(response, 500);
+      }
+    }
+
+    if (pathname === '/assets/manifest.json') {
+      if (!isEditorRequest(query, getEditorOrigin()) || !projectRoot) return send(response, 404);
+      try {
+        const activeProject = await loadProjectAt(projectRoot);
+        const assets = await readAssetManifestAt(activeProject.root);
+        const body = Buffer.from(`${JSON.stringify({ version: 1, assets })}\n`);
+        return send(response, 200, { 'Content-Type': 'application/json; charset=utf-8', 'Content-Length': String(body.length) }, request.method === 'HEAD' ? '' : body);
+      } catch (error) {
+        return send(response, error.code === 'ENOENT' ? 404 : 400);
+      }
+    }
+
+    const importedAsset = /^\/assets\/imported\/(img_[a-f0-9]{32})$/.exec(pathname);
+    if (importedAsset) {
+      if (!isEditorRequest(query, getEditorOrigin()) || !projectRoot) return send(response, 404);
+      try {
+        const result = await readRegisteredAssetAt((await loadProjectAt(projectRoot)).root, importedAsset[1]);
+        return send(response, 200, {
+          'Content-Type': result.asset.mimeType,
+          'Content-Length': String(result.body.length),
+        }, request.method === 'HEAD' ? '' : result.body);
+      } catch {
+        return send(response, 404);
       }
     }
 
@@ -84,7 +117,7 @@ function createPreviewServer(projectRoot, getEditorOrigin) {
       if (relativePath === 'index.html') {
         if (!editorOrigin) return send(response, 503);
         const bridgeSession = query.get('studioSession') || '';
-        if (!/^[a-f0-9]{64}$/.test(bridgeSession)) return send(response, 400);
+        if (!isEditorRequest(query, editorOrigin)) return send(response, 404);
         const html = body.toString('utf8');
         const requestedMode = query.get('studioMode') === 'test' ? 'test' : 'edit';
         const bridgeQuery = new URLSearchParams({ studioParent: editorOrigin, studioSession: bridgeSession, studioMode: requestedMode }).toString().replaceAll('&', '&amp;');
@@ -98,6 +131,7 @@ function createPreviewServer(projectRoot, getEditorOrigin) {
         'Content-Type': contentTypes.get(path.extname(relativePath).toLowerCase()) || 'application/octet-stream',
         'Content-Security-Policy': csp,
       };
+      headers['Cross-Origin-Resource-Policy'] = 'same-origin';
       if (request.method === 'HEAD') {
         headers['Content-Length'] = String(body.length);
         return send(response, 200, headers);

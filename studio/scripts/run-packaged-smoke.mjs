@@ -128,7 +128,7 @@ async function attach(target) {
     if (message.method === 'Network.loadingFailed') networkFailures.push({
       url: requests.get(message.params.requestId) || '',
       errorText: message.params.errorText,
-      canceled: message.params.canceled === true,
+      canceled: message.params.canceled === true || message.params.errorText === '',
     });
     if (message.id && pending.has(message.id)) {
       const { resolve: resolvePromise, reject } = pending.get(message.id);
@@ -178,13 +178,20 @@ for (const relative of allowedFiles) {
   await copyFile(join(repositoryRoot, relative), destination);
 }
 await copyFile(join(repositoryRoot, 'config/gameplay.local.json'), join(fixture, 'config/gameplay.local.json'));
+const assetSamplePath = process.env.TRINDADE_STUDIO_TEST_IMPORT_PATH
+  ? resolve(process.env.TRINDADE_STUDIO_TEST_IMPORT_PATH)
+  : join(temporary, 'asset-samples', 'Studio-spark.png');
+if (!process.env.TRINDADE_STUDIO_TEST_IMPORT_PATH) {
+  await mkdir(dirname(assetSamplePath), { recursive: true });
+  await copyFile(join(repositoryRoot, 'assets/images/hand-paper.png'), assetSamplePath);
+}
 await access(executable);
 
 let child;
 let session;
 try {
   const port = await availablePort();
-  ({ child } = await launch(executable, profile, fixture, port));
+  ({ child } = await launch(executable, profile, fixture, port, { TRINDADE_STUDIO_TEST_IMPORT_PATH: assetSamplePath }));
   session = await attach((await (await fetch(`http://127.0.0.1:${port}/json/list`)).json()).find((target) => target.type === 'page'));
   report('janela empacotada aberta');
 
@@ -206,7 +213,7 @@ try {
   assert.equal(studio.layers, 3, `O menu deve listar seu cartão, título e botão registrados: ${JSON.stringify(studio)}`);
   assert.match(studio.preview, /^http:\/\/127\.0\.0\.1:/, 'A prévia não usa servidor local isolado.');
   assert.deepEqual(studio.nodeAccess, ['undefined', 'undefined'], 'O renderer recebeu acesso Node inesperado.');
-  assert.deepEqual(studio.api.sort(), ['checkForUpdates', 'chooseProjectParent', 'closeStudio', 'createProject', 'getHomeState', 'getProject', 'onCloseRequest', 'onHistoryCommand', 'onOpenProjectRequest', 'onReturnHomeRequest', 'onSaveRequest', 'openProject', 'openRecentProject', 'openReleasePage', 'removeRecentProject', 'requestHome', 'respondToClose', 'saveVisualConfig', 'setDirty'].sort());
+  assert.deepEqual(studio.api.sort(), ['checkForUpdates', 'chooseProjectParent', 'closeStudio', 'createProject', 'getAssetPreview', 'getHomeState', 'getProject', 'importImage', 'onCloseRequest', 'onHistoryCommand', 'onOpenProjectRequest', 'onReturnHomeRequest', 'onSaveRequest', 'openProject', 'openRecentProject', 'openReleasePage', 'removeRecentProject', 'requestHome', 'respondToClose', 'saveVisualConfig', 'setDirty'].sort());
   report('renderer isolado, oito cenas e três camadas de menu verificadas');
 
   let frameId = await waitFor(async () => {
@@ -501,6 +508,36 @@ try {
   await waitFor(() => session.evaluate(`document.querySelector('[data-editor-id="hands.player.image"]').getAttribute('src') === './assets/images/hand-paper.png'`, frameContext), 'seleção de imagem permitida aplicada à prévia');
   report('edição de cor, imagem permitida e isolamento das propriedades compartilhadas verificados');
 
+  await session.evaluate(`document.querySelector('.asset-import-button').click()`);
+  await waitFor(() => session.evaluate(`document.querySelector('[data-asset-id]')?.dataset.assetId || [...document.querySelectorAll('.toast')].some((node) => /imagem|import|asset|arquivo/i.test(node.innerText))`), 'importação de imagem para biblioteca do projeto');
+  const importDiagnostic = await session.evaluate(`({assets:document.querySelectorAll('[data-asset-id]').length,status:[...document.querySelectorAll('.toast')].map(node=>node.innerText)})`);
+  assert.ok(importDiagnostic.assets > 0, `Importação sem asset. Diagnóstico: ${JSON.stringify(importDiagnostic)}`);
+  const importedAssetId = await session.evaluate(`document.querySelector('[data-asset-id]').dataset.assetId`);
+  try {
+    await waitFor(() => session.evaluate(`(() => { const image=document.querySelector('[data-asset-id] img'); return Boolean(image?.complete && image.naturalWidth > 0); })()`), 'miniatura do asset carregada na biblioteca');
+  } catch (error) {
+    const thumbnailState = await session.evaluate(`(async () => { const image=document.querySelector('[data-asset-id] img'); let response=''; try { response=await fetch(image.src).then(value=>String(value.status)); } catch (failure) { response=String(failure); } return {src:image?.src,complete:image?.complete,naturalWidth:image?.naturalWidth,outerHTML:image?.outerHTML,response,location:location.href}; })()`);
+    let httpAssetState;
+    try { const response = await fetch(thumbnailState.src); httpAssetState = { status: response.status, contentType: response.headers.get('content-type'), bytes: (await response.arrayBuffer()).byteLength }; }
+    catch (fetchError) { httpAssetState = String(fetchError); }
+    const csp = await session.evaluate(`fetch('/').then(response => response.headers.get('content-security-policy'))`);
+    throw new Error(`${error.message}; miniatura=${JSON.stringify(thumbnailState)}; http=${JSON.stringify(httpAssetState)}; csp=${csp}; console=${JSON.stringify(session.consoleErrors.slice(-8))}; rede=${JSON.stringify(session.networkFailures.slice(-8))}`);
+  }
+  await session.evaluate(`document.querySelector('[data-element-id="hands.player.image"]').click()`);
+  await waitFor(() => session.evaluate(`document.querySelector('.selected-element-card')?.innerText.includes('hands.player.image')`), 'seleção do elemento para asset importado');
+  await new Promise((resolvePromise) => setTimeout(resolvePromise, 1000));
+  await setInspectorValue('property-hands.player.image.assetId.base', importedAssetId, 'select');
+  const importedPreviewSrc = await waitFor(async () => session.evaluate(`(() => { const image=document.querySelector('[data-editor-id="hands.player.image"]'); return image?.getAttribute('src')?.includes('/assets/imported/${importedAssetId}?') && image.complete && image.naturalWidth > 0 ? image.getAttribute('src') : null; })()`, frameContext), 'asset importado servido pelo projeto e decodificado na prévia');
+  assert.equal((await readFile(join(fixture, 'assets/manifest.json'), 'utf8')).includes(importedAssetId), true);
+  await mkdir(inspectorScreenshotRoot, { recursive: true });
+  await writeFile(join(inspectorScreenshotRoot, 'asset-library-imported.png'), Buffer.from((await capturePage(session)).data, 'base64'));
+  await session.evaluate(`document.querySelector('button[title^="Desfazer"]').click()`);
+  await waitFor(() => session.evaluate(`document.getElementById('property-hands.player.image.assetId.base')?.value === 'hands.paper'`), 'undo de atribuição do asset');
+  await session.evaluate(`document.querySelector('button[title^="Refazer"]').click()`);
+  await waitFor(() => session.evaluate(`document.getElementById('property-hands.player.image.assetId.base')?.value === '${importedAssetId}'`), 'redo de atribuição do asset');
+  assert.match(importedPreviewSrc, new RegExp(`/assets/imported/${importedAssetId}\\?`));
+  report('asset importado na biblioteca, atribuído pelo inspetor, decodificado e com undo/redo');
+
   await session.evaluate(`document.querySelector('button.button-test').click()`);
   await waitFor(() => session.evaluate(`document.querySelector('.canvas-statusbar')?.innerText.includes('Modo de teste')`), 'modo de teste');
   frameContext = await waitForReloadedFrame(frameContext, 'prévia real recarregada em modo teste');
@@ -573,7 +610,7 @@ try {
     const previewAsset = await session.evaluate(`document.querySelector('[data-editor-id="hands.player.image"]').getAttribute('src')`, frameContext);
     const previewScene = await session.evaluate(`document.querySelector('#menu-screen').hidden && !document.querySelector('#game-screen').hidden && document.querySelector('#end-screen').hidden`, frameContext);
     editReturnState = { uiState, previewAsset, previewScene, previewMode: await session.evaluate(`document.documentElement.dataset.studioMode`, frameContext), previewErrors: session.consoleErrors.slice(-3) };
-    return uiState.dirty && uiState.asset === 'hands.paper' && previewAsset === './assets/images/hand-paper.png' && previewScene;
+    return uiState.dirty && uiState.asset === importedAssetId && previewAsset.includes(`/assets/imported/${importedAssetId}?`) && previewScene;
   }, 'preservação das alterações não salvas ao retornar de Testar'); }
   catch (error) { throw new Error(`${error.message}; estado após retorno: ${JSON.stringify(editReturnState)}`); }
   await session.evaluate(`document.querySelector('button.save-button').click()`);
@@ -589,6 +626,7 @@ try {
   assert.deepEqual(geometrySaved.elements['menu.start'].geometry.base, { x: desktopX, y: 19, width: 190, height: 62 }, 'A geometria desktop salva deve corresponder ao estado mostrado.');
   assert.deepEqual(geometrySaved.elements['menu.start'].geometry.responsive.mobile, { x: draggedMobileX, y: draggedMobileY, width: 190, height: 62 }, 'A geometria mobile salva deve coincidir com o estado mostrado após o arraste.');
   assert.equal(geometrySaved.elements['arena.background'].geometry.base.y, 24, 'A geometria da arena deve ser salva.');
+  assert.equal(geometrySaved.elements['hands.player.image'].base.assetId, importedAssetId, 'A atribuição do asset importado deve ser salva.');
   assert.equal(await readFile(join(fixture, 'config/visual.json.bak'), 'utf8').then((raw) => JSON.parse(raw).elements['game.title'].base.text), 'Pedra, papel e tesoura', 'O backup não preservou a configuração anterior.');
   report('configuração salva com backup');
 
@@ -640,6 +678,7 @@ try {
   const reopenedFrameContext = await waitFor(() => session.contexts.get(reopenedFrameId), 'contexto da prévia após reabrir');
   frameContext = reopenedFrameContext;
   await waitFor(() => session.evaluate(`document.querySelector('[data-editor-id="game.title"]').style.getPropertyValue('--studio-font-family') === 'Georgia'`, reopenedFrameContext), 'fonte persistida aplicada à prévia depois de reabrir');
+  await waitFor(() => session.evaluate(`document.querySelector('[data-editor-id="hands.player.image"]').getAttribute('src')?.includes('/assets/imported/${importedAssetId}?') && document.querySelector('[data-editor-id="hands.player.image"]').complete && document.querySelector('[data-editor-id="hands.player.image"]').naturalWidth > 0`, reopenedFrameContext), 'asset importado persistiu e decodificou após reabrir');
   assert.equal(await session.evaluate(`document.querySelector('[data-editor-id="game.title"]').style.getPropertyValue('--studio-font-size')`, reopenedFrameContext), '42px');
   assert.equal(await session.evaluate(`document.querySelector('[data-editor-id="game.title"]').style.getPropertyValue('--studio-font-color')`, reopenedFrameContext), '');
   assert.equal(await session.evaluate(`document.querySelector('[data-editor-id="game.title"]').style.getPropertyValue('--studio-text-color')`, reopenedFrameContext), '#123456');
@@ -693,6 +732,7 @@ try {
   ({ child } = await launch(executable, homeProfile, fixture, homePort, {
     TRINDADE_STUDIO_TEST_HOME: '1',
     TRINDADE_STUDIO_TEST_PROJECTS_DIR: homeProjects,
+    TRINDADE_STUDIO_TEST_IMPORT_PATH: assetSamplePath,
   }));
   report('Central de Projetos aberta no Electron real');
   const homeTarget = (await (await fetch(`http://127.0.0.1:${homePort}/json/list`)).json()).find((target) => target.type === 'page');
@@ -737,6 +777,10 @@ try {
   })()`);
   await session.evaluate(`document.querySelector('button.save-button').click()`);
   await waitFor(() => readFile(join(firstProjectRoot, 'config/visual.json'), 'utf8').then((raw) => JSON.parse(raw).elements['game.title'].base.text === firstTitle), 'salvamento no primeiro projeto');
+  await session.evaluate(`document.querySelector('.asset-import-button').click()`);
+  await waitFor(() => session.evaluate(`document.querySelector('[data-asset-id]')?.dataset.assetId`), 'importação do asset no primeiro projeto da Central');
+  const firstProjectAssetId = await session.evaluate(`document.querySelector('[data-asset-id]').dataset.assetId`);
+  assert.equal((await readFile(join(firstProjectRoot, 'assets/manifest.json'), 'utf8')).includes(firstProjectAssetId), true);
   await session.evaluate(`([...document.querySelectorAll('button')].find((button) => button.innerText.trim() === 'Projetos')).click()`);
   await waitFor(() => session.evaluate(`Boolean(document.querySelector('.home-shell'))`), 'retorno limpo à Central de Projetos');
   await session.evaluate(newProjectButton);
@@ -744,6 +788,8 @@ try {
   await typeProjectName('Projeto Central Dois');
   const secondProjectRoot = join(homeProjects, 'Projeto Central Dois');
   await waitFor(() => readFile(join(secondProjectRoot, 'trindade.project.json'), 'utf8').then((raw) => JSON.parse(raw).projectFormatVersion === 1), 'manifesto do segundo projeto');
+  await assert.rejects(access(join(secondProjectRoot, 'assets/manifest.json')), 'Um projeto novo não deve herdar assets importados em outro projeto.');
+  await assert.rejects(access(join(secondProjectRoot, `assets/imported/${firstProjectAssetId}.png`)), 'Assets de um projeto não podem ser lidos/copiados para outro implicitamente.');
   assert.equal(JSON.parse(await readFile(join(secondProjectRoot, 'config/visual.json'), 'utf8')).elements['game.title'].base.text, 'Pedra, papel e tesoura', 'Projetos diferentes devem ter configurações independentes.');
   await session.evaluate(`([...document.querySelectorAll('button')].find((button) => button.innerText.trim() === 'Projetos')).click()`);
   await waitFor(() => session.evaluate(`document.querySelectorAll('.recent-project').length === 2`), 'lista de dois projetos recentes');

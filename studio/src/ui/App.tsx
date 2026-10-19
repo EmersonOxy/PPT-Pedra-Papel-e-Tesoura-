@@ -47,6 +47,7 @@ export function App() {
   const [device, setDevice] = useState<Device>('desktop');
   const [previewReady, setPreviewReady] = useState(false);
   const [geometryMetrics, setGeometryMetrics] = useState<Record<string, { width: number; height: number }>>({});
+  const [assetPreviews, setAssetPreviews] = useState<Record<string, string>>({});
   const [toast, setToast] = useState<Toast | null>(null);
   const [prompt, setPrompt] = useState<Prompt>(null);
   const [saving, setSaving] = useState(false);
@@ -66,9 +67,23 @@ export function App() {
   dirtyRef.current = dirty;
   const catalog = project?.catalog;
   const elements = catalog?.elements ?? [];
+  const registeredAssets = useMemo(() => [...ASSETS, ...(project?.assets || [])], [project?.assets]);
   const selectedElement = elements.find((element) => element.id === selectedId) ?? null;
   const selectedScene = STUDIO_SCENES.find((scene) => scene.id === selectedSceneId) ?? STUDIO_SCENES[0];
   const sceneElements = useMemo(() => elements.filter((element) => selectedScene.elementIds.includes(element.id)), [elements, selectedScene]);
+  const assetUsage = useMemo(() => {
+    const usage: Record<string, string[]> = {};
+    for (const element of elements) {
+      for (const property of element.properties.filter((item) => item.type === 'imageAsset')) {
+        const entry = config?.elements[element.id];
+        const values = [entry?.base?.[property.key], ...Object.values(entry?.responsive || {}).map((responsive) => responsive[property.key])];
+        for (const value of values) {
+          if (typeof value === 'string') usage[value] = [...new Set([...(usage[value] || []), prettyName(element)])];
+        }
+      }
+    }
+    return usage;
+  }, [config, elements]);
   const canUndo = undoStack.current.length > 0;
   const canRedo = redoStack.current.length > 0;
   const previewOrigin = project?.previewUrl ? new URL(project.previewUrl).origin : '';
@@ -85,13 +100,23 @@ export function App() {
     toastTimeout.current = window.setTimeout(() => setToast(null), 4000);
   }, []);
 
+  useEffect(() => {
+    let active = true;
+    const assets = project?.assets || [];
+    if (!assets.length) { setAssetPreviews({}); return () => { active = false; }; }
+    Promise.all(assets.map(async (asset) => [asset.id, await window.trindadeStudio.getAssetPreview(asset.id)] as const))
+      .then((entries) => { if (active) setAssetPreviews(Object.fromEntries(entries)); })
+      .catch((error: unknown) => { if (active) showToast('error', error instanceof Error ? error.message : 'Não foi possível criar a miniatura do asset.'); });
+    return () => { active = false; };
+  }, [project?.assets, showToast]);
+
   const installProject = useCallback((payload: ProjectPayload) => {
     if (!payload.ok || !payload.catalog || !payload.config || !payload.previewUrl) {
       if (payload.error && !payload.canceled) showToast('error', payload.error);
       return false;
     }
     try {
-      validateClientConfig(payload.catalog, payload.config);
+      validateClientConfig(payload.catalog, payload.config, [...ASSETS, ...(payload.assets || [])]);
     } catch (error) {
       showToast('error', error instanceof Error ? error.message : 'A configuração do projeto é inválida.');
       return false;
@@ -170,6 +195,19 @@ export function App() {
     target.postMessage({ protocol: 1, session: project.session, type, ...detail }, previewOrigin);
   }, [project, previewOrigin]);
 
+  const importImage = useCallback(async () => {
+    try {
+      const result = await window.trindadeStudio.importImage();
+      if (result.canceled) return;
+      if (!result.ok || !result.asset) throw new Error('O Studio não confirmou a importação da imagem.');
+      setProject((current) => current ? { ...current, assets: result.assets || [] } : current);
+      sendPreview('ASSETS_UPDATED');
+      showToast('success', result.reused ? `“${result.asset.name}” já estava na biblioteca.` : `“${result.asset.name}” foi adicionada ao projeto.`);
+    } catch (error) {
+      showToast('error', error instanceof Error ? error.message : 'Não foi possível importar essa imagem.');
+    }
+  }, [sendPreview, showToast]);
+
   const selectPreviewDevice = useCallback((nextDevice: Device) => {
     setDevice(nextDevice);
     if (!previewReady || !config) return;
@@ -227,7 +265,7 @@ export function App() {
         }
         next.elements[message.id] = entry;
         try {
-          validateClientConfig(catalog!, next);
+          validateClientConfig(catalog!, next, registeredAssets);
           rememberCurrentRef.current(`geometry.${message.id}.${breakpoint}`, config);
           setConfig(next);
           setSelectedId(message.id);
@@ -242,7 +280,7 @@ export function App() {
     window.addEventListener('message', onMessage);
     sendPreview('HELLO');
     return () => window.removeEventListener('message', onMessage);
-  }, [catalog, config, elements, previewOrigin, project, sceneElements, sendPreview, showToast]);
+  }, [catalog, config, elements, previewOrigin, project, registeredAssets, sceneElements, sendPreview, showToast]);
 
   useEffect(() => {
     if (!previewReady || !config || !selectedScene) return;
@@ -264,7 +302,7 @@ export function App() {
   rememberCurrentRef.current = rememberCurrent;
 
   const updateProperty = useCallback((elementId: string, property: EditorProperty, value: string | number | boolean) => {
-    if (!config || !catalog || !validateClientValue(property, value)) return;
+    if (!config || !catalog || !validateClientValue(property, value, registeredAssets)) return;
     const key = `${elementId}.${property.key}.${property.responsive ? device : 'base'}`;
     rememberCurrent(key, config);
     const next = clone(config);
@@ -279,7 +317,7 @@ export function App() {
     }
     setConfig(next);
     if (typeof value === 'string') setDrafts((current) => ({ ...current, [key]: value }));
-  }, [catalog, config, device, rememberCurrent]);
+  }, [catalog, config, device, registeredAssets, rememberCurrent]);
 
   const restoreOriginalProperties = useCallback((element: EditorElement) => {
     if (!config) return;
@@ -320,9 +358,9 @@ export function App() {
       entry.geometry.base = { ...(entry.geometry.base || {}), [field]: value };
     }
     next.elements[element.id] = entry;
-    try { validateClientConfig(catalog, next); setConfig(next); }
+    try { validateClientConfig(catalog, next, registeredAssets); setConfig(next); }
     catch (error) { showToast('error', error instanceof Error ? error.message : 'Geometria inválida.'); }
-  }, [catalog, config, device, rememberCurrent, showToast]);
+  }, [catalog, config, device, registeredAssets, rememberCurrent, showToast]);
 
   const resetGeometry = useCallback((element: EditorElement) => {
     if (!config || !element.geometry) return;
@@ -354,7 +392,7 @@ export function App() {
   const save = useCallback(async (): Promise<boolean> => {
     if (!config || !catalog || saving) return false;
     try {
-      validateClientConfig(catalog, config);
+      validateClientConfig(catalog, config, registeredAssets);
       setSaving(true);
       const result = await window.trindadeStudio.saveVisualConfig(config);
       if (!result.ok || !result.config) throw new Error('O Studio não confirmou o salvamento.');
@@ -368,7 +406,7 @@ export function App() {
     } finally {
       setSaving(false);
     }
-  }, [catalog, config, saving, showToast]);
+  }, [catalog, config, registeredAssets, saving, showToast]);
 
   const openProject = useCallback(async () => {
     const payload = await window.trindadeStudio.openProject();
@@ -512,8 +550,8 @@ export function App() {
     const value = propertyValue(config, selectedElement.id, property, device);
     const draft = drafts[key] ?? (typeof value === 'string' ? value : '');
     const invalid = typeof value === 'string' && (property.type === 'text' || property.type === 'color')
-      ? !validateClientValue(property, draft)
-      : !validateClientValue(property, value);
+      ? !validateClientValue(property, draft, registeredAssets)
+      : !validateClientValue(property, value, registeredAssets);
     const bindingCount = catalog?.elements.flatMap((element) => element.properties.map((item) => ({ item })))
       .filter(({ item }) => item.binding.operation === property.binding.operation && item.type === property.type).length ?? 1;
     const valueTypeLabel = property.type === 'imageAsset' ? 'ASSET LOCAL'
@@ -534,13 +572,13 @@ export function App() {
             <input id={`property-${key}`} className="color-text" type="text" value={draft} maxLength={7} onChange={(event) => {
               const nextDraft = event.target.value;
               setDrafts((current) => ({ ...current, [key]: nextDraft }));
-              if (validateClientValue(property, nextDraft)) updateProperty(selectedElement.id, property, nextDraft);
+              if (validateClientValue(property, nextDraft, registeredAssets)) updateProperty(selectedElement.id, property, nextDraft);
             }} onBlur={() => setDrafts((current) => ({ ...current, [key]: String(value) }))} aria-invalid={invalid} aria-label="Código hexadecimal da cor" />
             <span className="hex-hint">HEX</span>
           </div>
         )}
         {property.type === 'imageAsset' && (
-          <label className="select-wrap" htmlFor={`property-${key}`}><span className="asset-thumb">{ASSETS.find((asset) => asset.id === value)?.label.slice(0, 1) || '▧'}</span><select id={`property-${key}`} value={String(value)} onChange={(event) => updateProperty(selectedElement.id, property, event.target.value)}>{ASSETS.map((asset) => <option key={asset.id} value={asset.id}>{asset.label}</option>)}</select><span className="select-chevron">⌄</span></label>
+          <label className="select-wrap" htmlFor={`property-${key}`}><span className="asset-thumb">{('label' in (registeredAssets.find((asset) => asset.id === value) || {}) ? (registeredAssets.find((asset) => asset.id === value) as {label: string}).label : (registeredAssets.find((asset) => asset.id === value) as {name?: string} | undefined)?.name)?.slice(0, 1) || '▧'}</span><select id={`property-${key}`} value={String(value)} onChange={(event) => updateProperty(selectedElement.id, property, event.target.value)}>{registeredAssets.map((asset) => <option key={asset.id} value={asset.id}>{('label' in asset ? asset.label : asset.name) || asset.id} · {asset.id}</option>)}</select><span className="select-chevron">⌄</span></label>
         )}
         {(property.type === 'fontFamily' || property.type === 'fontWeight' || property.type === 'textAlign') && (
           <label className="select-wrap property-select" htmlFor={`property-${key}`}><span aria-hidden="true">Aa</span><select id={`property-${key}`} value={String(value)} onChange={(event) => updateProperty(selectedElement.id, property, property.type === 'fontWeight' ? Number(event.target.value) : event.target.value)}>{property.options?.map((option) => <option key={option} value={option}>{property.type === 'fontFamily' ? option : property.type === 'fontWeight' ? `${option} · ${Number(option) >= 700 ? 'Negrito' : Number(option) >= 600 ? 'Seminegrito' : 'Normal'}` : option === 'left' ? 'À esquerda' : option === 'right' ? 'À direita' : 'Centralizado'}</option>)}</select><span className="select-chevron">⌄</span></label>
@@ -705,6 +743,21 @@ export function App() {
               ? <div className="empty-panel"><div className="empty-icon">◈</div><strong>Estado sem alvos editáveis</strong><p>Esta tela pode ser visualizada, mas ainda não possui elementos com suporte a edição.</p></div>
               : <div className="empty-panel"><div className="empty-icon">▱</div><strong>Abra um projeto</strong><p>Escolha a pasta do jogo para carregar as telas e os elementos editáveis.</p><button className="text-button" onClick={() => void openProject()}>Selecionar pasta</button></div>
           )}
+          <section className="asset-library" aria-label="Biblioteca de imagens do projeto">
+            <div className="asset-library-heading"><div><span className="eyebrow">RECURSOS DO PROJETO</span><strong>Imagens</strong><span className="count-pill">{project?.assets?.length || 0}</span></div><button className="button button-quiet asset-import-button" onClick={() => void importImage()} disabled={!project?.ok || mode === 'test'}>＋ Importar imagem</button></div>
+            <p className="asset-library-note">PNG, JPEG ou WebP estático · até 5 MiB</p>
+            {project?.assets?.length ? (
+              <div className="asset-library-list">
+                {project.assets.map((asset) => {
+                  const usedBy = assetUsage[asset.id] || [];
+                  return <article className="asset-library-card" key={asset.id} data-asset-id={asset.id}>
+                    <img src={assetPreviews[asset.id] || ''} alt={`Miniatura de ${asset.name}`} />
+                    <div className="asset-library-copy"><strong title={asset.name}>{asset.name}</strong><code title={asset.id}>{asset.id}</code><small>{asset.width} × {asset.height} · {Math.ceil(asset.size / 1024)} KiB</small><small>{usedBy.length ? `Usada em: ${usedBy.join(', ')}` : 'Ainda não usada'}</small></div>
+                  </article>;
+                })}
+              </div>
+            ) : <div className="asset-library-empty">Nenhuma imagem própria ainda. Imagens importadas ficam dentro deste projeto.</div>}
+          </section>
           <div className="layers-footnote"><span className="dot dot-violet" />Elementos editáveis vêm do catálogo oficial.</div>
         </aside>
 

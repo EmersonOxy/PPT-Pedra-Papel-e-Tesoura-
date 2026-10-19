@@ -1,4 +1,4 @@
-import type { EditorCatalog, EditorProperty, VisualConfig } from '../types';
+import type { EditorCatalog, EditorProperty, ImageAsset, VisualConfig } from '../types';
 
 export const ASSETS = [
   { id: 'hands.rock', label: 'Pedra', file: 'hand-rock.png' },
@@ -47,10 +47,10 @@ export function configSnapshot(config: VisualConfig): string {
   return JSON.stringify(config);
 }
 
-export function validateClientValue(property: EditorProperty, value: unknown): boolean {
+export function validateClientValue(property: EditorProperty, value: unknown, registeredAssets: ReadonlyArray<{ id: string } | ImageAsset> = ASSETS): boolean {
   if (property.type === 'text') return typeof value === 'string' && value.length <= (property.maxLength || 80);
   if (property.type === 'color') return typeof value === 'string' && /^#[0-9a-f]{6}$/i.test(value);
-  if (property.type === 'imageAsset') return typeof value === 'string' && ASSETS.some((asset) => asset.id === value);
+  if (property.type === 'imageAsset') return typeof value === 'string' && registeredAssets.some((asset) => asset.id === value);
   if (property.type === 'fontFamily' || property.type === 'textAlign') return typeof value === 'string' && property.options?.some((option) => option === value) === true;
   if (property.type === 'fontSize' || property.type === 'opacity') {
     if (typeof value !== 'number' || !Number.isFinite(value) || value < (property.min ?? -Infinity) || value > (property.max ?? Infinity)) return false;
@@ -78,7 +78,7 @@ function validateClientBinding(property: EditorProperty): boolean {
   return supported[binding.name] === property.type;
 }
 
-export function validateClientConfig(catalog: EditorCatalog, config: VisualConfig): void {
+export function validateClientConfig(catalog: EditorCatalog, config: VisualConfig, registeredAssets: ReadonlyArray<{ id: string } | ImageAsset> = ASSETS): void {
   if (![1, 2, 3].includes(catalog.version) || config.schemaVersion !== catalog.version || !Array.isArray(catalog.elements)) {
     throw new Error('O catálogo ou a configuração usa uma versão incompatível.');
   }
@@ -90,7 +90,7 @@ export function validateClientConfig(catalog: EditorCatalog, config: VisualConfi
     }
     ids.add(element.id);
     for (const property of element.properties) {
-      if (!validateClientBinding(property) || !validateClientValue(property, property.default)) throw new Error(`A propriedade ${property.key} em ${element.id} está fora do catálogo seguro.`);
+      if (!validateClientBinding(property) || !validateClientValue(property, property.default, registeredAssets)) throw new Error(`A propriedade ${property.key} em ${element.id} está fora do catálogo seguro.`);
     }
   }
   for (const [id, entry] of Object.entries(config.elements)) {
@@ -98,7 +98,7 @@ export function validateClientConfig(catalog: EditorCatalog, config: VisualConfi
     if (!definition) throw new Error(`O elemento ${id} não está registrado no catálogo.`);
     for (const [key, value] of Object.entries(entry.base || {})) {
       const property = definition.properties.find((item) => item.key === key);
-      if (!property || !validateClientBinding(property) || !validateClientValue(property, value)) {
+      if (!property || !validateClientBinding(property) || !validateClientValue(property, value, registeredAssets)) {
         throw new Error(`O valor de ${ELEMENT_LABELS[id] || id} não é permitido.`);
       }
     }
@@ -106,7 +106,7 @@ export function validateClientConfig(catalog: EditorCatalog, config: VisualConfi
       if (!['mobile', 'tablet'].includes(breakpoint) || !values || typeof values !== 'object') throw new Error(`O breakpoint responsivo de ${id} não é permitido.`);
       for (const [key, value] of Object.entries(values)) {
         const property = definition.properties.find((item) => item.key === key);
-        if (!property?.responsive || !validateClientBinding(property) || !validateClientValue(property, value)) throw new Error(`O override responsivo ${id}.${key} não é permitido.`);
+        if (!property?.responsive || !validateClientBinding(property) || !validateClientValue(property, value, registeredAssets)) throw new Error(`O override responsivo ${id}.${key} não é permitido.`);
       }
     }
     if (entry.geometry) {

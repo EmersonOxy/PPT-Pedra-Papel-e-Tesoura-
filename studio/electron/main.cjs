@@ -1,10 +1,10 @@
-const { app, BrowserWindow, Menu, dialog, ipcMain, shell } = require('electron');
+const { app, BrowserWindow, Menu, dialog, ipcMain, nativeImage, shell } = require('electron');
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const { createPreviewServer } = require('./preview-server.cjs');
 const { createStaticServer, createContentSecurityPolicy } = require('./renderer-server.cjs');
-const { loadProjectAt, saveVisualConfigAt } = require('./project-service.cjs');
+const { importImageAt, loadProjectAt, readRegisteredAssetAt, saveVisualConfigAt } = require('./project-service.cjs');
 const { TEMPLATES, addRecentProject, createDuplicate, createProject, ensureManifest, getTemplate, isGitWorkingTree, listRecentProjects, removeRecentProject } = require('./project-library.cjs');
 const { STABLE_RELEASE_PAGE, createUpdateService, isOfficialReleasePage } = require('./update-service.cjs');
 
@@ -38,12 +38,13 @@ function makePayload() {
   if (!project || !previewOrigin || !previewSession) {
     return { ok: false, error: startupMessage || 'Abra uma pasta de projeto para carregar a prévia.' };
   }
-  const query = new URLSearchParams({ studioSession: previewSession }).toString();
+  const query = new URLSearchParams({ studioSession: previewSession, studioParent: rendererOrigin }).toString();
   return {
     ok: true,
     name: project.name,
     catalog: project.catalog,
     config: project.config,
+    assets: project.assets || [],
     previewUrl: `${previewOrigin}/?${query}`,
     session: previewSession,
     protocol: 1,
@@ -58,6 +59,31 @@ function assertRenderer(event) {
   let senderOrigin;
   try { senderOrigin = new URL(event.senderFrame.url).origin; } catch { senderOrigin = ''; }
   if (senderOrigin !== rendererOrigin) throw new Error('Operação recusada: origem do Studio inválida.');
+}
+
+async function decodeImageInStudioRenderer(bytes, mimeType, { thumbnail = false } = {}) {
+  if (!mainWindow || mainWindow.isDestroyed()) throw new Error('O Studio precisa estar aberto para validar a imagem.');
+  const dataUrl = `data:${mimeType};base64,${bytes.toString('base64')}`;
+  const expression = `new Promise((resolve) => {
+    const image = new Image();
+    image.onload = () => {
+      const result = { width: image.naturalWidth, height: image.naturalHeight };
+      if (${thumbnail}) {
+        const scale = Math.min(128 / result.width, 128 / result.height, 1);
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, Math.round(result.width * scale));
+        canvas.height = Math.max(1, Math.round(result.height * scale));
+        const context = canvas.getContext('2d', { alpha: true });
+        if (!context) return resolve(null);
+        context.drawImage(image, 0, 0, canvas.width, canvas.height);
+        result.thumbnail = canvas.toDataURL('image/png');
+      }
+      resolve(result);
+    };
+    image.onerror = () => resolve(null);
+    image.src = ${JSON.stringify(dataUrl)};
+  })`;
+  return mainWindow.webContents.executeJavaScript(expression, true);
 }
 
 async function canonicalProject(root) {
@@ -271,6 +297,48 @@ async function installIpc() {
     isDirty = false;
     return { ok: true, config: result.config, backupName: path.basename(result.backupPath) };
   });
+  ipcMain.handle('studio:import-image', async (event) => {
+    assertRenderer(event);
+    if (!project || !projectRoot) throw new Error('Abra um projeto antes de importar imagens.');
+    let selectedPath = '';
+    if (process.env.TRINDADE_STUDIO_TEST_MODE === '1' && process.env.TRINDADE_STUDIO_TEST_IMPORT_PATH) {
+      selectedPath = path.resolve(process.env.TRINDADE_STUDIO_TEST_IMPORT_PATH);
+    } else {
+      const result = await dialog.showOpenDialog(mainWindow, {
+        title: 'Importar imagem para este projeto',
+        properties: ['openFile'],
+        buttonLabel: 'Importar imagem',
+        filters: [{ name: 'Imagens raster estáticas', extensions: ['png', 'jpg', 'jpeg', 'webp'] }],
+      });
+      if (result.canceled || !result.filePaths[0]) return { ok: false, canceled: true, assets: project.assets || [] };
+      selectedPath = result.filePaths[0];
+    }
+    const imported = await importImageAt(projectRoot, selectedPath, {
+      validateDecoded: async (bytes, details) => {
+        let dimensions;
+        if (details.format === 'webp') dimensions = await decodeImageInStudioRenderer(bytes, details.mimeType);
+        else {
+          const image = nativeImage.createFromBuffer(bytes);
+          if (!image.isEmpty()) dimensions = image.getSize();
+        }
+        if (!dimensions || dimensions.width !== details.width || dimensions.height !== details.height) {
+          throw new Error('O runtime do Electron não conseguiu decodificar a imagem selecionada.');
+        }
+      },
+    });
+    project.assets = imported.assets;
+    return { ok: true, asset: imported.asset, assets: imported.assets, reused: imported.reused === true };
+  });
+  ipcMain.handle('studio:get-asset-preview', async (event, assetId) => {
+    assertRenderer(event);
+    if (!project || !projectRoot) throw new Error('Abra um projeto antes de visualizar imagens.');
+    const result = await readRegisteredAssetAt(projectRoot, assetId);
+    const image = nativeImage.createFromBuffer(result.body);
+    if (!image.isEmpty()) return image.resize({ width: 128 }).toDataURL();
+    const decoded = await decodeImageInStudioRenderer(result.body, result.asset.mimeType, { thumbnail: true });
+    if (!decoded?.thumbnail) throw new Error('A imagem registrada não pôde ser decodificada para a miniatura.');
+    return decoded.thumbnail;
+  });
   ipcMain.handle('studio:set-dirty', (event, dirty) => {
     assertRenderer(event);
     if (typeof dirty !== 'boolean') throw new Error('Estado de edição inválido.');
@@ -423,7 +491,7 @@ app.whenReady().then(async () => {
     }
 
     const rendererUrl = await startRenderer();
-    previewServer = createPreviewServer(projectRoot, () => rendererOrigin);
+    previewServer = createPreviewServer(projectRoot, () => rendererOrigin, () => previewSession);
     previewOrigin = await previewServer.listen();
     await installIpc();
     buildMenu();

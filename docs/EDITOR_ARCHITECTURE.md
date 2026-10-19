@@ -120,6 +120,16 @@ Registro incompleto falha na validação de build/teste. Elemento sem registro c
 - Histórico undo/redo guarda comandos semânticos sobre valores permitidos, não snapshots executáveis ou source code. Edição contínua de slider agrupa uma transação.
 - Colisão de ID, propriedade desconhecida ou asset ausente produz erro legível e não apaga configuração.
 
+## Biblioteca de imagens do projeto
+
+- A primeira biblioteca aceita PNG estático, JPEG e WebP estático; SVG, GIF, APNG, WebP animado, HTML, scripts e URLs externas são recusados. O conteúdo é inspecionado além da extensão; PNG também valida CRC e fluxo de descompressão, JPEG exige quadro e marcadores de início/fim, e WebP exige contêiner RIFF íntegro e quadro estático. Antes de registrar, PNG/JPEG passam por `nativeImage`; WebP é decodificado pelo Chromium do renderer confiável do Studio, pois `nativeImage.createFromBuffer` documenta suporte de leitura a PNG/JPEG. Ambas as rotas confirmam as dimensões declaradas antes de gravar. Miniaturas WebP são rasterizadas em PNG no canvas isolado do Studio.
+- Limites atuais: 5 MiB por arquivo, 4096 px por lado, 16 megapixels por imagem e 500 imagens por projeto. PNG interlaced é aceito; imagens que excedam limites são recusadas antes de gravar.
+- A seleção de arquivo acontece pelo diálogo nativo do processo principal. A cópia fica em `assets/imported/img_<hash-prefix>.<ext>`; `assets/manifest.json` (versão 1) guarda ID estável baseado no SHA-256, nome, formato, dimensões, tamanho e hash completo. O caminho original do computador nunca é persistido. Mesmo conteúdo pode ser reutilizado; colisões ou nomes duplicados diferentes são recusados sem substituir arquivo.
+- O inspetor só aceita IDs presentes no catálogo ou no manifesto íntegro do projeto. A biblioteca mostra miniatura, ID, tamanho, dimensões e elementos que usam a imagem. O histórico undo/redo cobre atribuição; a configuração visual grava o ID e a prévia solicita imagem por uma rota autenticada da sessão ativa.
+- Cada requisição da prévia precisa apresentar a sessão aleatória atualmente ativa e a origem exata do editor. Ao trocar o projeto, a sessão anterior deixa de funcionar. O servidor serve uma imagem importada somente se o ID está no manifesto do projeto ativo, e valida novamente conteúdo/hash; caminhos arbitrários não são servidos. Raízes, diretórios e arquivos com symlink são recusados.
+- Duplicar projeto copia o manifesto e os arquivos registrados para a pasta independente. Projetos antigos schema 1, 2 ou 3 continuam sem migração: a biblioteca é opcional e nenhum asset é importado até o usuário escolher um arquivo. Se uma versão incompatível de manifesto for encontrada, o carregamento falha sem sobrescrever dados.
+- Uma falha de importação limpa o arquivo parcial e mantém o manifesto anterior. Configuração visual salva continua usando backup e escrita atômica. Assets importados ficam dentro do projeto e acompanham sua cópia/transferência.
+
 ## Segurança e privacidade
 
 - Não permitir import de HTML/JS, URL remota, CSS arbitrary, SVG ativo sem sanitização, arquivo executável ou fonte remota.
