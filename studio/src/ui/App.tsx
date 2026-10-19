@@ -20,8 +20,10 @@ function prettyName(element: EditorElement): string {
   return ELEMENT_LABELS[element.id] || element.id;
 }
 
-function propertyValue(config: VisualConfig, elementId: string, property: EditorProperty): string {
-  return config.elements[elementId]?.base[property.key] ?? property.default;
+function propertyValue(config: VisualConfig, elementId: string, property: EditorProperty, device: Device): string | number | boolean {
+  const entry = config.elements[elementId];
+  const responsive = property.responsive && device === 'mobile' ? entry?.responsive?.mobile?.[property.key] : undefined;
+  return responsive ?? entry?.base?.[property.key] ?? property.default;
 }
 
 export function App() {
@@ -168,6 +170,13 @@ export function App() {
     target.postMessage({ protocol: 1, session: project.session, type, ...detail }, previewOrigin);
   }, [project, previewOrigin]);
 
+  const selectPreviewDevice = useCallback((nextDevice: Device) => {
+    setDevice(nextDevice);
+    if (!previewReady || !config) return;
+    sendPreview('SET_DEVICE', { device: nextDevice });
+    sendPreview('APPLY_CONFIG', { config });
+  }, [config, previewReady, sendPreview]);
+
   useEffect(() => {
     if (!previewReady || !config) return;
     sendPreview('APPLY_CONFIG', { config });
@@ -254,16 +263,44 @@ export function App() {
   }, []);
   rememberCurrentRef.current = rememberCurrent;
 
-  const updateProperty = useCallback((elementId: string, property: EditorProperty, value: string) => {
-    if (!config || !catalog || !validateClientValue(property.type, value, property.maxLength)) return;
-    const key = `${elementId}.${property.key}`;
+  const updateProperty = useCallback((elementId: string, property: EditorProperty, value: string | number | boolean) => {
+    if (!config || !catalog || !validateClientValue(property, value)) return;
+    const key = `${elementId}.${property.key}.${property.responsive ? device : 'base'}`;
     rememberCurrent(key, config);
     const next = clone(config);
     if (!next.elements[elementId]) next.elements[elementId] = { base: {} };
-    next.elements[elementId].base[property.key] = value;
+    next.elements[elementId].base = next.elements[elementId].base || {};
+    if (property.responsive && device === 'mobile') {
+      next.elements[elementId].responsive = next.elements[elementId].responsive || {};
+      next.elements[elementId].responsive.mobile = next.elements[elementId].responsive.mobile || {};
+      next.elements[elementId].responsive.mobile[property.key] = value;
+    } else {
+      next.elements[elementId].base[property.key] = value;
+    }
     setConfig(next);
-    setDrafts((current) => ({ ...current, [key]: value }));
-  }, [catalog, config, rememberCurrent]);
+    if (typeof value === 'string') setDrafts((current) => ({ ...current, [key]: value }));
+  }, [catalog, config, device, rememberCurrent]);
+
+  const restoreOriginalProperties = useCallback((element: EditorElement) => {
+    if (!config) return;
+    rememberCurrent(`properties.${element.id}.restore`, config);
+    const next = clone(config);
+    const entry = next.elements[element.id];
+    if (entry) {
+      const keys = new Set(element.properties.map((property) => property.key));
+      for (const key of keys) delete entry.base?.[key];
+      if (entry.responsive) {
+        for (const values of Object.values(entry.responsive)) for (const key of keys) delete values[key];
+        for (const [breakpoint, values] of Object.entries(entry.responsive)) if (Object.keys(values).length === 0) delete entry.responsive[breakpoint];
+        if (Object.keys(entry.responsive).length === 0) delete entry.responsive;
+      }
+      if (entry.base && Object.keys(entry.base).length === 0) delete entry.base;
+      if (Object.keys(entry).length === 0) delete next.elements[element.id];
+    }
+    setConfig(next);
+    setDrafts((current) => Object.fromEntries(Object.entries(current).filter(([key]) => !key.startsWith(`${element.id}.`))));
+    showToast('info', 'Valores visuais originais restaurados. Geometria responsiva preservada.');
+  }, [config, rememberCurrent, showToast]);
 
   const updateGeometry = useCallback((element: EditorElement, field: 'x' | 'y' | 'width' | 'height', value: number) => {
     if (!config || !catalog || !element.geometry || !Number.isFinite(value)) return;
@@ -469,6 +506,65 @@ export function App() {
     setSelectedId(scene.elementIds[0] || '');
   };
 
+  const renderProperty = (property: EditorProperty) => {
+    if (!selectedElement || !config) return null;
+    const key = `${selectedElement.id}.${property.key}.${property.responsive ? device : 'base'}`;
+    const value = propertyValue(config, selectedElement.id, property, device);
+    const draft = drafts[key] ?? (typeof value === 'string' ? value : '');
+    const invalid = typeof value === 'string' && (property.type === 'text' || property.type === 'color')
+      ? !validateClientValue(property, draft)
+      : !validateClientValue(property, value);
+    const bindingCount = catalog?.elements.flatMap((element) => element.properties.map((item) => ({ item })))
+      .filter(({ item }) => item.binding.operation === property.binding.operation && item.type === property.type).length ?? 1;
+    const valueTypeLabel = property.type === 'imageAsset' ? 'ASSET LOCAL'
+      : property.type === 'boolean' ? 'BOOLEANO'
+        : property.type === 'fontSize' || property.type === 'opacity' ? 'NÚMERO'
+          : property.type === 'text' ? 'TEXTO'
+            : property.type === 'color' ? 'COR'
+              : 'LISTA REGISTRADA';
+    return (
+      <div className="property-field" key={key}>
+        <div className="field-heading"><label htmlFor={`property-${key}`}>{PROPERTY_LABELS[property.key] || property.key}</label><span className="field-type">{valueTypeLabel}</span></div>
+        {property.type === 'text' && (
+          <div className="text-input-wrap"><input id={`property-${key}`} type="text" maxLength={property.maxLength || 80} value={draft} onChange={(event) => updateProperty(selectedElement.id, property, event.target.value)} aria-invalid={invalid} /><span>{draft.length}/{property.maxLength || 80}</span></div>
+        )}
+        {property.type === 'color' && (
+          <div className="color-input-wrap">
+            <label className="color-swatch" htmlFor={`color-${key}`} style={{ backgroundColor: /^#[0-9a-f]{6}$/i.test(String(value)) ? String(value) : '#ffffff' }} title="Escolher cor"><input id={`color-${key}`} type="color" value={/^#[0-9a-f]{6}$/i.test(String(value)) ? String(value) : '#ffffff'} onChange={(event) => updateProperty(selectedElement.id, property, event.target.value)} aria-label="Escolher cor" /></label>
+            <input id={`property-${key}`} className="color-text" type="text" value={draft} maxLength={7} onChange={(event) => {
+              const nextDraft = event.target.value;
+              setDrafts((current) => ({ ...current, [key]: nextDraft }));
+              if (validateClientValue(property, nextDraft)) updateProperty(selectedElement.id, property, nextDraft);
+            }} onBlur={() => setDrafts((current) => ({ ...current, [key]: String(value) }))} aria-invalid={invalid} aria-label="Código hexadecimal da cor" />
+            <span className="hex-hint">HEX</span>
+          </div>
+        )}
+        {property.type === 'imageAsset' && (
+          <label className="select-wrap" htmlFor={`property-${key}`}><span className="asset-thumb">{ASSETS.find((asset) => asset.id === value)?.label.slice(0, 1) || '▧'}</span><select id={`property-${key}`} value={String(value)} onChange={(event) => updateProperty(selectedElement.id, property, event.target.value)}>{ASSETS.map((asset) => <option key={asset.id} value={asset.id}>{asset.label}</option>)}</select><span className="select-chevron">⌄</span></label>
+        )}
+        {(property.type === 'fontFamily' || property.type === 'fontWeight' || property.type === 'textAlign') && (
+          <label className="select-wrap property-select" htmlFor={`property-${key}`}><span aria-hidden="true">Aa</span><select id={`property-${key}`} value={String(value)} onChange={(event) => updateProperty(selectedElement.id, property, property.type === 'fontWeight' ? Number(event.target.value) : event.target.value)}>{property.options?.map((option) => <option key={option} value={option}>{property.type === 'fontFamily' ? option : property.type === 'fontWeight' ? `${option} · ${Number(option) >= 700 ? 'Negrito' : Number(option) >= 600 ? 'Seminegrito' : 'Normal'}` : option === 'left' ? 'À esquerda' : option === 'right' ? 'À direita' : 'Centralizado'}</option>)}</select><span className="select-chevron">⌄</span></label>
+        )}
+        {(property.type === 'fontSize' || property.type === 'opacity') && (
+          <div className="range-property"><input id={`property-${key}`} type="range" min={property.min} max={property.max} step={property.step} value={Number(value)} onChange={(event) => updateProperty(selectedElement.id, property, Number(event.target.value))} /><label htmlFor={`property-number-${key}`}>{property.type === 'opacity' ? `${Math.round(Number(value) * 100)}%` : `${value} px`}</label><input id={`property-number-${key}`} className="compact-number" type="number" min={property.min} max={property.max} step={property.step} value={Number(value)} onChange={(event) => updateProperty(selectedElement.id, property, Number(event.target.value))} aria-label={PROPERTY_LABELS[property.key]} /></div>
+        )}
+        {property.type === 'boolean' && (
+          <label className="visibility-toggle" htmlFor={`property-${key}`}><input id={`property-${key}`} type="checkbox" checked={Boolean(value)} onChange={(event) => updateProperty(selectedElement.id, property, event.target.checked)} /><span className="toggle-track" aria-hidden="true" /><span>{value ? 'Visível na prévia' : 'Oculto na prévia'}</span></label>
+        )}
+        {property.responsive && <p className="property-responsive-note">{device === 'mobile' && !config.elements[selectedElement.id]?.responsive?.mobile?.[property.key] ? 'Celular herda o valor desktop até receber um ajuste próprio.' : device === 'mobile' ? 'Este valor fica salvo somente para celular.' : 'O valor desktop pode receber um override próprio no celular.'}</p>}
+        {invalid && <p className="field-error">Valor inválido para a definição registrada neste projeto.</p>}
+        {property.binding.operation === 'styleVariable' && bindingCount > 1 && <p className="binding-note"><span aria-hidden="true">ⓘ</span> Propriedade disponível em {bindingCount} elementos registrados; cada alvo mantém seu próprio valor.</p>}
+      </div>
+    );
+  };
+
+  const propertyGroups = selectedElement ? {
+    typography: selectedElement.properties.filter((property) => ['text', 'fontFamily', 'fontSize', 'fontWeight', 'textAlign'].includes(property.type) || property.key === 'textColor'),
+    appearance: selectedElement.properties.filter((property) => property.type === 'color' && property.key !== 'textColor' || property.type === 'opacity'),
+    image: selectedElement.properties.filter((property) => property.type === 'imageAsset'),
+    visibility: selectedElement.properties.filter((property) => property.type === 'boolean'),
+  } : null;
+
   if (view === 'home') {
     const updateStatus = updateCheck?.state === 'available'
       ? `A versão ${updateCheck.latestVersion} está disponível.`
@@ -616,8 +712,8 @@ export function App() {
           <div className="canvas-toolbar">
             <div className="canvas-title"><span className="canvas-title-icon">◫</span><div><strong>{mode === 'edit' ? selectedScene.label : 'Modo Testar'}</strong><small>{mode === 'edit' ? 'Fixture demonstrativa · selecione elementos registrados' : 'Jogo real reiniciado para uma partida de teste'}</small></div></div>
             <div className="device-toggle" role="group" aria-label="Tamanho da prévia">
-              <button className={device === 'desktop' ? 'active' : ''} onClick={() => setDevice('desktop')} aria-pressed={device === 'desktop'} title="Visualização desktop"><span aria-hidden="true">▱</span><span>Desktop</span></button>
-              <button className={device === 'mobile' ? 'active' : ''} onClick={() => setDevice('mobile')} aria-pressed={device === 'mobile'} title="Visualização celular"><span aria-hidden="true">▯</span><span>Celular</span></button>
+              <button className={device === 'desktop' ? 'active' : ''} onClick={() => selectPreviewDevice('desktop')} aria-pressed={device === 'desktop'} title="Visualização desktop"><span aria-hidden="true">▱</span><span>Desktop</span></button>
+              <button className={device === 'mobile' ? 'active' : ''} onClick={() => selectPreviewDevice('mobile')} aria-pressed={device === 'mobile'} title="Visualização celular"><span aria-hidden="true">▯</span><span>Celular</span></button>
             </div>
           </div>
           <div className={`canvas-stage ${device === 'mobile' ? 'mobile-stage' : ''}`}>
@@ -653,41 +749,11 @@ export function App() {
           {selectedElement && config ? (
             <>
               <div className="selected-element-card"><span className="selected-indicator" /><div><strong>{prettyName(selectedElement)}</strong><small>{selectedElement.id}</small></div></div>
-              <div className="property-list">
-                {selectedElement.properties.map((property) => {
-                  const key = `${selectedElement.id}.${property.key}`;
-                  const value = propertyValue(config, selectedElement.id, property);
-                  const draft = drafts[key] ?? value;
-                  const invalid = !validateClientValue(property.type, draft, property.maxLength);
-                  const bindingCount = catalog?.elements.flatMap((element) => element.properties.map((item) => ({ element, item }))).filter(({ item }) => item.binding.operation === property.binding.operation && item.type === property.type).length ?? 1;
-                  return (
-                    <div className="property-field" key={key}>
-                      <div className="field-heading"><label htmlFor={`property-${key}`}>{PROPERTY_LABELS[property.key] || property.key}</label><span className="field-type">{property.type === 'text' ? 'TEXTO' : property.type === 'color' ? 'COR' : 'ASSET'}</span></div>
-                      {property.type === 'text' && (
-                        <div className="text-input-wrap"><input id={`property-${key}`} type="text" maxLength={property.maxLength || 80} value={draft} onChange={(event) => updateProperty(selectedElement.id, property, event.target.value)} aria-invalid={invalid} /><span>{draft.length}/{property.maxLength || 80}</span></div>
-                      )}
-                      {property.type === 'color' && (
-                        <div className="color-input-wrap">
-                          <label className="color-swatch" htmlFor={`color-${key}`} style={{ backgroundColor: /^#[0-9a-f]{6}$/i.test(value) ? value : '#ffffff' }} title="Escolher cor"><input id={`color-${key}`} type="color" value={/^#[0-9a-f]{6}$/i.test(value) ? value : '#ffffff'} onChange={(event) => updateProperty(selectedElement.id, property, event.target.value)} aria-label="Escolher cor" /></label>
-                          <input id={`property-${key}`} className="color-text" type="text" value={draft} maxLength={7} onChange={(event) => {
-                            const nextDraft = event.target.value;
-                            setDrafts((current) => ({ ...current, [key]: nextDraft }));
-                            if (validateClientValue(property.type, nextDraft)) updateProperty(selectedElement.id, property, nextDraft);
-                          }} onBlur={() => setDrafts((current) => ({ ...current, [key]: value }))} aria-invalid={invalid} aria-label="Código hexadecimal da cor" />
-                          <span className="hex-hint">HEX</span>
-                        </div>
-                      )}
-                      {property.type === 'imageAsset' && (
-                        <label className="select-wrap" htmlFor={`property-${key}`}><span className="asset-thumb">{ASSETS.find((asset) => asset.id === value)?.label.slice(0, 1) || '▧'}</span><select id={`property-${key}`} value={value} onChange={(event) => updateProperty(selectedElement.id, property, event.target.value)}>{ASSETS.map((asset) => <option key={asset.id} value={asset.id}>{asset.label}</option>)}</select><span className="select-chevron">⌄</span></label>
-                      )}
-                      {invalid && <p className="field-error">Valor inválido. Use texto simples, cor #RRGGBB ou asset registrado.</p>}
-                      {property.binding.operation === 'styleVariable' && bindingCount > 1 && <p className="binding-note"><span aria-hidden="true">ⓘ</span> Este token aparece em {bindingCount} controles. O valor é aplicado ao alvo selecionado e cada botão mantém seu próprio valor.</p>}
-                    </div>
-                  );
-                })}
-              </div>
-              {selectedElement.geometry && (
-                <section className="geometry-editor" aria-label="Geometria do elemento">
+              <div className="advanced-inspector-sections">
+                <details className="inspector-section" open>
+                  <summary>Transformação <span>⌄</span></summary>
+                  {selectedElement.geometry ? (
+                  <section className="geometry-editor" aria-label="Geometria do elemento">
                   <div className="geometry-heading"><div><span className="eyebrow">GEOMETRIA · {device === 'mobile' ? 'CELULAR' : 'DESKTOP'}</span><strong>Posição e tamanho</strong></div><span className="geometry-unit">px</span></div>
                   <div className="geometry-fields">
                     {(['x', 'y', 'width', 'height'] as const).map((field) => {
@@ -702,8 +768,28 @@ export function App() {
                   <div className="geometry-actions"><button className="button button-quiet" onClick={() => alignGeometry('horizontal')} title="Centralizar horizontalmente">↔ Centralizar</button><button className="button button-quiet" onClick={() => alignGeometry('vertical')} title="Centralizar verticalmente">↕ Centralizar</button></div>
                   <button className="geometry-reset" onClick={() => resetGeometry(selectedElement)}>Restaurar geometria original</button>
                   <p className="geometry-hint">Arraste o elemento selecionado; use as alças nos cantos para redimensionar.</p>
-                </section>
-              )}
+                  </section>
+                  ) : <p className="inspector-limitation">Este elemento não declara propriedades de transformação.</p>}
+                </details>
+                <details className="inspector-section" open>
+                  <summary>Texto e tipografia <span>⌄</span></summary>
+                  {propertyGroups?.typography.length ? propertyGroups.typography.map(renderProperty) : <p className="inspector-limitation">Este elemento não declara propriedades tipográficas editáveis.</p>}
+                </details>
+                <details className="inspector-section" open>
+                  <summary>Aparência <span>⌄</span></summary>
+                  {propertyGroups?.appearance.length ? propertyGroups.appearance.map(renderProperty) : <p className="inspector-limitation">Este elemento não declara propriedades de aparência editáveis.</p>}
+                </details>
+                <details className="inspector-section" open>
+                  <summary>Imagem <span>⌄</span></summary>
+                  {propertyGroups?.image.length ? <><p className="inspector-limitation">Somente assets locais já registrados estão disponíveis. Importação de imagens será um incremento separado.</p>{propertyGroups.image.map(renderProperty)}</> : <p className="inspector-limitation">Este elemento não possui vínculo de imagem registrado.</p>}
+                </details>
+                <details className="inspector-section" open>
+                  <summary>Visibilidade <span>⌄</span></summary>
+                  {propertyGroups?.visibility.length ? propertyGroups.visibility.map(renderProperty) : <p className="inspector-limitation">Este elemento não declara controle de visibilidade.</p>}
+                  {propertyGroups?.visibility.length ? <p className="inspector-limitation">Elementos ocultos continuam disponíveis na lista de camadas à esquerda.</p> : null}
+                </details>
+                <button className="inspector-reset" onClick={() => restoreOriginalProperties(selectedElement)}>Restaurar valores visuais originais</button>
+              </div>
               <div className="inspector-divider" />
               <div className="inspector-info"><span className="info-check">✓</span><p>Propriedades validadas pelo catálogo. O jogo aceita somente valores registrados.</p></div>
             </>

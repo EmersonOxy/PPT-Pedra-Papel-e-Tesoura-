@@ -13,6 +13,7 @@
   let applyConfig = null;
   let currentConfig = null;
   let geometryBreakpoint = 'desktop';
+  let visualBreakpointOverride = null;
   let dragState = null;
   let overlay = null;
   let overlayFrame = 0;
@@ -321,6 +322,9 @@
       if (message.mode !== 'edit' && message.mode !== 'test') return;
       mode = message.mode;
       document.documentElement.dataset.studioMode = mode;
+      if (catalog && currentConfig && applyConfig) {
+        applyConfig(catalog, currentConfig, document, mode === 'edit' ? visualBreakpointOverride : null);
+      }
       updateOverlay();
       post('MODE_CHANGED', { mode });
       return;
@@ -332,7 +336,12 @@
       return;
     }
     if (message.type === 'SET_DEVICE') {
+      if (message.device !== 'desktop' && message.device !== 'mobile') return;
       geometryBreakpoint = message.device === 'mobile' ? 'mobile' : 'desktop';
+      visualBreakpointOverride = message.device;
+      if (catalog && currentConfig && applyConfig) {
+        applyConfig(catalog, currentConfig, document, mode === 'edit' ? visualBreakpointOverride : null);
+      }
       if (selectedId) applyGeometryToTarget(selectedId, geometryValues(selectedId));
       updateOverlay();
       return;
@@ -360,7 +369,7 @@
       try {
         if (!catalog || !applyConfig) throw new Error('A prévia ainda está carregando o catálogo.');
         currentConfig = message.config;
-        applyConfig(catalog, message.config, document);
+        applyConfig(catalog, message.config, document, mode === 'edit' ? visualBreakpointOverride : null);
         updateOverlay();
         post('CONFIG_APPLIED');
       } catch (error) {

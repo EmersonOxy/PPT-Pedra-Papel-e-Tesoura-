@@ -112,5 +112,5 @@ O Studio começa na Central. Projetos novos são criados sob `Documentos/Trindad
 
 - A referência original permanece byte a byte inalterada com SHA-256 `C6011DB78BC72E7932959AD1FCD81EF7EA2D0D353FE58FA391AD72B1B07DF843`.
 - `index.html` segue como entrada modular do jogo, servido em origem isolada do Studio. `Jogar-Trindade-transicao-preta.html` continua como referência autocontida e não recebe mensagens do Studio.
-- A configuração mantém `schemaVersion: 1`; o catálogo deve conter exatamente alvos reais e defaults válidos. Arquivos internos e código do Studio não entram na prévia nem no bundle Vercel.
+- A configuração e o catálogo atuais usam schema v3; projetos schema 1 e 2 continuam abrindo sem reescrita/migração silenciosa, e o inspetor expõe somente propriedades presentes no catálogo selecionado. Propriedades novas opcionais não são materializadas até o usuário editar. Restaurar valores remove overrides visuais e mantém a geometria independente. Arquivos internos e código do Studio não entram na prévia nem no bundle Vercel.
 - O contrato de preview usa protocolo 1, origem exata, `event.source` e nonce de sessão de 256 bits. Ao mudar o formato, aumentar versão e manter somente a compatibilidade necessária.

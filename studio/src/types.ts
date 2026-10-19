@@ -1,16 +1,22 @@
-export type PropertyType = 'text' | 'color' | 'imageAsset';
+export type PropertyType = 'text' | 'color' | 'imageAsset' | 'fontFamily' | 'fontSize' | 'fontWeight' | 'textAlign' | 'opacity' | 'boolean';
 export type Binding =
   | { operation: 'textContent' }
   | { operation: 'styleVariable'; name: string }
   | { operation: 'firstChildBackground' }
-  | { operation: 'imageSource' };
+  | { operation: 'imageSource' }
+  | { operation: 'visibility' };
 
 export interface EditorProperty {
   key: string;
   type: PropertyType;
-  default: string;
+  default: string | number | boolean;
   binding: Binding;
   maxLength?: number;
+  min?: number;
+  max?: number;
+  step?: number;
+  options?: Array<string | number>;
+  optional?: boolean;
   responsive: boolean;
 }
 
@@ -40,8 +46,8 @@ export interface EditorCatalog {
 export interface VisualConfig {
   schemaVersion: number;
   elements: Record<string, {
-    base: Record<string, string>;
-    responsive?: Record<string, Record<string, string>>;
+    base?: Record<string, string | number | boolean>;
+    responsive?: Record<string, Record<string, string | number | boolean>>;
     geometry?: { base?: Record<string, number>; responsive?: Record<string, Record<string, number>> };
   }>;
 }

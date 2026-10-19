@@ -10,15 +10,32 @@ const breakpoints = Object.freeze({
   mobile: '(max-width: 600px)',
   tablet: '(min-width: 601px) and (max-width: 750px)',
 });
+const styleVariableTypes = Object.freeze({
+  '--arena-background': 'color', '--move-button-background': 'color',
+  '--studio-background-color': 'color', '--studio-text-color': 'color',
+  '--studio-font-family': 'fontFamily', '--studio-font-size': 'fontSize',
+  '--studio-font-weight': 'fontWeight', '--studio-text-align': 'textAlign', '--studio-opacity': 'opacity',
+});
+const propertyBaselines = new WeakMap();
+const appliedProperties = new WeakMap();
 
 function isRecord(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
 
-function isValidValue(type, value) {
-  if (type === 'text') return typeof value === 'string' && value.length <= 80;
+function isValidValue(property, value) {
+  const { type } = property;
+  if (type === 'text') return typeof value === 'string' && value.length <= Math.min(80, property.maxLength || 80);
   if (type === 'color') return typeof value === 'string' && colorPattern.test(value);
   if (type === 'imageAsset') return typeof value === 'string' && Object.hasOwn(assetPaths, value);
+  if (type === 'fontFamily' || type === 'textAlign') return typeof value === 'string' && property.options?.includes(value) === true;
+  if (type === 'fontWeight') return typeof value === 'number' && property.options?.includes(value) === true;
+  if (type === 'fontSize' || type === 'opacity') {
+    if (typeof value !== 'number' || !Number.isFinite(value) || value < property.min || value > property.max) return false;
+    const step = property.step || 1;
+    return Math.abs((value - property.min) / step - Math.round((value - property.min) / step)) < 1e-7;
+  }
+  if (type === 'boolean') return typeof value === 'boolean';
   return false;
 }
 
@@ -26,14 +43,15 @@ function isValidBinding(property) {
   const binding = property?.binding;
   if (!binding || typeof binding !== 'object') return false;
   if (binding.operation === 'textContent') return property.type === 'text' && Object.keys(binding).length === 1;
-  if (binding.operation === 'styleVariable') return property.type === 'color' && Object.keys(binding).length === 2 && /^--[a-z][a-z0-9-]*$/.test(binding.name);
+  if (binding.operation === 'styleVariable') return Object.keys(binding).length === 2 && styleVariableTypes[binding.name] === property.type;
   if (binding.operation === 'firstChildBackground') return property.type === 'color' && Object.keys(binding).length === 1;
   if (binding.operation === 'imageSource') return property.type === 'imageAsset' && Object.keys(binding).length === 1;
+  if (binding.operation === 'visibility') return property.type === 'boolean' && Object.keys(binding).length === 1;
   return false;
 }
 
 export function validateConfig(catalog, config) {
-  if (![1, 2].includes(catalog?.version) || config?.schemaVersion !== catalog.version || !config.elements || typeof config.elements !== 'object') {
+  if (![1, 2, 3].includes(catalog?.version) || config?.schemaVersion !== catalog.version || !config.elements || typeof config.elements !== 'object') {
     throw new Error('Versão ou formato da configuração visual não reconhecido.');
   }
 
@@ -42,6 +60,16 @@ export function validateConfig(catalog, config) {
   for (const element of catalog.elements) {
     if (!element || typeof element.id !== 'string' || !/^[a-z][a-z0-9]*(?:\.[a-z][a-z0-9]*)+$/.test(element.id) || catalogElements.has(element.id)) {
       throw new Error('ID de elemento ausente, inválido ou duplicado.');
+    }
+    if (!Array.isArray(element.properties)) throw new Error(`Lista de propriedades inválida em ${element.id}.`);
+    for (const property of element.properties) {
+      if (!property || typeof property.key !== 'string' || !isValidBinding(property) || !isValidValue(property, property.default)) throw new Error(`Propriedade registrada inválida em ${element.id}.`);
+      if (['fontFamily', 'fontWeight', 'textAlign'].includes(property.type)
+        && (!Array.isArray(property.options) || property.options.length === 0 || !property.options.includes(property.default))) throw new Error(`Opções inválidas em ${element.id}.${property.key}.`);
+      if (['fontSize', 'opacity'].includes(property.type)
+        && (!Number.isFinite(property.min) || !Number.isFinite(property.max) || property.min > property.max
+          || property.min < (property.type === 'opacity' ? 0 : 10) || property.max > (property.type === 'opacity' ? 1 : 72)
+          || !Number.isFinite(property.step) || property.step <= 0 || property.default < property.min || property.default > property.max)) throw new Error(`Limites inválidos em ${element.id}.${property.key}.`);
     }
     catalogElements.set(element.id, element);
   }
@@ -53,13 +81,13 @@ export function validateConfig(catalog, config) {
     const permitted = new Map(definition.properties.map((property) => [property.key, property]));
     for (const [key, value] of Object.entries(entry.base || {})) {
       const property = permitted.get(key);
-      if (!property || !isValidBinding(property) || !isValidValue(property.type, value)) throw new Error(`Valor inválido em ${id}.${key}`);
+      if (!property || !isValidBinding(property) || !isValidValue(property, value)) throw new Error(`Valor inválido em ${id}.${key}`);
     }
     for (const [breakpoint, values] of Object.entries(entry.responsive || {})) {
       if (!Object.hasOwn(breakpoints, breakpoint) || !values || typeof values !== 'object') throw new Error(`Breakpoint inválido em ${id}`);
       for (const [key, value] of Object.entries(values)) {
         const property = permitted.get(key);
-        if (!property?.responsive || !isValidBinding(property) || !isValidValue(property.type, value)) throw new Error(`Valor responsivo inválido em ${id}.${key}`);
+        if (!property?.responsive || !isValidBinding(property) || !isValidValue(property, value)) throw new Error(`Valor responsivo inválido em ${id}.${key}`);
       }
     }
     if (entry.geometry !== undefined) {
@@ -96,18 +124,57 @@ function targetFor(id, targetDocument = document) {
 function applyProperty(target, property, value) {
   const binding = property.binding;
   if (binding.operation === 'textContent') target.textContent = value;
-  else if (binding.operation === 'styleVariable') target.style.setProperty(binding.name, value);
+  else if (binding.operation === 'styleVariable') target.style.setProperty(binding.name, property.type === 'fontSize' ? `${value}px` : String(value));
   else if (binding.operation === 'firstChildBackground') {
     if (!target.firstElementChild) throw new Error('Alvo de cor não possui elemento filho.');
     target.firstElementChild.style.backgroundColor = value;
   } else if (binding.operation === 'imageSource') target.setAttribute('src', assetPaths[value]);
+  else if (binding.operation === 'visibility') target.hidden = !value;
   else throw new Error(`Operação de vínculo não registrada: ${binding.operation}`);
 }
 
-function valuesForViewport(entry, targetWindow = window) {
+function captureOriginal(target, property) {
+  const binding = property.binding;
+  if (binding.operation === 'textContent') return { textContent: target.textContent };
+  if (binding.operation === 'styleVariable') return { value: target.style.getPropertyValue(binding.name), priority: target.style.getPropertyPriority(binding.name) };
+  if (binding.operation === 'firstChildBackground') {
+    if (!target.firstElementChild) throw new Error('Alvo de cor não possui elemento filho.');
+    return { value: target.firstElementChild.style.getPropertyValue('background-color'), priority: target.firstElementChild.style.getPropertyPriority('background-color') };
+  }
+  if (binding.operation === 'imageSource') return { hadAttribute: target.hasAttribute('src'), value: target.getAttribute('src') };
+  if (binding.operation === 'visibility') return { hidden: target.hidden, hadAttribute: target.hasAttribute('hidden') };
+  throw new Error(`Operação de vínculo não registrada: ${binding.operation}`);
+}
+
+function restoreOriginal(target, property, original) {
+  const binding = property.binding;
+  if (binding.operation === 'textContent') target.textContent = original.textContent;
+  else if (binding.operation === 'styleVariable') {
+    if (original.value) target.style.setProperty(binding.name, original.value, original.priority);
+    else target.style.removeProperty(binding.name);
+  } else if (binding.operation === 'firstChildBackground') {
+    if (!target.firstElementChild) throw new Error('Alvo de cor não possui elemento filho.');
+    if (original.value) target.firstElementChild.style.setProperty('background-color', original.value, original.priority);
+    else target.firstElementChild.style.removeProperty('background-color');
+  } else if (binding.operation === 'imageSource') {
+    if (original.hadAttribute) target.setAttribute('src', original.value);
+    else target.removeAttribute('src');
+  } else if (binding.operation === 'visibility') {
+    target.hidden = original.hidden;
+    if (original.hadAttribute) target.setAttribute('hidden', '');
+    else target.removeAttribute('hidden');
+  }
+}
+
+function valuesForViewport(entry, targetWindow = window, breakpointOverride = null) {
   const values = { ...(entry.base || {}) };
-  for (const [name, query] of Object.entries(breakpoints)) {
-    if (targetWindow.matchMedia(query).matches) Object.assign(values, entry.responsive?.[name] || {});
+  if (breakpointOverride === 'desktop') return values;
+  if (breakpointOverride === 'mobile' || breakpointOverride === 'tablet') {
+    Object.assign(values, entry.responsive?.[breakpointOverride] || {});
+  } else {
+    for (const [name, query] of Object.entries(breakpoints)) {
+      if (targetWindow.matchMedia(query).matches) Object.assign(values, entry.responsive?.[name] || {});
+    }
   }
   return values;
 }
@@ -123,18 +190,37 @@ function geometryForViewport(entry, catalog, id, targetWindow = window) {
   return values;
 }
 
-export function applyVisualConfiguration(catalog, config, targetDocument = document) {
+export function applyVisualConfiguration(catalog, config, targetDocument = document, breakpointOverride = null) {
   validateConfig(catalog, config);
   const targetWindow = targetDocument.defaultView;
   if (!targetWindow) throw new Error('O documento de prévia não está disponível.');
   for (const id of Object.keys(config.elements)) targetFor(id, targetDocument);
   const apply = () => {
-    for (const [id, entry] of Object.entries(config.elements)) {
-      const definition = catalog.elements.find((element) => element.id === id);
-      const properties = new Map(definition.properties.map((property) => [property.key, property]));
+    for (const definition of catalog.elements) {
+      const { id } = definition;
+      const entry = config.elements[id] || {};
       const target = targetFor(id, targetDocument);
-      for (const [key, value] of Object.entries(valuesForViewport(entry, targetWindow))) {
-        applyProperty(target, properties.get(key), value);
+      const values = valuesForViewport(entry, targetWindow, breakpointOverride);
+      let previouslyApplied = appliedProperties.get(target);
+      if (!previouslyApplied) {
+        previouslyApplied = new Set();
+        appliedProperties.set(target, previouslyApplied);
+      }
+      let originals = propertyBaselines.get(target);
+      if (!originals) {
+        originals = new Map();
+        propertyBaselines.set(target, originals);
+      }
+      for (const property of definition.properties) {
+        if (Object.hasOwn(values, property.key)) {
+          if (!originals.has(property.key)) originals.set(property.key, captureOriginal(target, property));
+          applyProperty(target, property, values[property.key]);
+          previouslyApplied.add(property.key);
+        } else if (previouslyApplied.has(property.key)) {
+          restoreOriginal(target, property, originals.get(property.key));
+          previouslyApplied.delete(property.key);
+          originals.delete(property.key);
+        }
       }
       const geometry = geometryForViewport(entry, catalog, id, targetWindow);
       const hasGeometry = Object.keys(entry.geometry?.base || {}).length > 0

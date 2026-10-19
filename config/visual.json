@@ -1,7 +1,9 @@
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "elements": {
     "game.title": { "base": { "text": "Pedra, papel e tesoura" } },
+    "menu.card": { "base": {} },
+    "menu.start": { "base": {} },
     "arena.background": { "base": { "backgroundColor": "#fafaf7" } },
     "hands.player.image": { "base": { "assetId": "hands.rock" } },
     "hands.enemy.image": { "base": { "assetId": "hands.rock" } },

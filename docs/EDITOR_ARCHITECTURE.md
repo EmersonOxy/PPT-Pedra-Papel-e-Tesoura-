@@ -2,19 +2,25 @@
 
 Status: arquitetura proposta aprovada no Marco 1 e base inicial de extensibilidade implementada no Marco 2. O editor completo e sua UI continuam fora do Marco 2.
 
-## Geometria visual — incremento inicial do Marco 3
+## Inspetor avançado e geometria visual — Marco 3
 
-O catálogo v2 declara um binding genérico `css-flow-box-v1`, descrito em `config/editor-elements.schema.json`. A UI lê metadados do catálogo; não implementa movimento por IDs do jogo. A prévia isolada recebe seleção e gestos pelo canal autenticado existente. O processo principal e o runtime validam valores numéricos e limites antes de aplicar/salvar.
+O catálogo v3 descreve propriedades genéricas e tipadas. O inspetor lê somente o registro selecionado e não contém IDs/regras específicas do jogo. Controles de fonte, tamanho em CSS px, peso, alinhamento, cor do texto/fundo, opacidade e visibilidade aparecem somente quando o elemento declara a propriedade. Cada binding de estilo é uma variável CSS allowlisted; visibilidade usa operação nomeada. Limites, enums, cores, números e campos desconhecidos são validados no renderer, serviço do projeto e runtime. As propriedades opcionais não gravam seus defaults até uma edição; restaurar valores remove overrides e recupera o valor original do HTML/CSS.
+
+Propriedades responsivas usam `base` e overrides mobile/tablet declarados. O Studio edita o breakpoint ativo sem substituir valores de outro breakpoint. Undo/redo opera sobre os mesmos comandos semânticos e o salvamento mantém JSON validado, escrita atômica e backup.
+
+Importação de imagem própria foi avaliada, mas fica para um incremento separado. O fluxo futuro recomendado é limitado a PNG, JPEG e WebP raster, tamanho máximo de 5 MiB, dimensão máxima de 4096 px por lado e até 16 megapixels decodificados; deve validar assinatura real e decodificação, gerar `assetId` estável e nome interno, gravar atomicamente em `assets/` na raiz do projeto e manter hash/backup. SVG, HTML, URLs remotas e conteúdo ativo devem ser recusados. Hoje o Studio apenas escolhe IDs de imagens que já estão registrados; não há seletor fictício de importação.
+
+O catálogo v3 declara os bindings de propriedades e o binding genérico `css-flow-box-v1`, descritos em `config/editor-elements.schema.json`. A UI lê metadados do catálogo; não implementa edição por IDs do jogo. A prévia isolada recebe seleção e gestos pelo canal autenticado existente. O processo principal e o runtime validam tipos, valores, nomes de variáveis CSS e limites antes de aplicar/salvar.
 
 `flow-box-v1` preserva o fluxo e o pai CSS original. X/Y são deslocamentos em CSS px a partir da posição natural; largura/altura substituem dimensões apenas quando configuradas. Não é posicionamento absoluto livre. Sem override, o CSS original controla a geometria. Cada alvo declara âncora, unidade, capacidades, valores padrão, limites e suporte responsivo.
 
 Os alvos registrados nesta etapa são título, cartão e botão do Menu inicial e fundo da Arena. A interface oferece seleção, contorno, arraste, alças nos cantos, campos X/Y/largura/altura, centralização em relação ao elemento pai, reset e undo/redo. Desktop grava em `geometry.base`; celular grava em `geometry.responsive.mobile`, herdando campos omitidos de `base`.
 
-Projetos novos usam catálogo/configuração v2. Projetos v1 permanecem v1 ao abrir e salvar, sem migração silenciosa nem novos alvos geométricos. Migrações futuras serão explícitas, com backup e teste. A validação rejeita coordenadas não finitas, dimensões fora dos limites, campos desconhecidos e breakpoints não declarados. CSS e JavaScript arbitrários nunca são aceitos pelo inspetor.
+Projetos novos usam catálogo/configuração v3. Projetos schema 1 e 2 permanecem na versão original ao abrir/salvar, sem migração silenciosa nem novas propriedades adicionadas. Migrações futuras serão explícitas, com backup e teste. A validação rejeita coordenadas não finitas, dimensões/números fora dos limites, campos desconhecidos, enums inválidos e breakpoints não declarados. CSS, HTML e JavaScript arbitrários nunca são aceitos pelo inspetor.
 
 Na compatibilidade v1, o navegador de telas filtra alvos que ainda não existem no catálogo do projeto; o estado visual pode ser inspecionado sem alterar os arquivos. O smoke do Electron abre um projeto fixture v1, navega entre Menu e Combate e compara os bytes de `config/visual.json` antes/depois da abertura.
 
-Uma futura migração v1 → v2 deverá ser iniciada por uma ação explícita do usuário: (1) criar backup recuperável do projeto e validar o manifesto/arquivos, (2) mostrar versão de origem/destino e mudanças que serão aplicadas, (3) validar uma cópia em diretório temporário, incluindo catálogo, defaults e recursos, (4) pedir confirmação antes de trocar os arquivos de configuração e (5) confirmar o resultado ou restaurar o backup se houver falha. O incremento atual não oferece nem executa migração.
+Uma migração futura de schema deverá ser iniciada por ação explícita: criar backup, mostrar origem/destino e mudanças, validar cópia temporária, pedir confirmação antes de gravar e restaurar o backup se a validação final falhar. O inspetor atual não oferece nem executa migração automática.
 
 Limitações: offsets e dimensões usam CSS px; colisões retangulares são cobertas por teste, mas ainda não há ferramenta visual de diagnóstico ou prevenção de sobreposição. Validar o layout em desktop e celular, pois algumas sobreposições podem ser intencionais.
 
@@ -32,9 +38,9 @@ Limitações: offsets e dimensões usam CSS px; colisões retangulares são cobe
 
 ## Integração existente no runtime modular
 
-`index.html` marca nove alvos iniciais com `data-editor-id`. `config/editor-elements.schema.json` cataloga esses elementos, propriedades e vínculos; `config/visual.json` contém seus valores externos versionados. `src/game/ui/visual-config.js` valida IDs, tipos, valores, vínculos e assets contra allowlists antes de aplicar texto simples, cores hexadecimais e três IDs de imagem local. O adaptador não interpreta HTML, CSS, JavaScript ou URL remota.
+`index.html` marca onze alvos iniciais com `data-editor-id`. `config/editor-elements.schema.json` cataloga elementos, propriedades e vínculos; `config/visual.json` contém valores externos versionados. `src/game/ui/visual-config.js` valida IDs, tipos, defaults, faixas, enums, variáveis de estilo, visibilidade e assets locais contra allowlists. O adaptador não interpreta HTML, CSS, JavaScript ou URL remota.
 
-Os breakpoints publicados são `mobile` (até 600 px) e `tablet` (601 a 750 px). Uma propriedade só aceita override quando seu registro declara `responsive: true`; o runtime reavalia os valores ao mudar de breakpoint. Os elementos deste primeiro catálogo ainda não usam overrides responsivos, pois os valores atuais já são definidos pelo CSS do jogo.
+Os breakpoints publicados são `mobile` (até 600 px) e `tablet` (601 a 750 px). Uma propriedade só aceita override quando seu registro declara `responsive: true`; o runtime reavalia os valores ao mudar de breakpoint. As propriedades registradas mantêm os defaults existentes em CSS e só criam overrides quando editadas.
 
 Se catálogo/configuração estiver ausente, inválido ou em versão não suportada, o jogo mantém os defaults do HTML/CSS e registra uma mensagem no console. A configuração de gameplay sandbox é apenas um arquivo reservado e ainda não é carregada pelo runtime.
 

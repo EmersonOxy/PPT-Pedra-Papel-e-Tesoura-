@@ -1,18 +1,27 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "version": 2,
+  "version": 3,
   "breakpoints": {
     "mobile": { "maxWidth": 600 },
     "tablet": { "minWidth": 601, "maxWidth": 750 }
   },
-  "propertyTypes": ["text", "color", "imageAsset"],
+  "propertyTypes": ["text", "color", "imageAsset", "fontFamily", "fontSize", "fontWeight", "textAlign", "opacity", "boolean"],
   "elements": [
     {
       "id": "game.title",
       "kind": "text",
       "labelKey": "editor.elements.gameTitle",
       "target": { "attribute": "data-editor-id" },
-      "properties": [{ "key": "text", "type": "text", "default": "Pedra, papel e tesoura", "binding": { "operation": "textContent" }, "maxLength": 80, "responsive": false }],
+      "properties": [
+        { "key": "text", "type": "text", "default": "Pedra, papel e tesoura", "binding": { "operation": "textContent" }, "maxLength": 80, "responsive": false },
+        { "key": "fontFamily", "type": "fontFamily", "default": "Arial", "binding": { "operation": "styleVariable", "name": "--studio-font-family" }, "options": ["system-ui", "Arial", "Georgia", "Trebuchet MS", "Verdana"], "optional": true, "responsive": false },
+        { "key": "fontSize", "type": "fontSize", "default": 34, "binding": { "operation": "styleVariable", "name": "--studio-font-size" }, "min": 12, "max": 72, "step": 1, "optional": true, "responsive": true },
+        { "key": "fontWeight", "type": "fontWeight", "default": 600, "binding": { "operation": "styleVariable", "name": "--studio-font-weight" }, "options": [400, 500, 600, 700, 800], "optional": true, "responsive": false },
+        { "key": "textAlign", "type": "textAlign", "default": "center", "binding": { "operation": "styleVariable", "name": "--studio-text-align" }, "options": ["left", "center", "right"], "optional": true, "responsive": true },
+        { "key": "textColor", "type": "color", "default": "#2b312d", "binding": { "operation": "styleVariable", "name": "--studio-text-color" }, "optional": true, "responsive": false },
+        { "key": "opacity", "type": "opacity", "default": 1, "binding": { "operation": "styleVariable", "name": "--studio-opacity" }, "min": 0, "max": 1, "step": 0.05, "optional": true, "responsive": true },
+        { "key": "visible", "type": "boolean", "default": true, "binding": { "operation": "visibility" }, "optional": true, "responsive": true }
+      ],
       "geometry": { "type": "flow-box-v1", "binding": "css-flow-box-v1", "anchor": "flow", "default": { "x": 0, "y": 0 }, "supports": ["move", "resize"], "units": "css-px", "responsive": true, "limits": { "x": { "min": -240, "max": 240 }, "y": { "min": -240, "max": 240 }, "width": { "min": 120, "max": 520 }, "height": { "min": 32, "max": 180 } } }
     },
     {
@@ -20,7 +29,11 @@
       "kind": "container",
       "labelKey": "editor.elements.arenaBackground",
       "target": { "attribute": "data-editor-id" },
-      "properties": [{ "key": "backgroundColor", "type": "color", "default": "#fafaf7", "binding": { "operation": "styleVariable", "name": "--arena-background" }, "responsive": false }],
+      "properties": [
+        { "key": "backgroundColor", "type": "color", "default": "#fafaf7", "binding": { "operation": "styleVariable", "name": "--arena-background" }, "responsive": false },
+        { "key": "opacity", "type": "opacity", "default": 1, "binding": { "operation": "styleVariable", "name": "--studio-opacity" }, "min": 0, "max": 1, "step": 0.05, "optional": true, "responsive": true },
+        { "key": "visible", "type": "boolean", "default": true, "binding": { "operation": "visibility" }, "optional": true, "responsive": true }
+      ],
       "geometry": { "type": "flow-box-v1", "binding": "css-flow-box-v1", "anchor": "flow", "default": { "x": 0, "y": 0 }, "supports": ["move", "resize"], "units": "css-px", "responsive": true, "limits": { "x": { "min": -240, "max": 240 }, "y": { "min": -180, "max": 180 }, "width": { "min": 320, "max": 1300 }, "height": { "min": 240, "max": 700 } } }
     },
     {
@@ -28,7 +41,10 @@
       "kind": "container",
       "labelKey": "editor.elements.menuCard",
       "target": { "attribute": "data-editor-id" },
-      "properties": [],
+      "properties": [
+        { "key": "opacity", "type": "opacity", "default": 1, "binding": { "operation": "styleVariable", "name": "--studio-opacity" }, "min": 0, "max": 1, "step": 0.05, "optional": true, "responsive": true },
+        { "key": "visible", "type": "boolean", "default": true, "binding": { "operation": "visibility" }, "optional": true, "responsive": true }
+      ],
       "geometry": { "type": "flow-box-v1", "binding": "css-flow-box-v1", "anchor": "flow", "default": { "x": 0, "y": 0 }, "supports": ["move", "resize"], "units": "css-px", "responsive": true, "limits": { "x": { "min": -240, "max": 240 }, "y": { "min": -240, "max": 240 }, "width": { "min": 200, "max": 700 }, "height": { "min": 160, "max": 700 } } }
     },
     {
@@ -36,7 +52,17 @@
       "kind": "button",
       "labelKey": "editor.elements.menuStart",
       "target": { "attribute": "data-editor-id" },
-      "properties": [],
+      "properties": [
+        { "key": "text", "type": "text", "default": "Jogar", "binding": { "operation": "textContent" }, "maxLength": 40, "optional": true, "responsive": false },
+        { "key": "fontFamily", "type": "fontFamily", "default": "Arial", "binding": { "operation": "styleVariable", "name": "--studio-font-family" }, "options": ["system-ui", "Arial", "Georgia", "Trebuchet MS", "Verdana"], "optional": true, "responsive": false },
+        { "key": "fontSize", "type": "fontSize", "default": 15, "binding": { "operation": "styleVariable", "name": "--studio-font-size" }, "min": 10, "max": 48, "step": 1, "optional": true, "responsive": true },
+        { "key": "fontWeight", "type": "fontWeight", "default": 400, "binding": { "operation": "styleVariable", "name": "--studio-font-weight" }, "options": [400, 500, 600, 700, 800], "optional": true, "responsive": false },
+        { "key": "textAlign", "type": "textAlign", "default": "center", "binding": { "operation": "styleVariable", "name": "--studio-text-align" }, "options": ["left", "center", "right"], "optional": true, "responsive": true },
+        { "key": "textColor", "type": "color", "default": "#ffffff", "binding": { "operation": "styleVariable", "name": "--studio-text-color" }, "optional": true, "responsive": false },
+        { "key": "backgroundColor", "type": "color", "default": "#466c56", "binding": { "operation": "styleVariable", "name": "--studio-background-color" }, "optional": true, "responsive": false },
+        { "key": "opacity", "type": "opacity", "default": 1, "binding": { "operation": "styleVariable", "name": "--studio-opacity" }, "min": 0, "max": 1, "step": 0.05, "optional": true, "responsive": true },
+        { "key": "visible", "type": "boolean", "default": true, "binding": { "operation": "visibility" }, "optional": true, "responsive": true }
+      ],
       "geometry": { "type": "flow-box-v1", "binding": "css-flow-box-v1", "anchor": "flow", "default": { "x": 0, "y": 0 }, "supports": ["move", "resize"], "units": "css-px", "responsive": true, "limits": { "x": { "min": -180, "max": 180 }, "y": { "min": -180, "max": 180 }, "width": { "min": 100, "max": 340 }, "height": { "min": 36, "max": 150 } } }
     },
     {

@@ -15,6 +15,7 @@ const expectedVersion = process.env.TRINDADE_STUDIO_EXPECTED_VERSION || JSON.par
 const screenshotPath = join(packageRoot, 'Trindade-Studio-proof.png');
 const sceneScreenshotRoot = join(packageRoot, 'scene-browser');
 const projectCenterScreenshotRoot = join(packageRoot, 'project-center');
+const inspectorScreenshotRoot = join(packageRoot, 'inspector');
 const require = createRequire(import.meta.url);
 const allowedFiles = require('../electron/project-service.cjs').allowedFiles;
 
@@ -75,7 +76,7 @@ async function launch(exe, profile, fixture, debugPort, extraEnvironment = {}) {
       ...process.env,
       TRINDADE_PROJECT_ROOT: fixture,
       TRINDADE_STUDIO_TEST_MODE: '1',
-      TRINDADE_STUDIO_TEST_HIDDEN: '1',
+      TRINDADE_STUDIO_TEST_HIDDEN: process.env.TRINDADE_STUDIO_TEST_HIDDEN || '1',
       TRINDADE_STUDIO_DEBUG_PORT: String(debugPort),
       TRINDADE_STUDIO_TEST_USER_DATA: join(profile, 'app-data'),
       ...extraEnvironment,
@@ -266,6 +267,12 @@ try {
 
   await session.evaluate(`document.querySelector('[data-editor-id="game.title"]').dispatchEvent(new MouseEvent('click',{bubbles:true}))`, frameContext);
   await waitFor(() => session.evaluate(`document.querySelector('.selected-element-card')?.innerText.includes('game.title')`), 'seleção direta no canvas');
+  await mkdir(inspectorScreenshotRoot, { recursive: true });
+  const saveInspectorScreenshot = async (name) => {
+    const captured = await capturePage(session);
+    await writeFile(join(inspectorScreenshotRoot, name), Buffer.from(captured.data, 'base64'));
+  };
+  await saveInspectorScreenshot('inspector-before.png');
   const titleInput = await session.evaluate(`document.querySelector('input[id^="property-"]').id`);
   const titleInputId = JSON.stringify(titleInput);
   const newTitle = 'Título Studio validado';
@@ -284,6 +291,66 @@ try {
   await session.evaluate(`document.querySelector('button[title^="Refazer"]').click()`);
   await waitFor(() => session.evaluate(`document.querySelector('[data-editor-id="game.title"]').textContent === ${JSON.stringify(newTitle)}`, frameContext), 'refazer na prévia');
   report('undo/redo verificados');
+
+  const setInspectorValue = async (id, value, type) => session.evaluate(`(() => {
+    const input=document.getElementById(${JSON.stringify(id)});
+    if (!input) throw new Error('Controle de propriedade ausente: ${id}');
+    const prototype = ${JSON.stringify(type === 'select' ? 'HTMLSelectElement' : type === 'checkbox' ? 'HTMLInputElement' : 'HTMLInputElement')};
+    if (${JSON.stringify(type)} === 'checkbox') {
+      if (input.checked !== ${JSON.stringify(value)}) input.click();
+      return;
+    }
+    const setter=Object.getOwnPropertyDescriptor(window[prototype].prototype, 'value').set;
+    setter.call(input, ${JSON.stringify(value)});
+    input.dispatchEvent(new Event(${JSON.stringify(type === 'select' ? 'change' : 'input')},{bubbles:true}));
+    if (${JSON.stringify(type)} !== 'select') input.dispatchEvent(new Event('change',{bubbles:true}));
+  })()`);
+  await setInspectorValue('property-game.title.fontFamily.base', 'Georgia', 'select');
+  await waitFor(() => session.evaluate(`document.querySelector('[data-editor-id="game.title"]').style.getPropertyValue('--studio-font-family') === 'Georgia'`, frameContext), 'fonte do título aplicada');
+  await setInspectorValue('property-number-game.title.fontSize.desktop', '42', 'number');
+  await waitFor(() => session.evaluate(`document.querySelector('[data-editor-id="game.title"]').style.getPropertyValue('--studio-font-size') === '42px'`, frameContext), 'tamanho do título aplicado');
+  await setInspectorValue('property-game.title.textColor.base', '#123456', 'text');
+  await waitFor(() => session.evaluate(`document.querySelector('[data-editor-id="game.title"]').style.getPropertyValue('--studio-text-color') === '#123456'`, frameContext), 'cor do texto aplicada');
+  await session.evaluate(`document.querySelector('button[title^="Desfazer"]').click()`);
+  await waitFor(() => session.evaluate(`document.querySelector('[data-editor-id="game.title"]').style.getPropertyValue('--studio-text-color') === ''`, frameContext), 'undo da cor do título');
+  await session.evaluate(`document.querySelector('button[title^="Refazer"]').click()`);
+  await waitFor(() => session.evaluate(`document.querySelector('[data-editor-id="game.title"]').style.getPropertyValue('--studio-text-color') === '#123456'`, frameContext), 'redo da cor do título');
+  await saveInspectorScreenshot('inspector-title-after.png');
+
+  await session.evaluate(`document.querySelector('[data-element-id="menu.start"]').click()`);
+  await waitFor(() => session.evaluate(`document.querySelector('.selected-element-card')?.innerText.includes('menu.start')`), 'seleção do botão Jogar no inspetor');
+  await setInspectorValue('property-menu.start.backgroundColor.base', '#234567', 'text');
+  await waitFor(() => session.evaluate(`document.querySelector('[data-editor-id="menu.start"]').style.getPropertyValue('--studio-background-color') === '#234567'`, frameContext), 'aparência do botão Jogar aplicada');
+  await setInspectorValue('property-menu.start.textColor.base', '#f1e2d3', 'text');
+  await waitFor(() => session.evaluate(`document.querySelector('[data-editor-id="menu.start"]').style.getPropertyValue('--studio-text-color') === '#f1e2d3'`, frameContext), 'cor do texto do botão aplicada');
+
+  await session.evaluate(`document.querySelector('[data-element-id="menu.card"]').click()`);
+  await waitFor(() => session.evaluate(`document.querySelector('.selected-element-card')?.innerText.includes('menu.card')`), 'seleção do cartão do menu');
+  await setInspectorValue('property-number-menu.card.opacity.desktop', '0.75', 'number');
+  await waitFor(() => session.evaluate(`document.querySelector('[data-editor-id="menu.card"]').style.getPropertyValue('--studio-opacity') === '0.75'`, frameContext), 'opacidade do cartão aplicada');
+  await session.evaluate(`document.querySelector('button[title^="Desfazer"]').click()`);
+  await waitFor(() => session.evaluate(`document.querySelector('[data-editor-id="menu.card"]').style.getPropertyValue('--studio-opacity') === ''`, frameContext), 'undo da opacidade do cartão');
+  await session.evaluate(`document.querySelector('button[title^="Refazer"]').click()`);
+  await waitFor(() => session.evaluate(`document.querySelector('[data-editor-id="menu.card"]').style.getPropertyValue('--studio-opacity') === '0.75'`, frameContext), 'redo da opacidade do cartão');
+  await setInspectorValue('property-menu.card.visible.desktop', false, 'checkbox');
+  await waitFor(() => session.evaluate(`document.querySelector('[data-editor-id="menu.card"]').hidden === true`, frameContext), 'visibilidade do cartão desativada');
+  await session.evaluate(`document.querySelector('button[title^="Desfazer"]').click()`);
+  await waitFor(() => session.evaluate(`document.querySelector('[data-editor-id="menu.card"]').hidden === false`, frameContext), 'undo da visibilidade do cartão');
+  await session.evaluate(`document.querySelector('button[title^="Refazer"]').click()`);
+  await waitFor(() => session.evaluate(`document.querySelector('[data-editor-id="menu.card"]').hidden === true`, frameContext), 'redo da visibilidade do cartão');
+  assert.equal(await session.evaluate(`Boolean(document.querySelector('[data-element-id="menu.card"]'))`), true, 'Elemento oculto deve continuar recuperável na lista de camadas.');
+  await saveInspectorScreenshot('inspector-appearance-hidden.png');
+  await setInspectorValue('property-menu.card.visible.desktop', true, 'checkbox');
+  await waitFor(() => session.evaluate(`document.querySelector('[data-editor-id="menu.card"]').hidden === false`, frameContext), 'restauração de visibilidade do cartão');
+  await selectScene('combat', `!document.querySelector('#game-screen').hidden && document.querySelector('#end-screen').hidden`, 'Arena para validação do inspetor');
+  await session.evaluate(`document.querySelector('[data-element-id="arena.background"]').click()`);
+  await waitFor(() => session.evaluate(`document.querySelector('.selected-element-card')?.innerText.includes('arena.background')`), 'seleção do componente da Arena');
+  assert.equal(await session.evaluate(`Boolean(document.getElementById('property-number-arena.background.opacity.desktop'))`), true, 'A Arena deve expor opacidade registrada.');
+  assert.equal(await session.evaluate(`Boolean(document.getElementById('property-arena.background.fontFamily.base'))`), false, 'A Arena não deve exibir fonte incompatível.');
+  await setInspectorValue('property-number-arena.background.opacity.desktop', '0.6', 'number');
+  await waitFor(() => session.evaluate(`document.querySelector('[data-editor-id="arena.background"]').style.getPropertyValue('--studio-opacity') === '0.6'`, frameContext), 'opacidade da arena aplicada');
+  await saveInspectorScreenshot('inspector-arena-after.png');
+  report('inspetor avançado: fonte, tamanho, cores, opacidade, visibilidade, camadas e undo/redo verificados');
 
   const geometryCapture = async (name) => {
     const alignment = () => session.evaluate(`(() => {
@@ -305,6 +372,7 @@ try {
     await mkdir(join(packageRoot, 'geometry'), { recursive: true });
     await writeFile(join(packageRoot, 'geometry', name), Buffer.from(captured.data, 'base64'));
   };
+  await selectScene('menu', `!document.querySelector('#menu-screen').hidden && document.querySelector('#game-screen').hidden`, 'retorno ao menu após inspeção da Arena');
   await session.evaluate("document.querySelector('[data-element-id=\\\"menu.start\\\"]').click()");
   await waitFor(() => session.evaluate("document.querySelector('.selected-element-card')?.innerText.includes('menu.start')"), 'seleção do botão do menu');
   await geometryCapture('menu-before.png');
@@ -398,7 +466,7 @@ try {
   await session.evaluate(`document.querySelector('[data-editor-id="arena.background"]').dispatchEvent(new MouseEvent('click',{bubbles:true}))`, frameContext);
   await waitFor(() => session.evaluate(`document.querySelector('.selected-element-card')?.innerText.includes('arena.background')`), 'seleção restaurada da arena');
   await session.evaluate(`(() => {
-    const input = document.getElementById('property-arena.background.backgroundColor');
+    const input = document.getElementById('property-arena.background.backgroundColor.base');
     if (!(input instanceof HTMLInputElement)) throw new Error('Campo de cor ausente: ' + document.querySelector('.selected-element-card')?.innerText + ' / ' + [...document.querySelectorAll('[id^="property-"]')].map((item) => item.id).join(','));
     const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
     setter.call(input, '#123456');
@@ -412,7 +480,7 @@ try {
   await session.evaluate(`document.querySelector('[data-editor-id="controls.move.rock"]').dispatchEvent(new MouseEvent('click',{bubbles:true}))`, frameContext);
   await waitFor(() => session.evaluate(`document.querySelector('.selected-element-card')?.innerText.includes('controls.move.rock')`), 'seleção de controle com propriedade compartilhada');
   await session.evaluate(`(() => {
-    const input = document.getElementById('property-controls.move.rock.backgroundColor');
+    const input = document.getElementById('property-controls.move.rock.backgroundColor.base');
     if (!(input instanceof HTMLInputElement)) throw new Error('Campo de cor ausente: ' + document.querySelector('.selected-element-card')?.innerText + ' / ' + [...document.querySelectorAll('[id^="property-"]')].map((item) => item.id).join(','));
     const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
     setter.call(input, '#123456');
@@ -425,7 +493,7 @@ try {
   await session.evaluate(`document.querySelector('[data-editor-id="hands.player.image"]').dispatchEvent(new MouseEvent('click',{bubbles:true}))`, frameContext);
   await waitFor(() => session.evaluate(`document.querySelector('.selected-element-card')?.innerText.includes('hands.player.image')`), 'seleção da imagem do jogador');
   await session.evaluate(`(() => {
-    const input = document.getElementById('property-hands.player.image.assetId');
+    const input = document.getElementById('property-hands.player.image.assetId.base');
     const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set;
     setter.call(input, 'hands.paper');
     input.dispatchEvent(new Event('change', {bubbles:true}));
@@ -501,7 +569,7 @@ try {
   await waitFor(() => session.evaluate(`document.documentElement.dataset.studioMode === 'edit'`, frameContext), 'retorno da prévia ao modo de edição');
   let editReturnState = {};
   try { await waitFor(async () => {
-    const uiState = await session.evaluate(`({dirty:document.querySelector('.save-state').classList.contains('is-dirty'), asset:document.getElementById('property-hands.player.image.assetId')?.value})`);
+    const uiState = await session.evaluate(`({dirty:document.querySelector('.save-state').classList.contains('is-dirty'), asset:document.getElementById('property-hands.player.image.assetId.base')?.value})`);
     const previewAsset = await session.evaluate(`document.querySelector('[data-editor-id="hands.player.image"]').getAttribute('src')`, frameContext);
     const previewScene = await session.evaluate(`document.querySelector('#menu-screen').hidden && !document.querySelector('#game-screen').hidden && document.querySelector('#end-screen').hidden`, frameContext);
     editReturnState = { uiState, previewAsset, previewScene, previewMode: await session.evaluate(`document.documentElement.dataset.studioMode`, frameContext), previewErrors: session.consoleErrors.slice(-3) };
@@ -511,6 +579,13 @@ try {
   await session.evaluate(`document.querySelector('button.save-button').click()`);
   await waitFor(() => readFile(join(fixture, 'config/visual.json'), 'utf8').then((raw) => JSON.parse(raw).elements['game.title'].base.text === newTitle), 'salvamento persistente');
   const geometrySaved = JSON.parse(await readFile(join(fixture, 'config/visual.json'), 'utf8'));
+  assert.equal(geometrySaved.elements['game.title'].base.fontFamily, 'Georgia');
+  assert.equal(geometrySaved.elements['game.title'].base.fontSize, 42);
+  assert.equal(geometrySaved.elements['game.title'].base.textColor, '#123456');
+  assert.equal(geometrySaved.elements['menu.start'].base.backgroundColor, '#234567');
+  assert.equal(geometrySaved.elements['menu.card'].base.opacity, 0.75);
+  assert.equal(geometrySaved.elements['menu.card'].base.visible, true, 'O cartão deve estar visível ao salvar.');
+  assert.equal(geometrySaved.elements['arena.background'].base.opacity, 0.6);
   assert.deepEqual(geometrySaved.elements['menu.start'].geometry.base, { x: desktopX, y: 19, width: 190, height: 62 }, 'A geometria desktop salva deve corresponder ao estado mostrado.');
   assert.deepEqual(geometrySaved.elements['menu.start'].geometry.responsive.mobile, { x: draggedMobileX, y: draggedMobileY, width: 190, height: 62 }, 'A geometria mobile salva deve coincidir com o estado mostrado após o arraste.');
   assert.equal(geometrySaved.elements['arena.background'].geometry.base.y, 24, 'A geometria da arena deve ser salva.');
@@ -520,6 +595,26 @@ try {
   await session.send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
   await session.evaluate(`document.querySelector('button[title="Visualização celular"]').click()`);
   assert.equal(await session.evaluate(`document.querySelector('.preview-frame-wrap').classList.contains('mobile-preview')`), true, 'A prévia celular não alterou o enquadramento.');
+  await selectScene('menu', `!document.querySelector('#menu-screen').hidden && document.querySelector('#game-screen').hidden`, 'menu para edição de tipografia responsiva');
+  await session.evaluate(`document.querySelector('[data-element-id="game.title"]').click()`);
+  await waitFor(() => session.evaluate(`document.querySelector('.selected-element-card')?.innerText.includes('game.title')`), 'título selecionado para override responsivo');
+  await setInspectorValue('property-number-game.title.fontSize.mobile', '38', 'number');
+  await waitFor(() => session.evaluate(`document.querySelector('[data-editor-id="game.title"]').style.getPropertyValue('--studio-font-size') === '38px'`, frameContext), 'tamanho de fonte celular aplicado');
+  await session.send('Emulation.clearDeviceMetricsOverride');
+  await session.evaluate(`document.querySelector('button[title="Visualização desktop"]').click()`);
+  try {
+    await waitFor(() => session.evaluate(`document.querySelector('[data-editor-id="game.title"]').style.getPropertyValue('--studio-font-size') === '42px'`, frameContext), 'valor desktop preservado após ajuste celular');
+  } catch (error) {
+    const responsiveDebug = await session.evaluate(`({frameRect:document.querySelector('iframe')?.getBoundingClientRect().toJSON(),fontSize:document.querySelector('[data-editor-id="game.title"]')?.style.getPropertyValue('--studio-font-size'),innerWidth,matchMobile:matchMedia('(max-width: 600px)').matches})`, frameContext);
+    const editorDebug = await session.evaluate(`({desktopActive:document.querySelector('button[title="Visualização desktop"]')?.className,mobileActive:document.querySelector('button[title="Visualização celular"]')?.className,desktopValue:document.getElementById('property-number-game.title.fontSize.desktop')?.value,mobileValue:document.getElementById('property-number-game.title.fontSize.mobile')?.value,mode:document.querySelector('.canvas-statusbar')?.innerText})`);
+    throw new Error(`${error.message}; estado desktop responsivo=${JSON.stringify(responsiveDebug)}; estado do editor=${JSON.stringify(editorDebug)}`);
+  }
+  await session.evaluate(`document.querySelector('button[title="Visualização celular"]').click()`);
+  await waitFor(() => session.evaluate(`document.querySelector('[data-editor-id="game.title"]').style.getPropertyValue('--studio-font-size') === '38px'`, frameContext), 'retorno ao valor móvel próprio');
+  await session.evaluate(`document.querySelector('button.save-button').click()`);
+  await waitFor(() => readFile(join(fixture, 'config/visual.json'), 'utf8').then((raw) => JSON.parse(raw).elements['game.title'].responsive.mobile.fontSize === 38), 'override responsivo salvo');
+  assert.equal(JSON.parse(await readFile(join(fixture, 'config/visual.json'), 'utf8')).elements['game.title'].base.fontSize, 42, 'A edição celular não pode substituir o valor desktop.');
+  await session.evaluate(`document.querySelector('button[title="Visualização desktop"]').click()`);
   await session.send('Emulation.clearDeviceMetricsOverride');
   await capturePage(session).then((result) => writeFile(screenshotPath, Buffer.from(result.data, 'base64')));
   report('prévia mobile e captura de tela verificadas');
@@ -537,7 +632,53 @@ try {
   const reopenedTarget = (await (await fetch(`http://127.0.0.1:${secondPort}/json/list`)).json()).find((target) => target.type === 'page');
   session = await attach(reopenedTarget);
   await waitFor(() => session.evaluate(`document.querySelector('input[id^="property-"]')?.value === ${JSON.stringify(newTitle)}`), 'persistência ao reabrir o executável');
+  assert.equal(await session.evaluate(`document.getElementById('property-game.title.fontFamily.base')?.value`), 'Georgia');
+  assert.equal(await session.evaluate(`document.getElementById('property-number-game.title.fontSize.desktop')?.value`), '42');
+  assert.equal(await session.evaluate(`document.getElementById('property-game.title.textColor.base')?.value`), '#123456');
+  const reopenedTree = await session.send('Page.getFrameTree');
+  const reopenedFrameId = reopenedTree.frameTree.childFrames.find((f) => new URL(f.frame.url).pathname === '/').frame.id;
+  const reopenedFrameContext = await waitFor(() => session.contexts.get(reopenedFrameId), 'contexto da prévia após reabrir');
+  frameContext = reopenedFrameContext;
+  await waitFor(() => session.evaluate(`document.querySelector('[data-editor-id="game.title"]').style.getPropertyValue('--studio-font-family') === 'Georgia'`, reopenedFrameContext), 'fonte persistida aplicada à prévia depois de reabrir');
+  assert.equal(await session.evaluate(`document.querySelector('[data-editor-id="game.title"]').style.getPropertyValue('--studio-font-size')`, reopenedFrameContext), '42px');
+  assert.equal(await session.evaluate(`document.querySelector('[data-editor-id="game.title"]').style.getPropertyValue('--studio-font-color')`, reopenedFrameContext), '');
+  assert.equal(await session.evaluate(`document.querySelector('[data-editor-id="game.title"]').style.getPropertyValue('--studio-text-color')`, reopenedFrameContext), '#123456');
   await session.evaluate("document.querySelector('[data-element-id=\\\"menu.start\\\"]').click()");
+  assert.equal(await session.evaluate(`document.getElementById('property-menu.start.backgroundColor.base')?.value`), '#234567');
+  assert.equal(await session.evaluate(`document.getElementById('property-menu.start.textColor.base')?.value`), '#f1e2d3');
+  await session.evaluate(`document.querySelector('[data-element-id="menu.card"]').click()`);
+  assert.equal(await session.evaluate(`document.getElementById('property-number-menu.card.opacity.desktop')?.value`), '0.75');
+  await session.evaluate(`document.querySelector('[data-scene-id="combat"]').click()`);
+  await waitFor(() => session.evaluate(`!document.querySelector('#game-screen').hidden && document.querySelector('#end-screen').hidden`, reopenedFrameContext), 'retorno à Arena para validar valores persistidos');
+  await session.evaluate(`document.querySelector('[data-element-id="arena.background"]').click()`);
+  assert.equal(await session.evaluate(`document.getElementById('property-number-arena.background.opacity.desktop')?.value`), '0.6');
+  await session.evaluate(`document.querySelector('.inspector-reset').click()`);
+  await waitFor(() => session.evaluate(`document.querySelector('[data-editor-id="arena.background"]').style.getPropertyValue('--studio-opacity') === ''`, reopenedFrameContext), 'restauração visual da Arena');
+  await session.evaluate(`document.querySelector('[data-scene-id="menu"]').click()`);
+  await waitFor(() => session.evaluate(`!document.querySelector('#menu-screen').hidden && document.querySelector('#game-screen').hidden`, reopenedFrameContext), 'retorno ao Menu para restaurar outros elementos');
+  await session.evaluate(`document.querySelector('[data-element-id="game.title"]').click()`);
+  await session.evaluate(`document.querySelector('.inspector-reset').click()`);
+  await waitFor(() => session.evaluate(`document.querySelector('[data-editor-id="game.title"]').textContent === 'Pedra, papel e tesoura' && document.querySelector('[data-editor-id="game.title"]').style.getPropertyValue('--studio-font-family') === ''`, reopenedFrameContext), 'restauração dos valores originais do título');
+  await session.evaluate(`document.querySelector('[data-element-id="menu.start"]').click()`);
+  await session.evaluate(`document.querySelector('.inspector-reset').click()`);
+  await waitFor(() => session.evaluate(`document.querySelector('[data-editor-id="menu.start"]').style.getPropertyValue('--studio-background-color') === ''`, reopenedFrameContext), 'restauração visual do botão');
+  await session.evaluate(`document.querySelector('[data-element-id="menu.card"]').click()`);
+  await session.evaluate(`document.querySelector('.inspector-reset').click()`);
+  await waitFor(() => session.evaluate(`document.querySelector('[data-editor-id="menu.card"]').style.getPropertyValue('--studio-opacity') === ''`, reopenedFrameContext), 'restauração visual do cartão');
+  await session.evaluate(`document.querySelector('button.save-button').click()`);
+  await waitFor(() => readFile(join(fixture, 'config/visual.json'), 'utf8').then((raw) => {
+    const config=JSON.parse(raw);
+    return config.elements['game.title'].base.text === 'Pedra, papel e tesoura'
+      && !config.elements['game.title'].base.fontFamily
+      && !config.elements['game.title'].base.fontSize
+      && !config.elements['game.title'].responsive?.mobile?.fontSize
+      && !config.elements['menu.start'].base.backgroundColor
+      && !config.elements['menu.card'].base.opacity
+      && !config.elements['arena.background'].base.opacity;
+  }), 'defaults visuais restaurados e salvos');
+  await selectScene('menu', `!document.querySelector('#menu-screen').hidden && document.querySelector('#game-screen').hidden`, 'Menu após restaurar defaults visuais');
+  await session.evaluate(`document.querySelector('[data-element-id="menu.start"]').click()`);
+  await waitFor(() => session.evaluate(`document.querySelector('.selected-element-card')?.innerText.includes('menu.start')`), 'botão Jogar selecionado após reabrir');
   await waitFor(() => session.evaluate("Number(document.querySelector('.geometry-field input[aria-label=\\\"x em pixels\\\"]')?.value) === " + desktopX), 'persistência da geometria ao reabrir');
   assert.deepEqual(session.consoleErrors, [], `Console após reabrir: ${session.consoleErrors.join('; ')}`);
   await session.evaluate('setTimeout(() => window.trindadeStudio.closeStudio(), 200); true');
@@ -588,7 +729,7 @@ try {
   await waitFor(() => readFile(join(firstProjectRoot, 'trindade.project.json'), 'utf8').then((raw) => JSON.parse(raw).projectFormatVersion === 1), 'manifesto versionado do primeiro projeto');
   const firstTitle = 'Projeto Central Um — título independente';
   await session.evaluate(`(() => {
-    const input = document.getElementById('property-game.title.text');
+    const input = document.getElementById('property-game.title.text.base');
     const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
     setter.call(input, ${JSON.stringify(firstTitle)});
     input.dispatchEvent(new Event('input', {bubbles:true}));
@@ -609,9 +750,9 @@ try {
   await saveHomeScreenshot('Trindade-Studio-recentes.png');
   await session.evaluate(`([...document.querySelectorAll('.recent-project')].find((row) => row.innerText.includes('Projeto Central Um')).querySelector('.recent-open')).click()`);
   await waitFor(() => session.evaluate(`document.querySelector('.project-name')?.textContent === 'Projeto Central Um'`), 'abertura do projeto pelos recentes');
-  assert.equal(await session.evaluate(`document.getElementById('property-game.title.text')?.value`), firstTitle, 'A abertura recente deve restaurar a configuração salva no projeto escolhido.');
+  assert.equal(await session.evaluate(`document.getElementById('property-game.title.text.base')?.value`), firstTitle, 'A abertura recente deve restaurar a configuração salva no projeto escolhido.');
   await session.evaluate(`(() => {
-    const input = document.getElementById('property-game.title.text');
+    const input = document.getElementById('property-game.title.text.base');
     const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
     setter.call(input, 'Título ainda não salvo');
     input.dispatchEvent(new Event('input', {bubbles:true}));

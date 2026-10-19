@@ -6,12 +6,18 @@
 2. Abra **Trindade Studio** pelo atalho. A tela inicial é a Central de Projetos; não cria nem escolhe um projeto silenciosamente.
 3. Use **Novo projeto** para criar uma pasta independente usando o único modelo disponível, Pedra, Papel e Tesoura, ou **Abrir projeto** para selecionar uma pasta existente. A Central lista projetos recentes e não apaga arquivos ao remover um cartão.
 4. No editor, em **Telas**, selecione um estado demonstrativo. **Elementos da tela** mostra somente os alvos registrados para aquele estado; também é possível clicar diretamente em um alvo na prévia.
-5. Em **Propriedades**, altere texto, cor ou asset permitido. Use **Desfazer** / **Refazer**; **Testar** abre o jogo real e **Voltar a editar** retorna à tela escolhida sem descartar mudanças não salvas.
+5. Em **Propriedades**, use as seções Transformação, Texto e tipografia, Aparência, Imagem e Visibilidade. O Studio oferece somente os controles registrados e compatíveis com o elemento: texto, família de fonte registrada, tamanho em px, peso/alinhamento quando declarados, cores, opacidade, visibilidade, assets locais conhecidos e geometria suportada. As alterações aparecem na prévia, integram undo/redo e ficam pendentes até **Salvar**.
 6. **Salvar** grava a configuração dentro da pasta do projeto e mantém `config/visual.json.bak`. Ao voltar à Central ou fechar com mudanças pendentes, escolha salvar, descartar ou continuar editando.
 
 **Telas e estados disponíveis:** Menu inicial; Combate; Resultado de vitória e derrota no combate; Recompensa desbloqueada (prêmio determinístico de Cura); Resultado de vitória e derrota na partida; Derrota por inatividade. Esses estados usam fixtures de demonstração restritas ao DOM da prévia; não executam nem alteram as regras do jogo. O modo **Testar** carrega o runtime normal.
 
-**Desktop/Celular** muda o enquadramento da prévia, não o dispositivo real. As camadas e propriedades aceitas vêm do catálogo e dos alvos registrados que pertencem à tela selecionada. Se um estado futuro não tiver alvos editáveis, o Studio informa esse limite. Este incremento não importa imagens, cria elementos novos, permite movimento/redimensionamento, altera HTML/CSS livremente, edita regras, faz commits/envios ou publica na web.
+**Desktop/Celular** muda o enquadramento da prévia, não o dispositivo real. As camadas e propriedades aceitas vêm do catálogo e dos alvos registrados que pertencem à tela selecionada. Se um estado futuro não tiver alvos editáveis, o Studio informa esse limite. A geometria atual usa deslocamentos CSS limitados (`flow-box-v1`), não posicionamento absoluto livre. Este incremento não importa imagens, cria elementos novos, altera HTML/CSS livremente, edita regras, faz commits/envios ou publica na web.
+
+Elementos ocultos continuam na lista **Elementos da tela** e podem ser selecionados para reexibir. **Restaurar valores visuais originais** remove overrides visuais do elemento selecionado, preservando sua geometria. Defaults opcionais não são gravados até a primeira alteração; remover o override devolve ao jogo o valor original do HTML/CSS.
+
+O título do Menu e o botão Jogar expõem tipografia/aparência registradas; o cartão e componentes selecionados da Arena expõem apenas opacidade/visibilidade e propriedades que seu catálogo declarar. Outros controles podem oferecer somente cor, asset, ou nenhuma propriedade tipográfica. Fontes são opções registradas que dependem das famílias disponíveis no sistema; não há download de fontes. Imagens próprias ainda não podem ser importadas: o seletor atual escolhe somente assets locais já conhecidos. Importação segura (formatos raster validados, limite de tamanho/dimensões e escrita com ID interno dentro do projeto) será um incremento separado.
+
+Projetos schema 1 e 2 permanecem sem migração e sem propriedades novas gravadas ao abrir. O inspetor respeita o catálogo antigo. Uma eventual migração deverá pedir confirmação, criar backup recuperável e validar uma cópia antes de alterar o projeto.
 
 ## Abrir outro projeto
 

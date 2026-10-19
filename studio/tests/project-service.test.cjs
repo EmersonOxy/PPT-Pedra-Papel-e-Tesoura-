@@ -32,6 +32,34 @@ test('loads the modular project and all registered editable elements', async (t)
   assert.equal(project.catalog.elements.length, 11);
   assert.equal(Object.keys(project.config.elements).length, 11);
   assert.equal(project.config.elements['game.title'].base.text, 'Pedra, papel e tesoura');
+  assert.equal(project.catalog.version, 3);
+  assert.equal(project.config.elements['game.title'].base.fontFamily, undefined, 'Novas propriedades não devem ser materializadas como overrides ao abrir.');
+});
+
+test('keeps schema 2 projects editable without rewriting their files', async (t) => {
+  const { projectRoot } = await makeProject(t);
+  const catalogPath = path.join(projectRoot, 'config', 'editor-elements.schema.json');
+  const configPath = path.join(projectRoot, 'config', 'visual.json');
+  const catalog = JSON.parse(await fs.readFile(catalogPath, 'utf8'));
+  const config = JSON.parse(await fs.readFile(configPath, 'utf8'));
+  catalog.version = 2;
+  const legacyKeys = new Set(['text', 'backgroundColor', 'assetId', 'fillColor']);
+  for (const element of catalog.elements) {
+    element.properties = element.properties.filter((property) => legacyKeys.has(property.key));
+    for (const property of element.properties) delete property.optional;
+  }
+  config.schemaVersion = 2;
+  await fs.writeFile(catalogPath, JSON.stringify(catalog));
+  await fs.writeFile(configPath, JSON.stringify(config));
+  const beforeCatalog = await fs.readFile(catalogPath);
+  const beforeConfig = await fs.readFile(configPath);
+
+  const project = await loadProjectAt(projectRoot);
+  assert.equal(project.catalog.version, 2);
+  assert.equal(project.config.schemaVersion, 2);
+  assert.equal(project.catalog.elements.find((element) => element.id === 'game.title').properties.some((property) => property.type === 'fontFamily'), false);
+  assert.deepEqual(await fs.readFile(catalogPath), beforeCatalog);
+  assert.deepEqual(await fs.readFile(configPath), beforeConfig, 'Abertura compatível não pode migrar nem sobrescrever projeto existente.');
 });
 
 test('validates geometry limits, dimensions, breakpoints, and rejects arbitrary fields', async (t) => {
@@ -110,6 +138,31 @@ test('rejects unknown elements, invalid colors, unregistered images, and future 
   const future = structuredClone(config);
   future.schemaVersion = 900;
   assert.throws(() => validateVisualConfig(catalog, future), /versão ou formato incompatível/);
+});
+
+test('validates advanced inspector values, limits, unknown fields, and responsive properties', async (t) => {
+  const { projectRoot } = await makeProject(t);
+  const { catalog, config } = await loadProjectAt(projectRoot);
+  const invalidCases = [
+    ['game.title', 'fontFamily', 'url(javascript:alert(1))'],
+    ['game.title', 'fontSize', 1000],
+    ['game.title', 'fontWeight', 550],
+    ['game.title', 'textAlign', 'justify'],
+    ['game.title', 'opacity', -0.1],
+    ['game.title', 'visible', 'false'],
+    ['game.title', 'styleText', 'color:red'],
+  ];
+  for (const [elementId, property, value] of invalidCases) {
+    const candidate = structuredClone(config);
+    candidate.elements[elementId].base[property] = value;
+    assert.throws(() => validateVisualConfig(catalog, candidate), /Valor inválido|propriedade não registrada/i, `${elementId}.${property}`);
+  }
+  const invalidResponsive = structuredClone(config);
+  invalidResponsive.elements['game.title'].responsive = { mobile: { fontFamily: 'Courier New' } };
+  assert.throws(() => validateVisualConfig(catalog, invalidResponsive), /Valor responsivo inválido/);
+  const validResponsive = structuredClone(config);
+  validResponsive.elements['game.title'].responsive = { mobile: { fontSize: 26, opacity: 0.75, visible: false } };
+  assert.doesNotThrow(() => validateVisualConfig(catalog, validResponsive));
 });
 
 test('saves the versioned visual config with a recoverable previous copy and leaves gameplay alone', async (t) => {
