@@ -240,3 +240,6 @@ html{background:#111}body{background:#111;min-height:100dvh}
 @keyframes prize-received{0%{box-shadow:0 0 0 0 #cfaa56a1}65%{box-shadow:0 0 0 9px #cfaa5600}100%{box-shadow:0 4px 14px #26392816}}
 .power-orb.prize-received{animation:prize-received .75s ease-out}
 @media(prefers-reduced-motion:reduce){.power-orb.prize-received{animation:none}}
+
+/* Geometry is opt-in: the untouched runtime keeps its original flow and dimensions. */
+[data-trindade-geometry="flow-box"]{transform:translate(var(--studio-geometry-x,0px),var(--studio-geometry-y,0px));width:var(--studio-geometry-width,auto);height:var(--studio-geometry-height,auto);max-width:100%}

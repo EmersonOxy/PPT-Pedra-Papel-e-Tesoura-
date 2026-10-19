@@ -11,6 +11,11 @@
   let scenes = null;
   let activeScene = null;
   let applyConfig = null;
+  let currentConfig = null;
+  let geometryBreakpoint = 'desktop';
+  let dragState = null;
+  let overlay = null;
+  let overlayFrame = 0;
   let isReady = false;
 
   function post(type, detail = {}) {
@@ -22,17 +27,164 @@
     document.querySelectorAll('[data-trindade-studio-selected]').forEach((element) => {
       element.removeAttribute('data-trindade-studio-selected');
     });
-    if (!selectedId || !validId.test(selectedId) || !activeScene?.elementIds.includes(selectedId)) return;
+    if (!selectedId || !validId.test(selectedId) || !activeScene?.elementIds.includes(selectedId)) { updateOverlay(); return; }
     const target = document.querySelector(`[data-editor-id="${selectedId}"]`);
-    if (target) target.setAttribute('data-trindade-studio-selected', 'true');
+    if (target && isVisible(target)) {
+      target.setAttribute('data-trindade-studio-selected', 'true');
+      const rect = target.getBoundingClientRect();
+      post('ELEMENT_METRICS', { id: selectedId, width: rect.width, height: rect.height });
+    }
+    updateOverlay();
   }
+
+  function isVisible(element) {
+    if (!element || element.closest('[hidden]')) return false;
+    const style = getComputedStyle(element);
+    const rect = element.getBoundingClientRect();
+    return style.display !== 'none' && style.visibility !== 'hidden' && Number(style.opacity) !== 0 && rect.width > 0 && rect.height > 0;
+  }
+
+  function geometryDefinition(id) { return catalog?.elements.find((element) => element.id === id)?.geometry || null; }
+  function geometryValues(id) {
+    const definition = geometryDefinition(id);
+    const entry = currentConfig?.elements?.[id]?.geometry;
+    if (!definition || !entry) return { ...definition?.default };
+    const values = { ...definition.default, ...(entry.base || {}) };
+    if (geometryBreakpoint !== 'desktop') Object.assign(values, entry.responsive?.[geometryBreakpoint] || {});
+    return values;
+  }
+  function ensureOverlay() {
+    if (overlay) return overlay;
+    overlay = document.createElement('div');
+    overlay.className = 'trindade-geometry-overlay';
+    overlay.setAttribute('aria-hidden', 'true');
+    for (const handle of ['nw', 'ne', 'sw', 'se']) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = `trindade-geometry-handle handle-${handle}`;
+      button.dataset.resize = handle;
+      button.tabIndex = -1;
+      overlay.append(button);
+    }
+    document.body.append(overlay);
+    return overlay;
+  }
+  function updateOverlay() {
+    if (overlayFrame) return;
+    overlayFrame = requestAnimationFrame(() => {
+      overlayFrame = 0;
+      const definition = geometryDefinition(selectedId);
+      const target = selectedId ? document.querySelector(`[data-editor-id="${selectedId}"]`) : null;
+      if (mode !== 'edit' || !definition || !target || !isVisible(target) || !activeScene?.elementIds.includes(selectedId)) {
+        overlay?.setAttribute('hidden', '');
+        return;
+      }
+      const rect = target.getBoundingClientRect();
+      const frame = ensureOverlay();
+      frame.removeAttribute('hidden');
+      frame.style.left = `${rect.left + window.scrollX}px`;
+      frame.style.top = `${rect.top + window.scrollY}px`;
+      frame.style.width = `${rect.width}px`;
+      frame.style.height = `${rect.height}px`;
+      frame.querySelectorAll('[data-resize]').forEach((handle) => { handle.hidden = !definition.supports.includes('resize'); });
+    });
+  }
+  window.addEventListener('resize', updateOverlay, { passive: true });
+  window.addEventListener('scroll', updateOverlay, { passive: true });
+  const overlayResizeObserver = new ResizeObserver(updateOverlay);
+  overlayResizeObserver.observe(document.documentElement);
+  function applyGeometryToTarget(id, values) {
+    const target = document.querySelector(`[data-editor-id="${id}"]`);
+    if (!target) return;
+    target.dataset.trindadeGeometry = 'flow-box';
+    for (const field of ['x', 'y', 'width', 'height']) {
+      if (values[field] !== undefined) target.style.setProperty(`--studio-geometry-${field}`, `${values[field]}px`);
+    }
+    updateOverlay();
+  }
+  function beginGeometryDrag(event, target, resizeHandle = null) {
+    const id = target.getAttribute('data-editor-id');
+    const definition = geometryDefinition(id);
+    if (mode !== 'edit' || !definition || !isVisible(target)) return false;
+    if (resizeHandle ? !definition.supports.includes('resize') : !definition.supports.includes('move')) return false;
+    const rect = target.getBoundingClientRect();
+    const values = geometryValues(id);
+    dragState = { id, target, handle: resizeHandle, startX: event.clientX, startY: event.clientY, values, rect, changed: false };
+    target.setPointerCapture?.(event.pointerId);
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    return true;
+  }
+
+  document.addEventListener('pointerdown', (event) => {
+    if (mode !== 'edit') return;
+    const handle = event.composedPath().find((item) => item instanceof Element && item.hasAttribute('data-resize'));
+    if (handle && selectedId) {
+      const target = document.querySelector(`[data-editor-id="${selectedId}"]`);
+      if (target) beginGeometryDrag(event, target, handle.dataset.resize);
+      return;
+    }
+    const target = event.composedPath().find((item) => item instanceof Element && item.hasAttribute('data-editor-id'));
+    if (target) {
+      const id = target.getAttribute('data-editor-id');
+      if (!id || !validId.test(id) || !catalog?.elements.some((entry) => entry.id === id) || !activeScene?.elementIds.includes(id) || !isVisible(target)) return;
+      selectedId = id;
+      showSelection();
+      post('ELEMENT_SELECTED', { id });
+      if (beginGeometryDrag(event, target)) return;
+    }
+    event.preventDefault();
+    event.stopImmediatePropagation();
+  }, true);
+
+  document.addEventListener('pointermove', (event) => {
+    if (!dragState) return;
+    const { id, target, values, rect, startX, startY, handle } = dragState;
+    const dx = event.clientX - startX;
+    const dy = event.clientY - startY;
+    const definition = geometryDefinition(id);
+    const next = { ...values };
+    if (handle) {
+      if (handle.includes('e')) next.width = Math.max(definition.limits.width.min, Math.min(definition.limits.width.max, rect.width + dx));
+      if (handle.includes('s')) next.height = Math.max(definition.limits.height.min, Math.min(definition.limits.height.max, rect.height + dy));
+      if (handle.includes('w')) {
+        next.width = Math.max(definition.limits.width.min, Math.min(definition.limits.width.max, rect.width - dx));
+        next.x = Math.max(definition.limits.x.min, Math.min(definition.limits.x.max, values.x + dx));
+      }
+      if (handle.includes('n')) {
+        next.height = Math.max(definition.limits.height.min, Math.min(definition.limits.height.max, rect.height - dy));
+        next.y = Math.max(definition.limits.y.min, Math.min(definition.limits.y.max, values.y + dy));
+      }
+    } else {
+      next.x = Math.max(definition.limits.x.min, Math.min(definition.limits.x.max, values.x + dx));
+      next.y = Math.max(definition.limits.y.min, Math.min(definition.limits.y.max, values.y + dy));
+    }
+    dragState.changed = true;
+    applyGeometryToTarget(id, next);
+    event.preventDefault();
+  }, true);
+
+  document.addEventListener('pointerup', () => {
+    if (!dragState) return;
+    const { id, changed } = dragState;
+    dragState = null;
+    if (changed) {
+      const values = geometryValues(id);
+      const target = document.querySelector(`[data-editor-id="${id}"]`);
+      for (const field of ['x', 'y', 'width', 'height']) {
+        const value = Number.parseFloat(target?.style.getPropertyValue(`--studio-geometry-${field}`));
+        if (Number.isFinite(value)) values[field] = value;
+      }
+      post('GEOMETRY_CHANGED', { id, breakpoint: geometryBreakpoint, values });
+    }
+  }, true);
 
   document.addEventListener('click', (event) => {
     if (mode !== 'edit') return;
     const target = event.composedPath().find((item) => item instanceof Element && item.hasAttribute('data-editor-id'));
     if (target) {
       const id = target.getAttribute('data-editor-id');
-      if (id && validId.test(id) && catalog?.elements.some((entry) => entry.id === id) && activeScene?.elementIds.includes(id)) {
+      if (id && validId.test(id) && catalog?.elements.some((entry) => entry.id === id) && activeScene?.elementIds.includes(id) && isVisible(target)) {
         selectedId = id;
         showSelection();
         post('ELEMENT_SELECTED', { id });
@@ -77,10 +229,11 @@
     if (mode !== 'edit') return;
     const scene = scenes?.scenes.find((entry) => entry.id === id);
     if (!scene) return;
-    if (!Array.isArray(scene.elementIds) || scene.elementIds.some((elementId) => !catalog?.elements.some((entry) => entry.id === elementId))) {
-      throw new Error('A cena referencia elementos que não existem no catálogo.');
-    }
-    activeScene = scene;
+    if (!Array.isArray(scene.elementIds)) throw new Error('A cena possui uma lista de elementos inválida.');
+    // Projetos antigos podem usar um catálogo anterior ao da cena global do Studio.
+    // Filtramos somente os elementos não registrados, sem alterar ou migrar o projeto.
+    const compatibleElementIds = scene.elementIds.filter((elementId) => catalog?.elements.some((entry) => entry.id === elementId));
+    activeScene = { ...scene, elementIds: compatibleElementIds };
     const menu = scene.fixture.kind === 'menu';
     document.getElementById('menu-screen').hidden = !menu;
     document.getElementById('game-screen').hidden = menu;
@@ -90,7 +243,7 @@
     document.getElementById('player').className = 'hand';
     document.getElementById('enemy').className = 'hand';
     document.getElementById('message').className = '';
-    selectedId = scene.elementIds[0] || null;
+    selectedId = compatibleElementIds[0] || null;
 
     if (!menu) {
       const fixture = scene.fixture;
@@ -131,7 +284,7 @@
       }
     }
     showSelection();
-    post('SCENE_APPLIED', { id: scene.id, elementIds: scene.elementIds });
+    post('SCENE_APPLIED', { id: scene.id, elementIds: compatibleElementIds });
   }
 
   function waitForGameUi() {
@@ -168,6 +321,7 @@
       if (message.mode !== 'edit' && message.mode !== 'test') return;
       mode = message.mode;
       document.documentElement.dataset.studioMode = mode;
+      updateOverlay();
       post('MODE_CHANGED', { mode });
       return;
     }
@@ -175,6 +329,26 @@
       if (message.id !== null && (typeof message.id !== 'string' || !validId.test(message.id) || !catalog?.elements.some((entry) => entry.id === message.id) || !activeScene?.elementIds.includes(message.id))) return;
       selectedId = message.id;
       showSelection();
+      return;
+    }
+    if (message.type === 'SET_DEVICE') {
+      geometryBreakpoint = message.device === 'mobile' ? 'mobile' : 'desktop';
+      if (selectedId) applyGeometryToTarget(selectedId, geometryValues(selectedId));
+      updateOverlay();
+      return;
+    }
+    if (message.type === 'ALIGN_SELECTION' && selectedId && ['horizontal', 'vertical'].includes(message.axis)) {
+      const target = document.querySelector(`[data-editor-id="${selectedId}"]`);
+      const definition = geometryDefinition(selectedId);
+      if (!target || !definition || !isVisible(target)) return;
+      const parent = target.parentElement;
+      if (!parent) return;
+      const targetRect = target.getBoundingClientRect();
+      const parentRect = parent.getBoundingClientRect();
+      const values = geometryValues(selectedId);
+      if (message.axis === 'horizontal') values.x = Math.max(definition.limits.x.min, Math.min(definition.limits.x.max, values.x + parentRect.left + parentRect.width / 2 - targetRect.left - targetRect.width / 2));
+      else values.y = Math.max(definition.limits.y.min, Math.min(definition.limits.y.max, values.y + parentRect.top + parentRect.height / 2 - targetRect.top - targetRect.height / 2));
+      post('GEOMETRY_CHANGED', { id: selectedId, breakpoint: geometryBreakpoint, values });
       return;
     }
     if (message.type === 'SET_SCENE' && typeof message.id === 'string') {
@@ -185,7 +359,9 @@
     if (message.type === 'APPLY_CONFIG') {
       try {
         if (!catalog || !applyConfig) throw new Error('A prévia ainda está carregando o catálogo.');
+        currentConfig = message.config;
         applyConfig(catalog, message.config, document);
+        updateOverlay();
         post('CONFIG_APPLIED');
       } catch (error) {
         post('PREVIEW_ERROR', { message: error instanceof Error ? error.message : 'Não foi possível aplicar a prévia.' });
@@ -194,7 +370,7 @@
   });
 
   const style = document.createElement('style');
-  style.textContent = '[data-trindade-studio-selected="true"]{outline:3px solid #596eea!important;outline-offset:3px!important;position:relative!important}[data-studio-mode="edit"]{cursor:crosshair!important}';
+  style.textContent = '[data-trindade-studio-selected="true"]{outline:2px solid #596eea!important;outline-offset:2px!important}.trindade-geometry-overlay{position:absolute;z-index:2147483000;border:2px solid #596eea;box-sizing:border-box;pointer-events:none}.trindade-geometry-overlay[hidden]{display:none!important}.trindade-geometry-handle{position:absolute;width:12px;height:12px;padding:0;border:2px solid white;border-radius:50%;background:#596eea;box-shadow:0 1px 5px #2228;pointer-events:auto;cursor:nwse-resize}.handle-nw{left:-7px;top:-7px}.handle-ne{right:-7px;top:-7px}.handle-sw{left:-7px;bottom:-7px}.handle-se{right:-7px;bottom:-7px}[data-studio-mode="edit"]{cursor:crosshair!important}';
   document.head.append(style);
 
   Promise.all([

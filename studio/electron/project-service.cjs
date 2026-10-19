@@ -1,6 +1,7 @@
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const crypto = require('node:crypto');
+const { validateGeometry } = require('./geometry.cjs');
 
 const allowedFiles = new Set([
   'index.html',
@@ -52,7 +53,7 @@ function validateBinding(property) {
 }
 
 function validateCatalog(catalog, html) {
-  if (!isRecord(catalog) || catalog.version !== 1 || !Array.isArray(catalog.elements) || catalog.elements.length === 0) {
+  if (!isRecord(catalog) || ![1, 2].includes(catalog.version) || !Array.isArray(catalog.elements) || catalog.elements.length === 0) {
     throw new Error('O catálogo de elementos não corresponde à versão suportada pelo Studio.');
   }
   const elements = new Map();
@@ -66,8 +67,23 @@ function validateCatalog(catalog, html) {
     if (element.target?.attribute !== 'data-editor-id' || !html.includes(`data-editor-id="${element.id}"`)) {
       throw new Error(`O elemento ${element.id} não tem um alvo real no jogo.`);
     }
-    if (!Array.isArray(element.properties) || element.properties.length === 0) {
+    if (!Array.isArray(element.properties) || (element.properties.length === 0 && !(catalog.version >= 2 && element.geometry))) {
       throw new Error(`O elemento ${element.id} não tem propriedades editáveis registradas.`);
+    }
+    if (element.geometry) {
+      const geometry = element.geometry;
+      const fields = ['x', 'y', 'width', 'height'];
+      if (catalog.version < 2 || geometry.type !== 'flow-box-v1' || geometry.binding !== 'css-flow-box-v1' || geometry.anchor !== 'flow'
+        || geometry.units !== 'css-px' || typeof geometry.responsive !== 'boolean'
+        || !Array.isArray(geometry.supports) || geometry.supports.length === 0
+        || geometry.supports.some((capability) => !['move', 'resize'].includes(capability))
+        || !isRecord(geometry.default) || Object.keys(geometry.default).some((field) => !fields.includes(field))
+        || !isRecord(geometry.limits) || fields.some((field) => !isRecord(geometry.limits[field])
+          || !Number.isFinite(geometry.limits[field].min) || !Number.isFinite(geometry.limits[field].max)
+          || geometry.limits[field].min > geometry.limits[field].max)) {
+        throw new Error(`A geometria do elemento ${element.id} não usa um binding permitido.`);
+      }
+      validateGeometry(geometry, { base: geometry.default });
     }
     const keys = new Set();
     for (const property of element.properties) {
@@ -88,13 +104,13 @@ function validateCatalog(catalog, html) {
 }
 
 function validateVisualConfig(catalog, config) {
-  if (!isRecord(config) || config.schemaVersion !== 1 || !isRecord(config.elements)) {
+  if (!isRecord(config) || config.schemaVersion !== catalog?.version || !isRecord(config.elements)) {
     throw new Error('A configuração visual tem uma versão ou formato incompatível.');
   }
   const definitions = new Map(catalog.elements.map((element) => [element.id, element]));
   for (const [id, entry] of Object.entries(config.elements)) {
     const definition = definitions.get(id);
-    if (!definition || !isRecord(entry) || Object.keys(entry).some((key) => !['base', 'responsive'].includes(key))) {
+    if (!definition || !isRecord(entry) || Object.keys(entry).some((key) => !['base', 'responsive', ...(catalog.version >= 2 ? ['geometry'] : [])].includes(key))) {
       throw new Error(`A configuração contém um elemento não registrado: ${id}`);
     }
     if (entry.base !== undefined && !isRecord(entry.base)) throw new Error(`Propriedades base inválidas em ${id}.`);
@@ -115,6 +131,11 @@ function validateVisualConfig(catalog, config) {
         }
       }
     }
+    if (entry.geometry !== undefined) {
+      if (!definition.geometry) throw new Error(`Geometria não registrada para ${id}.`);
+      try { validateGeometry(definition.geometry, entry.geometry); }
+      catch (error) { throw new Error(`Geometria inválida em ${id}: ${error.message}`); }
+    }
   }
   return config;
 }
@@ -131,8 +152,9 @@ function completeConfig(catalog, config) {
     }
     elements[definition.id] = { base };
     if (existing.responsive && Object.keys(existing.responsive).length > 0) elements[definition.id].responsive = existing.responsive;
+    if (definition.geometry && existing.geometry) elements[definition.id].geometry = existing.geometry;
   }
-  return { schemaVersion: 1, elements };
+  return { schemaVersion: catalog.version, elements };
 }
 
 async function readAllowedFile(root, relativePath) {

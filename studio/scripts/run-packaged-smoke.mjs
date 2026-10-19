@@ -11,6 +11,7 @@ const studioRoot = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const repositoryRoot = resolve(studioRoot, '..');
 const packageRoot = join(studioRoot, 'release');
 const executable = process.env.TRINDADE_STUDIO_TEST_EXE || join(packageRoot, 'win-unpacked', 'Trindade Studio.exe');
+const expectedVersion = process.env.TRINDADE_STUDIO_EXPECTED_VERSION || JSON.parse(await readFile(join(studioRoot, 'package.json'), 'utf8')).version;
 const screenshotPath = join(packageRoot, 'Trindade-Studio-proof.png');
 const sceneScreenshotRoot = join(packageRoot, 'scene-browser');
 const projectCenterScreenshotRoot = join(packageRoot, 'project-center');
@@ -42,6 +43,18 @@ async function waitFor(check, label, timeout = 20000) {
   throw new Error(`Timeout aguardando ${label}${lastError ? `: ${lastError.message}` : ''}`);
 }
 
+async function capturePage(session) {
+  let lastError;
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try { return await session.send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false }); }
+    catch (error) {
+      lastError = error;
+      if (attempt < 3) await new Promise((resolvePromise) => setTimeout(resolvePromise, 250));
+    }
+  }
+  throw lastError;
+}
+
 function taskkillTree(pid) {
   if (process.platform === 'win32' && pid) {
     try { execFileSync('taskkill', ['/PID', String(pid), '/T', '/F'], { stdio: 'ignore' }); } catch {}
@@ -49,13 +62,20 @@ function taskkillTree(pid) {
 }
 
 async function launch(exe, profile, fixture, debugPort, extraEnvironment = {}) {
-  const child = spawn(exe, [`--user-data-dir=${profile}`, `--remote-debugging-port=${debugPort}`], {
-    windowsHide: false,
+  const child = spawn(exe, [
+    `--user-data-dir=${profile}`,
+    `--remote-debugging-port=${debugPort}`,
+    '--disable-backgrounding-occluded-windows',
+    '--disable-renderer-backgrounding',
+    '--disable-background-timer-throttling',
+  ], {
+    windowsHide: true,
     stdio: ['ignore', 'pipe', 'pipe'],
     env: {
       ...process.env,
       TRINDADE_PROJECT_ROOT: fixture,
       TRINDADE_STUDIO_TEST_MODE: '1',
+      TRINDADE_STUDIO_TEST_HIDDEN: '1',
       TRINDADE_STUDIO_DEBUG_PORT: String(debugPort),
       TRINDADE_STUDIO_TEST_USER_DATA: join(profile, 'app-data'),
       ...extraEnvironment,
@@ -178,15 +198,15 @@ try {
     api: Object.keys(window.trindadeStudio || {}),
     body: document.body.innerText,
   }))()`);
-    return state.scenes === 8 && state.project !== 'Nenhum projeto aberto' && state.layers > 0
+    return state.scenes === 8 && state.project !== 'Nenhum projeto aberto' && state.layers >= 3
       || state.body.includes('Não foi possível carregar') ? state : null;
   }, 'interface React e projeto em edição');
   assert.equal(studio.scenes, 8, `O navegador não apresentou as oito cenas cadastradas: ${JSON.stringify(studio)}`);
-  assert.equal(studio.layers, 1, `O menu deve listar somente seu alvo editável: ${JSON.stringify(studio)}`);
+  assert.equal(studio.layers, 3, `O menu deve listar seu cartão, título e botão registrados: ${JSON.stringify(studio)}`);
   assert.match(studio.preview, /^http:\/\/127\.0\.0\.1:/, 'A prévia não usa servidor local isolado.');
   assert.deepEqual(studio.nodeAccess, ['undefined', 'undefined'], 'O renderer recebeu acesso Node inesperado.');
   assert.deepEqual(studio.api.sort(), ['checkForUpdates', 'chooseProjectParent', 'closeStudio', 'createProject', 'getHomeState', 'getProject', 'onCloseRequest', 'onHistoryCommand', 'onOpenProjectRequest', 'onReturnHomeRequest', 'onSaveRequest', 'openProject', 'openRecentProject', 'openReleasePage', 'removeRecentProject', 'requestHome', 'respondToClose', 'saveVisualConfig', 'setDirty'].sort());
-  report('renderer isolado, oito cenas e camada de menu verificados');
+  report('renderer isolado, oito cenas e três camadas de menu verificadas');
 
   let frameId = await waitFor(async () => {
     const { frameTree } = await session.send('Page.getFrameTree');
@@ -265,9 +285,118 @@ try {
   await waitFor(() => session.evaluate(`document.querySelector('[data-editor-id="game.title"]').textContent === ${JSON.stringify(newTitle)}`, frameContext), 'refazer na prévia');
   report('undo/redo verificados');
 
+  const geometryCapture = async (name) => {
+    const alignment = () => session.evaluate(`(() => {
+      const target=document.querySelector('[data-editor-id="menu.start"]');
+      const overlay=document.querySelector('.trindade-geometry-overlay');
+      if (!target || !overlay) return null;
+      const a=target.getBoundingClientRect(), b=overlay.getBoundingClientRect();
+      return {hidden:overlay.hidden, target:{left:a.left,top:a.top,width:a.width,height:a.height}, overlay:{left:b.left,top:b.top,width:b.width,height:b.height}};
+    })()`, frameContext);
+    try {
+      await waitFor(async () => {
+        const value = await alignment();
+        return value && !value.hidden && ['left','top','width','height'].every((key) => Math.abs(value.target[key] - value.overlay[key]) < 2);
+      }, `contorno alinhado com o elemento antes de ${name}`, 5000);
+    } catch (error) {
+      throw new Error(`${error.message}; alinhamento atual=${JSON.stringify(await alignment())}`);
+    }
+    const captured = await capturePage(session);
+    await mkdir(join(packageRoot, 'geometry'), { recursive: true });
+    await writeFile(join(packageRoot, 'geometry', name), Buffer.from(captured.data, 'base64'));
+  };
+  await session.evaluate("document.querySelector('[data-element-id=\\\"menu.start\\\"]').click()");
+  await waitFor(() => session.evaluate("document.querySelector('.selected-element-card')?.innerText.includes('menu.start')"), 'seleção do botão do menu');
+  await geometryCapture('menu-before.png');
+  const frameRect = await session.evaluate("(() => { const rect=document.querySelector('iframe').getBoundingClientRect(); return {x:rect.left,y:rect.top}; })()");
+  const targetRect = await session.evaluate("(() => { const rect=document.querySelector('[data-editor-id=\\\"menu.start\\\"]').getBoundingClientRect(); return {x:rect.left,y:rect.top,width:rect.width,height:rect.height}; })()", frameContext);
+  const startPoint = { x: frameRect.x + targetRect.x + targetRect.width / 2, y: frameRect.y + targetRect.y + targetRect.height / 2 };
+  await session.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: startPoint.x, y: startPoint.y });
+  await session.send('Input.dispatchMouseEvent', { type: 'mousePressed', x: startPoint.x, y: startPoint.y, button: 'left', clickCount: 1 });
+  await session.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: startPoint.x + 28, y: startPoint.y + 17, button: 'left' });
+  await session.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: startPoint.x + 28, y: startPoint.y + 17, button: 'left' });
+  await waitFor(() => session.evaluate("document.querySelector('.geometry-field input[aria-label=\\\"x em pixels\\\"]')?.value !== '0'"), 'arraste do elemento do menu');
+  assert.equal(await session.evaluate("document.querySelector('[data-editor-id=\\\"game.title\\\"]').textContent", frameContext), newTitle,
+    'A geometria de outro objeto não deve reverter a edição de texto pendente.');
+  const desktopX = Number(await session.evaluate("document.querySelector('.geometry-field input[aria-label=\\\"x em pixels\\\"]').value"));
+  const desktopY = Number(await session.evaluate("document.querySelector('.geometry-field input[aria-label=\\\"y em pixels\\\"]').value"));
+  const assertPendingTitle = async (step) => assert.equal(await session.evaluate("document.querySelector('[data-editor-id=\\\"game.title\\\"]').textContent", frameContext), newTitle, `A geometria em ${step} não deve descartar o texto pendente.`);
+  await assertPendingTitle('arraste');
+  assert.ok(desktopX >= -180 && desktopX <= 180 && desktopY >= -180 && desktopY <= 180, 'O arraste deve respeitar limites.');
+  const handleRect = await session.evaluate("(() => { const rect=document.querySelector('.trindade-geometry-overlay .handle-se').getBoundingClientRect(); return {x:rect.left,y:rect.top,width:rect.width,height:rect.height}; })()", frameContext);
+  const handlePoint = { x: frameRect.x + handleRect.x + handleRect.width / 2, y: frameRect.y + handleRect.y + handleRect.height / 2 };
+  const beforeWidth = Number(await session.evaluate("document.querySelector('.geometry-field input[aria-label=\\\"width em pixels\\\"]').value"));
+  await session.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: handlePoint.x, y: handlePoint.y });
+  await session.send('Input.dispatchMouseEvent', { type: 'mousePressed', x: handlePoint.x, y: handlePoint.y, button: 'left', clickCount: 1 });
+  await session.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: handlePoint.x + 22, y: handlePoint.y + 12, button: 'left' });
+  await session.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: handlePoint.x + 22, y: handlePoint.y + 12, button: 'left' });
+  await waitFor(() => session.evaluate("Number(document.querySelector('.geometry-field input[aria-label=\\\"width em pixels\\\"]')?.value) > " + beforeWidth), 'redimensionamento pela alça');
+  await assertPendingTitle('redimensionamento');
+  const setGeometryField = async (field, value) => session.evaluate(`(() => {
+    const input=document.querySelector('.geometry-field input[aria-label="${field} em pixels"]');
+    if (!input) throw new Error('Campo geométrico ausente: ${field}');
+    const set=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set;
+    set.call(input,${JSON.stringify(String(value))});
+    input.dispatchEvent(new Event('input',{bubbles:true}));
+    input.dispatchEvent(new Event('change',{bubbles:true}));
+  })()`);
+  await setGeometryField('width', 190);
+  await waitFor(() => session.evaluate("document.querySelector('[data-editor-id=\\\"menu.start\\\"]').style.getPropertyValue('--studio-geometry-width') === '190px'", frameContext), 'campo numérico de largura');
+  await assertPendingTitle('campo de largura');
+  await setGeometryField('height', 62);
+  await waitFor(() => session.evaluate("document.querySelector('[data-editor-id=\\\"menu.start\\\"]').style.getPropertyValue('--studio-geometry-height') === '62px'", frameContext), 'campo numérico de altura');
+  await assertPendingTitle('campo de altura');
+  await setGeometryField('y', 19);
+  await waitFor(() => session.evaluate("document.querySelector('[data-editor-id=\\\"menu.start\\\"]').style.getPropertyValue('--studio-geometry-y') === '19px'", frameContext), 'campo numérico Y');
+  await assertPendingTitle('campo Y');
+  await session.evaluate("document.querySelector('button[title=\\\"Visualização celular\\\"]').click()");
+  await waitFor(() => session.evaluate(`document.querySelector('[data-editor-id="game.title"]').textContent === ${JSON.stringify(newTitle)}`, frameContext), 'reaplicação das alterações pendentes na visualização celular');
+  await geometryCapture('menu-mobile-before.png');
+  const mobileFrameRect = await session.evaluate("(() => { const rect=document.querySelector('iframe').getBoundingClientRect(); return {x:rect.left,y:rect.top}; })()");
+  const mobileTargetRect = await session.evaluate("(() => { const rect=document.querySelector('[data-editor-id=\\\"menu.start\\\"]').getBoundingClientRect(); return {x:rect.left,y:rect.top,width:rect.width,height:rect.height}; })()", frameContext);
+  const mobileStartPoint = { x: mobileFrameRect.x + mobileTargetRect.x + mobileTargetRect.width / 2, y: mobileFrameRect.y + mobileTargetRect.y + mobileTargetRect.height / 2 };
+  await session.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: mobileStartPoint.x, y: mobileStartPoint.y });
+  await session.send('Input.dispatchMouseEvent', { type: 'mousePressed', x: mobileStartPoint.x, y: mobileStartPoint.y, button: 'left', clickCount: 1 });
+  await session.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: mobileStartPoint.x + 14, y: mobileStartPoint.y + 10, button: 'left' });
+  await session.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: mobileStartPoint.x + 14, y: mobileStartPoint.y + 10, button: 'left' });
+  await waitFor(() => session.evaluate("Number(document.querySelector('.geometry-field input[aria-label=\\\"x em pixels\\\"]')?.value) !== " + desktopX), 'arraste da geometria na prévia celular');
+  await assertPendingTitle('arraste celular');
+  const draggedMobileX = Number(await session.evaluate("document.querySelector('.geometry-field input[aria-label=\\\"x em pixels\\\"]').value"));
+  const draggedMobileY = Number(await session.evaluate("document.querySelector('.geometry-field input[aria-label=\\\"y em pixels\\\"]').value"));
+  await setGeometryField('x', 12);
+  await waitFor(() => session.evaluate("document.querySelector('.geometry-field input[aria-label=\\\"x em pixels\\\"]')?.value === '12'"), 'override de posição no celular');
+  await waitFor(() => session.evaluate("document.querySelector('[data-editor-id=\\\"menu.start\\\"]').style.getPropertyValue('--studio-geometry-x') === '12px'", frameContext), 'valor celular aplicado à prévia');
+  await setGeometryField('x', draggedMobileX);
+  await waitFor(() => session.evaluate("Number(document.querySelector('.geometry-field input[aria-label=\\\"x em pixels\\\"]')?.value) === " + draggedMobileX), 'restauração numérica da posição mostrada após arraste');
+  await waitFor(() => session.evaluate("document.querySelector('[data-editor-id=\\\"menu.start\\\"]').style.getPropertyValue('--studio-geometry-x') === '" + draggedMobileX + "px'", frameContext), 'posição celular final aplicada à prévia');
+  await geometryCapture('menu-mobile-after.png');
+  await session.evaluate("document.querySelector('button[title=\\\"Visualização desktop\\\"]').click()");
+  await waitFor(() => session.evaluate(`document.querySelector('[data-editor-id="game.title"]').textContent === ${JSON.stringify(newTitle)}`, frameContext), 'reaplicação das alterações pendentes na visualização desktop');
+  assert.equal(Number(await session.evaluate("document.querySelector('.geometry-field input[aria-label=\\\"x em pixels\\\"]').value")), desktopX, 'O breakpoint mobile não deve alterar X desktop.');
+  await geometryCapture('menu-after.png');
+  report('arraste desktop/celular, campos X/Y/largura/altura, redimensionamento e capturas antes/depois verificados');
+
+  await session.evaluate("document.querySelector('button[title^=\\\"Desfazer\\\"]').click()");
+  await session.evaluate("document.querySelector('button[title^=\\\"Refazer\\\"]').click()");
+  await waitFor(() => session.evaluate("Number(document.querySelector('.geometry-field input[aria-label=\\\"x em pixels\\\"]')?.value) === " + desktopX), 'undo/redo geométrico');
+  await session.evaluate("document.querySelector('.geometry-reset').click()");
+  await waitFor(() => session.evaluate("!document.querySelector('[data-editor-id=\\\"menu.start\\\"]').hasAttribute('data-trindade-geometry')", frameContext), 'reset remove override visual');
+  await session.evaluate("document.querySelector('button[title^=\\\"Desfazer\\\"]').click()");
+  await waitFor(() => session.evaluate("document.querySelector('[data-editor-id=\\\"menu.start\\\"]').dataset.trindadeGeometry === 'flow-box'", frameContext), 'undo do reset de geometria');
+  await session.evaluate("document.querySelector('button[title^=\\\"Refazer\\\"]').click()");
+  await waitFor(() => session.evaluate("!document.querySelector('[data-editor-id=\\\"menu.start\\\"]').hasAttribute('data-trindade-geometry')", frameContext), 'redo do reset de geometria');
+  await session.evaluate("document.querySelector('button[title^=\\\"Desfazer\\\"]').click()");
+  await waitFor(() => session.evaluate("document.querySelector('[data-editor-id=\\\"menu.start\\\"]').dataset.trindadeGeometry === 'flow-box'", frameContext), 'restauração final do override para salvar');
+
   await selectScene('combat', `!document.querySelector('#game-screen').hidden && document.querySelector('#end-screen').hidden`, 'retorno ao estado de combate');
   await session.evaluate(`document.querySelector('[data-editor-id="arena.background"]').dispatchEvent(new MouseEvent('click',{bubbles:true}))`, frameContext);
   await waitFor(() => session.evaluate(`document.querySelector('.selected-element-card')?.innerText.includes('arena.background')`), 'seleção do elemento de cor');
+  await session.evaluate(`document.querySelector('[data-editor-id="controls.move.rock"]').dispatchEvent(new MouseEvent('click',{bubbles:true}))`, frameContext);
+  await session.evaluate(`(() => { const target=document.querySelector('[data-editor-id="arena.background"]'); target.hidden=true; target.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true,pointerId:1,clientX:5,clientY:5})); target.dispatchEvent(new MouseEvent('click',{bubbles:true})); })()`, frameContext);
+  assert.match(await session.evaluate(`document.querySelector('.selected-element-card')?.innerText || ''`), /controls\.move\.rock/, 'Um elemento oculto não deve ser selecionável diretamente.');
+  await session.evaluate(`document.querySelector('[data-editor-id="arena.background"]').hidden=false`, frameContext);
+  await session.evaluate(`document.querySelector('[data-editor-id="arena.background"]').dispatchEvent(new MouseEvent('click',{bubbles:true}))`, frameContext);
+  await waitFor(() => session.evaluate(`document.querySelector('.selected-element-card')?.innerText.includes('arena.background')`), 'seleção restaurada da arena');
   await session.evaluate(`(() => {
     const input = document.getElementById('property-arena.background.backgroundColor');
     if (!(input instanceof HTMLInputElement)) throw new Error('Campo de cor ausente: ' + document.querySelector('.selected-element-card')?.innerText + ' / ' + [...document.querySelectorAll('[id^="property-"]')].map((item) => item.id).join(','));
@@ -277,6 +406,8 @@ try {
     input.dispatchEvent(new Event('change', {bubbles:true}));
   })()`);
   await waitFor(() => session.evaluate(`document.querySelector('[data-editor-id="arena.background"]').style.getPropertyValue('--arena-background') === '#123456'`, frameContext), 'alteração de cor aplicada à prévia');
+  await session.evaluate("(() => { const input=document.querySelector('.geometry-field input[aria-label=\\\"y em pixels\\\"]'); const set=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set; set.call(input,'24'); input.dispatchEvent(new Event('input',{bubbles:true})); input.dispatchEvent(new Event('change',{bubbles:true})); })()");
+  await waitFor(() => session.evaluate("document.querySelector('[data-editor-id=\\\"arena.background\\\"]').style.getPropertyValue('--studio-geometry-y') === '24px'", frameContext), 'edição geométrica da arena');
 
   await session.evaluate(`document.querySelector('[data-editor-id="controls.move.rock"]').dispatchEvent(new MouseEvent('click',{bubbles:true}))`, frameContext);
   await waitFor(() => session.evaluate(`document.querySelector('.selected-element-card')?.innerText.includes('controls.move.rock')`), 'seleção de controle com propriedade compartilhada');
@@ -379,6 +510,10 @@ try {
   catch (error) { throw new Error(`${error.message}; estado após retorno: ${JSON.stringify(editReturnState)}`); }
   await session.evaluate(`document.querySelector('button.save-button').click()`);
   await waitFor(() => readFile(join(fixture, 'config/visual.json'), 'utf8').then((raw) => JSON.parse(raw).elements['game.title'].base.text === newTitle), 'salvamento persistente');
+  const geometrySaved = JSON.parse(await readFile(join(fixture, 'config/visual.json'), 'utf8'));
+  assert.deepEqual(geometrySaved.elements['menu.start'].geometry.base, { x: desktopX, y: 19, width: 190, height: 62 }, 'A geometria desktop salva deve corresponder ao estado mostrado.');
+  assert.deepEqual(geometrySaved.elements['menu.start'].geometry.responsive.mobile, { x: draggedMobileX, y: draggedMobileY, width: 190, height: 62 }, 'A geometria mobile salva deve coincidir com o estado mostrado após o arraste.');
+  assert.equal(geometrySaved.elements['arena.background'].geometry.base.y, 24, 'A geometria da arena deve ser salva.');
   assert.equal(await readFile(join(fixture, 'config/visual.json.bak'), 'utf8').then((raw) => JSON.parse(raw).elements['game.title'].base.text), 'Pedra, papel e tesoura', 'O backup não preservou a configuração anterior.');
   report('configuração salva com backup');
 
@@ -386,7 +521,7 @@ try {
   await session.evaluate(`document.querySelector('button[title="Visualização celular"]').click()`);
   assert.equal(await session.evaluate(`document.querySelector('.preview-frame-wrap').classList.contains('mobile-preview')`), true, 'A prévia celular não alterou o enquadramento.');
   await session.send('Emulation.clearDeviceMetricsOverride');
-  await session.send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false }).then((result) => writeFile(screenshotPath, Buffer.from(result.data, 'base64')));
+  await capturePage(session).then((result) => writeFile(screenshotPath, Buffer.from(result.data, 'base64')));
   report('prévia mobile e captura de tela verificadas');
   assert.deepEqual(session.consoleErrors, [], `Console do Studio/jogo: ${session.consoleErrors.join('; ')}`);
   assert.deepEqual(session.networkFailures.filter((failure) => !failure.canceled), [], `Falhas de rede: ${JSON.stringify(session.networkFailures)}`);
@@ -402,6 +537,8 @@ try {
   const reopenedTarget = (await (await fetch(`http://127.0.0.1:${secondPort}/json/list`)).json()).find((target) => target.type === 'page');
   session = await attach(reopenedTarget);
   await waitFor(() => session.evaluate(`document.querySelector('input[id^="property-"]')?.value === ${JSON.stringify(newTitle)}`), 'persistência ao reabrir o executável');
+  await session.evaluate("document.querySelector('[data-element-id=\\\"menu.start\\\"]').click()");
+  await waitFor(() => session.evaluate("Number(document.querySelector('.geometry-field input[aria-label=\\\"x em pixels\\\"]')?.value) === " + desktopX), 'persistência da geometria ao reabrir');
   assert.deepEqual(session.consoleErrors, [], `Console após reabrir: ${session.consoleErrors.join('; ')}`);
   await session.evaluate('setTimeout(() => window.trindadeStudio.closeStudio(), 200); true');
   await waitFor(() => new Promise((resolvePromise) => child.exitCode !== null ? resolvePromise(true) : setTimeout(() => resolvePromise(false), 100)), 'fechamento normal após reabertura');
@@ -422,11 +559,12 @@ try {
   await waitFor(() => session.evaluate(`Boolean(document.querySelector('.home-shell'))`), 'Central de Projetos');
   await waitFor(() => session.evaluate(`document.querySelector('.home-version strong')?.textContent !== 'v—' && Boolean(document.querySelector('.projects-location strong')?.textContent)`), 'carregamento da versão e localização padrão');
   const homeApi = await session.evaluate(`({api:Object.keys(window.trindadeStudio).sort(),version:document.querySelector('.home-version strong')?.textContent,location:document.querySelector('.projects-location strong')?.textContent})`);
-  assert.equal(homeApi.version, `v${JSON.parse(await readFile(join(studioRoot, 'package.json'), 'utf8')).version}`);
+  assert.equal(homeApi.version, `v${expectedVersion}`);
   assert.equal(homeApi.location, homeProjects);
   await mkdir(projectCenterScreenshotRoot, { recursive: true });
   const saveHomeScreenshot = async (name) => {
-    const captured = await session.send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
+    if (process.env.TRINDADE_STUDIO_TEST_HIDDEN === '1') return;
+    const captured = await capturePage(session);
     await writeFile(join(projectCenterScreenshotRoot, name), Buffer.from(captured.data, 'base64'));
   };
   await saveHomeScreenshot('Trindade-Studio-central.png');
@@ -498,6 +636,47 @@ try {
   report('criação de dois projetos, recentes, configurações independentes e retorno com alterações pendentes verificados');
   await session.evaluate('setTimeout(() => window.trindadeStudio.closeStudio(), 200); true');
   await waitFor(() => new Promise((resolvePromise) => child.exitCode !== null ? resolvePromise(true) : setTimeout(() => resolvePromise(false), 100)), 'fechamento normal da Central de Projetos');
+  session.socket.close();
+  session = null;
+
+  const legacyFixture = join(temporary, 'legacy-schema-1-project');
+  await mkdir(legacyFixture, { recursive: true });
+  for (const relative of allowedFiles) {
+    const destination = join(legacyFixture, relative);
+    await mkdir(dirname(destination), { recursive: true });
+    await copyFile(join(repositoryRoot, relative), destination);
+  }
+  const legacyCatalog = JSON.parse(await readFile(join(legacyFixture, 'config/editor-elements.schema.json'), 'utf8'));
+  legacyCatalog.version = 1;
+  legacyCatalog.elements = legacyCatalog.elements.filter((element) => !['menu.card', 'menu.start'].includes(element.id)).map(({ geometry, ...element }) => element);
+  await writeFile(join(legacyFixture, 'config/editor-elements.schema.json'), `${JSON.stringify(legacyCatalog, null, 2)}\n`);
+  const legacyConfig = JSON.parse(await readFile(join(legacyFixture, 'config/visual.json'), 'utf8'));
+  legacyConfig.schemaVersion = 1;
+  legacyConfig.elements = Object.fromEntries(Object.entries(legacyConfig.elements).filter(([id]) => legacyCatalog.elements.some((element) => element.id === id)));
+  const legacyConfigPath = join(legacyFixture, 'config/visual.json');
+  await writeFile(legacyConfigPath, `${JSON.stringify(legacyConfig, null, 2)}\n`);
+  await copyFile(join(repositoryRoot, 'config/gameplay.local.json'), join(legacyFixture, 'config/gameplay.local.json'));
+  const legacyConfigBefore = await readFile(legacyConfigPath);
+  const legacyPort = await availablePort();
+  const legacyProfile = join(temporary, 'legacy-project-profile');
+  await mkdir(legacyProfile, { recursive: true });
+  ({ child } = await launch(executable, legacyProfile, legacyFixture, legacyPort));
+  session = await attach((await (await fetch(`http://127.0.0.1:${legacyPort}/json/list`)).json()).find((target) => target.type === 'page'));
+  await waitFor(() => session.evaluate(`document.querySelector('.project-name')?.textContent === 'legacy-schema-1-project'`), 'abertura real de projeto schema 1');
+  await waitFor(() => session.evaluate(`document.querySelectorAll('.layer-item[role="option"]').length === 1`), 'camadas compatíveis com o catálogo antigo');
+  assert.equal(await session.evaluate(`Boolean(document.querySelector('.geometry-fields'))`), false, 'Projeto schema 1 sem registro de geometria não deve receber novas propriedades automaticamente.');
+  const legacyFrameId = await waitFor(async () => {
+    const { frameTree } = await session.send('Page.getFrameTree');
+    return frameTree.childFrames?.find((frame) => new URL(frame.frame.url).pathname === '/')?.frame.id;
+  }, 'frame da prévia schema 1');
+  const legacyFrameContext = await waitFor(() => session.contexts.get(legacyFrameId), 'contexto da prévia schema 1');
+  await session.evaluate(`document.querySelectorAll('.scene-item[role="option"]')[1].click()`);
+  await waitFor(() => session.evaluate(`!document.querySelector('#game-screen').hidden`, legacyFrameContext), 'navegação de cena em projeto antigo');
+  assert.deepEqual(await readFile(legacyConfigPath), legacyConfigBefore, 'Abrir e navegar no projeto não deve gravar nem migrar sua configuração.');
+  assert.deepEqual(session.consoleErrors, [], `Console do projeto antigo: ${session.consoleErrors.join('; ')}`);
+  report('projeto schema 1 aberto e navegado sem migração ou gravação silenciosa');
+  await session.evaluate('setTimeout(() => window.trindadeStudio.closeStudio(), 200); true');
+  await waitFor(() => new Promise((resolvePromise) => child.exitCode !== null ? resolvePromise(true) : setTimeout(() => resolvePromise(false), 100)), 'fechamento do teste schema 1');
   session.socket.close();
   session = null;
   process.stdout.write(`Studio Windows smoke: editor, oito cenas, partida, salvamento/backup, Central de Projetos, criação, recentes e independência de projetos aprovados. Captura: ${screenshotPath}\n`);

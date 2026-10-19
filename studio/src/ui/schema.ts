@@ -8,6 +8,8 @@ export const ASSETS = [
 
 export const ELEMENT_LABELS: Record<string, string> = {
   'game.title': 'Título do jogo',
+  'menu.card': 'Cartão do menu',
+  'menu.start': 'Botão Jogar',
   'arena.background': 'Fundo da arena',
   'hands.player.image': 'Mão do jogador',
   'hands.enemy.image': 'Mão do adversário',
@@ -45,7 +47,7 @@ export function validateClientValue(type: string, value: unknown, maxLength = 80
 }
 
 export function validateClientConfig(catalog: EditorCatalog, config: VisualConfig): void {
-  if (catalog.version !== 1 || config.schemaVersion !== 1 || !Array.isArray(catalog.elements)) {
+  if (![1, 2].includes(catalog.version) || config.schemaVersion !== catalog.version || !Array.isArray(catalog.elements)) {
     throw new Error('O catálogo ou a configuração usa uma versão incompatível.');
   }
   const definitions = new Map(catalog.elements.map((element) => [element.id, element]));
@@ -63,6 +65,22 @@ export function validateClientConfig(catalog: EditorCatalog, config: VisualConfi
       const property = definition.properties.find((item) => item.key === key);
       if (!property || !validateClientValue(property.type, value, property.maxLength)) {
         throw new Error(`O valor de ${ELEMENT_LABELS[id] || id} não é permitido.`);
+      }
+    }
+    if (entry.geometry) {
+      const geometry = definition.geometry;
+      if (!geometry || geometry.type !== 'flow-box-v1' || geometry.binding !== 'css-flow-box-v1'
+        || Object.keys(entry.geometry).some((key) => !['base', 'responsive'].includes(key))) throw new Error(`Geometria não permitida em ${id}.`);
+      const validateValues = (values: Record<string, number>) => {
+        for (const [key, value] of Object.entries(values)) {
+          const limits = geometry.limits[key as keyof typeof geometry.limits];
+          if (!limits || !Number.isFinite(value) || value < limits.min || value > limits.max) throw new Error(`Geometria inválida em ${id}.${key}.`);
+        }
+      };
+      validateValues(entry.geometry.base || {});
+      for (const [breakpoint, values] of Object.entries(entry.geometry.responsive || {})) {
+        if (!geometry.responsive || !['mobile', 'tablet'].includes(breakpoint)) throw new Error(`Breakpoint geométrico inválido em ${id}.`);
+        validateValues(values);
       }
     }
   }

@@ -2,6 +2,22 @@
 
 Status: arquitetura proposta aprovada no Marco 1 e base inicial de extensibilidade implementada no Marco 2. O editor completo e sua UI continuam fora do Marco 2.
 
+## Geometria visual — incremento inicial do Marco 3
+
+O catálogo v2 declara um binding genérico `css-flow-box-v1`, descrito em `config/editor-elements.schema.json`. A UI lê metadados do catálogo; não implementa movimento por IDs do jogo. A prévia isolada recebe seleção e gestos pelo canal autenticado existente. O processo principal e o runtime validam valores numéricos e limites antes de aplicar/salvar.
+
+`flow-box-v1` preserva o fluxo e o pai CSS original. X/Y são deslocamentos em CSS px a partir da posição natural; largura/altura substituem dimensões apenas quando configuradas. Não é posicionamento absoluto livre. Sem override, o CSS original controla a geometria. Cada alvo declara âncora, unidade, capacidades, valores padrão, limites e suporte responsivo.
+
+Os alvos registrados nesta etapa são título, cartão e botão do Menu inicial e fundo da Arena. A interface oferece seleção, contorno, arraste, alças nos cantos, campos X/Y/largura/altura, centralização em relação ao elemento pai, reset e undo/redo. Desktop grava em `geometry.base`; celular grava em `geometry.responsive.mobile`, herdando campos omitidos de `base`.
+
+Projetos novos usam catálogo/configuração v2. Projetos v1 permanecem v1 ao abrir e salvar, sem migração silenciosa nem novos alvos geométricos. Migrações futuras serão explícitas, com backup e teste. A validação rejeita coordenadas não finitas, dimensões fora dos limites, campos desconhecidos e breakpoints não declarados. CSS e JavaScript arbitrários nunca são aceitos pelo inspetor.
+
+Na compatibilidade v1, o navegador de telas filtra alvos que ainda não existem no catálogo do projeto; o estado visual pode ser inspecionado sem alterar os arquivos. O smoke do Electron abre um projeto fixture v1, navega entre Menu e Combate e compara os bytes de `config/visual.json` antes/depois da abertura.
+
+Uma futura migração v1 → v2 deverá ser iniciada por uma ação explícita do usuário: (1) criar backup recuperável do projeto e validar o manifesto/arquivos, (2) mostrar versão de origem/destino e mudanças que serão aplicadas, (3) validar uma cópia em diretório temporário, incluindo catálogo, defaults e recursos, (4) pedir confirmação antes de trocar os arquivos de configuração e (5) confirmar o resultado ou restaurar o backup se houver falha. O incremento atual não oferece nem executa migração.
+
+Limitações: offsets e dimensões usam CSS px; colisões retangulares são cobertas por teste, mas ainda não há ferramenta visual de diagnóstico ou prevenção de sobreposição. Validar o layout em desktop e celular, pois algumas sobreposições podem ser intencionais.
+
 ## Decisões
 
 | Área | Decisão do Marco 1 | Compatibilidade exigida |

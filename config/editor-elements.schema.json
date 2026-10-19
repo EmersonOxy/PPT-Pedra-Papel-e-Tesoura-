@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "version": 1,
+  "version": 2,
   "breakpoints": {
     "mobile": { "maxWidth": 600 },
     "tablet": { "minWidth": 601, "maxWidth": 750 }
@@ -12,14 +12,32 @@
       "kind": "text",
       "labelKey": "editor.elements.gameTitle",
       "target": { "attribute": "data-editor-id" },
-      "properties": [{ "key": "text", "type": "text", "default": "Pedra, papel e tesoura", "binding": { "operation": "textContent" }, "maxLength": 80, "responsive": false }]
+      "properties": [{ "key": "text", "type": "text", "default": "Pedra, papel e tesoura", "binding": { "operation": "textContent" }, "maxLength": 80, "responsive": false }],
+      "geometry": { "type": "flow-box-v1", "binding": "css-flow-box-v1", "anchor": "flow", "default": { "x": 0, "y": 0 }, "supports": ["move", "resize"], "units": "css-px", "responsive": true, "limits": { "x": { "min": -240, "max": 240 }, "y": { "min": -240, "max": 240 }, "width": { "min": 120, "max": 520 }, "height": { "min": 32, "max": 180 } } }
     },
     {
       "id": "arena.background",
       "kind": "container",
       "labelKey": "editor.elements.arenaBackground",
       "target": { "attribute": "data-editor-id" },
-      "properties": [{ "key": "backgroundColor", "type": "color", "default": "#fafaf7", "binding": { "operation": "styleVariable", "name": "--arena-background" }, "responsive": false }]
+      "properties": [{ "key": "backgroundColor", "type": "color", "default": "#fafaf7", "binding": { "operation": "styleVariable", "name": "--arena-background" }, "responsive": false }],
+      "geometry": { "type": "flow-box-v1", "binding": "css-flow-box-v1", "anchor": "flow", "default": { "x": 0, "y": 0 }, "supports": ["move", "resize"], "units": "css-px", "responsive": true, "limits": { "x": { "min": -240, "max": 240 }, "y": { "min": -180, "max": 180 }, "width": { "min": 320, "max": 1300 }, "height": { "min": 240, "max": 700 } } }
+    },
+    {
+      "id": "menu.card",
+      "kind": "container",
+      "labelKey": "editor.elements.menuCard",
+      "target": { "attribute": "data-editor-id" },
+      "properties": [],
+      "geometry": { "type": "flow-box-v1", "binding": "css-flow-box-v1", "anchor": "flow", "default": { "x": 0, "y": 0 }, "supports": ["move", "resize"], "units": "css-px", "responsive": true, "limits": { "x": { "min": -240, "max": 240 }, "y": { "min": -240, "max": 240 }, "width": { "min": 200, "max": 700 }, "height": { "min": 160, "max": 700 } } }
+    },
+    {
+      "id": "menu.start",
+      "kind": "button",
+      "labelKey": "editor.elements.menuStart",
+      "target": { "attribute": "data-editor-id" },
+      "properties": [],
+      "geometry": { "type": "flow-box-v1", "binding": "css-flow-box-v1", "anchor": "flow", "default": { "x": 0, "y": 0 }, "supports": ["move", "resize"], "units": "css-px", "responsive": true, "limits": { "x": { "min": -180, "max": 180 }, "y": { "min": -180, "max": 180 }, "width": { "min": 100, "max": 340 }, "height": { "min": 36, "max": 150 } } }
     },
     {
       "id": "hands.player.image",

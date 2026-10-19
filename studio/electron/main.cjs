@@ -358,12 +358,14 @@ async function startRenderer() {
 }
 
 async function createWindow(rendererUrl) {
+  const testWindowHidden = process.env.TRINDADE_STUDIO_TEST_HIDDEN === '1';
   mainWindow = new BrowserWindow({
     width: 1500,
     height: 940,
     minWidth: 1100,
     minHeight: 700,
     show: false,
+    offscreen: testWindowHidden,
     title: 'Trindade Studio',
     backgroundColor: '#f4f2ee',
     autoHideMenuBar: false,
@@ -392,7 +394,9 @@ async function createWindow(rendererUrl) {
     closePending = true;
     mainWindow.webContents.send('studio:close-request');
   });
-  mainWindow.once('ready-to-show', () => mainWindow.show());
+  mainWindow.once('ready-to-show', () => {
+    if (!testWindowHidden) mainWindow.show();
+  });
   mainWindow.on('closed', () => { mainWindow = null; });
   await mainWindow.loadURL(rendererUrl);
   return mainWindow;

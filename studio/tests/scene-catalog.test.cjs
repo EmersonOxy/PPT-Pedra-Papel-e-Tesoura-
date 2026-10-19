@@ -44,7 +44,7 @@ test('each scene lists unique registered targets and deterministic, bounded fixt
     assert.equal(new Set(scene.elementIds).size, scene.elementIds.length, `Camadas duplicadas em ${scene.id}`);
     assert.ok(scene.elementIds.every((id) => ids.has(id)), `Camada não registrada em ${scene.id}`);
     assert.ok(scene.elementIds.length > 0, `Estado sem elementos listados: ${scene.id}`);
-    if (scene.fixture.kind === 'menu') assert.deepEqual(scene.elementIds, ['game.title']);
+  if (scene.fixture.kind === 'menu') assert.deepEqual(scene.elementIds, ['menu.card', 'game.title', 'menu.start']);
     else {
       assert.ok(scene.fixture.playerPoints >= 0 && scene.fixture.playerPoints <= 10);
       assert.ok(scene.fixture.enemyPoints >= 0 && scene.fixture.enemyPoints <= 10);
@@ -53,5 +53,13 @@ test('each scene lists unique registered targets and deterministic, bounded fixt
       assert.ok(['rock', 'paper', 'scissors'].includes(scene.fixture.playerSign));
       assert.ok(['rock', 'paper', 'scissors'].includes(scene.fixture.enemySign));
     }
+  }
+  for (const id of ['menu.card', 'menu.start', 'game.title', 'arena.background']) {
+    const element = gameCatalog.elements.find((entry) => entry.id === id);
+    assert.ok(element?.geometry, `Geometria compatível ausente em ${id}`);
+    assert.equal(element.geometry.binding, 'css-flow-box-v1');
+    assert.deepEqual(element.geometry.supports, ['move', 'resize']);
+    assert.equal(element.geometry.units, 'css-px');
+    assert.equal(element.geometry.responsive, true);
   }
 });

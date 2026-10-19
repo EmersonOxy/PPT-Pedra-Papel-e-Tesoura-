@@ -6,7 +6,7 @@
       "label": "Menu inicial",
       "description": "Menu inicial real do jogo.",
       "screen": "menu",
-      "elementIds": ["game.title"],
+      "elementIds": ["menu.card", "game.title", "menu.start"],
       "fixture": { "kind": "menu" }
     },
     {

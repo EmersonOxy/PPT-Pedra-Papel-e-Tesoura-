@@ -44,6 +44,7 @@ export function App() {
   const [mode, setMode] = useState<Mode>('edit');
   const [device, setDevice] = useState<Device>('desktop');
   const [previewReady, setPreviewReady] = useState(false);
+  const [geometryMetrics, setGeometryMetrics] = useState<Record<string, { width: number; height: number }>>({});
   const [toast, setToast] = useState<Toast | null>(null);
   const [prompt, setPrompt] = useState<Prompt>(null);
   const [saving, setSaving] = useState(false);
@@ -54,6 +55,7 @@ export function App() {
   const selectedIdRef = useRef(selectedId);
   selectedIdRef.current = selectedId;
   const lastEdit = useRef<{ key: string; at: number } | null>(null);
+  const rememberCurrentRef = useRef<(key: string, current: VisualConfig) => void>(() => {});
   const previewFrame = useRef<HTMLIFrameElement>(null);
   const toastTimeout = useRef<number | undefined>(undefined);
 
@@ -178,6 +180,11 @@ export function App() {
 
   useEffect(() => {
     if (!previewReady) return;
+    sendPreview('SET_DEVICE', { device });
+  }, [device, previewReady, sendPreview]);
+
+  useEffect(() => {
+    if (!previewReady) return;
     sendPreview('SET_SELECTION', { id: mode === 'edit' ? selectedId : null });
   }, [mode, previewReady, selectedId, sendPreview]);
 
@@ -192,6 +199,33 @@ export function App() {
         showToast('success', 'Prévia real do jogo pronta.');
       } else if (message.type === 'ELEMENT_SELECTED' && typeof message.id === 'string' && sceneElements.some((element) => element.id === message.id)) {
         setSelectedId(message.id);
+      } else if (message.type === 'ELEMENT_METRICS' && typeof message.id === 'string' && Number.isFinite(message.width) && Number.isFinite(message.height)) {
+        setGeometryMetrics((current) => ({ ...current, [message.id]: { width: message.width, height: message.height } }));
+      } else if (message.type === 'GEOMETRY_CHANGED' && typeof message.id === 'string' && sceneElements.some((element) => element.id === message.id)) {
+        const target = elements.find((element) => element.id === message.id);
+        if (!config || !target?.geometry || !message.values || typeof message.values !== 'object') return;
+        const next = clone(config);
+        const entry = next.elements[message.id] || { base: {} };
+        const breakpoint = message.breakpoint === 'mobile' ? 'mobile' : 'desktop';
+        const values = Object.fromEntries(Object.entries(message.values).filter(([key, value]) => ['x', 'y', 'width', 'height'].includes(key) && typeof value === 'number')) as Record<string, number>;
+        if (breakpoint === 'mobile') {
+          entry.geometry = entry.geometry || {};
+          entry.geometry.responsive = entry.geometry.responsive || {};
+          entry.geometry.responsive.mobile = { ...(entry.geometry.responsive.mobile || {}), ...values };
+        } else {
+          entry.geometry = entry.geometry || {};
+          entry.geometry.base = { ...(entry.geometry.base || {}), ...values };
+        }
+        next.elements[message.id] = entry;
+        try {
+          validateClientConfig(catalog!, next);
+          rememberCurrentRef.current(`geometry.${message.id}.${breakpoint}`, config);
+          setConfig(next);
+          setSelectedId(message.id);
+        } catch (error) {
+          sendPreview('APPLY_CONFIG', { config });
+          showToast('error', error instanceof Error ? error.message : 'Geometria fora dos limites permitidos.');
+        }
       } else if (message.type === 'PREVIEW_ERROR' && typeof message.message === 'string') {
         showToast('error', `Prévia: ${message.message}`);
       }
@@ -199,7 +233,7 @@ export function App() {
     window.addEventListener('message', onMessage);
     sendPreview('HELLO');
     return () => window.removeEventListener('message', onMessage);
-  }, [previewOrigin, project, sceneElements, sendPreview, showToast]);
+  }, [catalog, config, elements, previewOrigin, project, sceneElements, sendPreview, showToast]);
 
   useEffect(() => {
     if (!previewReady || !config || !selectedScene) return;
@@ -218,6 +252,7 @@ export function App() {
     redoStack.current = [];
     setHistoryVersion((value) => value + 1);
   }, []);
+  rememberCurrentRef.current = rememberCurrent;
 
   const updateProperty = useCallback((elementId: string, property: EditorProperty, value: string) => {
     if (!config || !catalog || !validateClientValue(property.type, value, property.maxLength)) return;
@@ -229,6 +264,39 @@ export function App() {
     setConfig(next);
     setDrafts((current) => ({ ...current, [key]: value }));
   }, [catalog, config, rememberCurrent]);
+
+  const updateGeometry = useCallback((element: EditorElement, field: 'x' | 'y' | 'width' | 'height', value: number) => {
+    if (!config || !catalog || !element.geometry || !Number.isFinite(value)) return;
+    const limits = element.geometry.limits[field];
+    if (value < limits.min || value > limits.max) {
+      showToast('error', `${field.toUpperCase()} deve ficar entre ${limits.min} e ${limits.max} px.`);
+      return;
+    }
+    rememberCurrent(`geometry.${element.id}.${device}`, config);
+    const next = clone(config);
+    const entry = next.elements[element.id] || { base: {} };
+    entry.geometry = entry.geometry || {};
+    if (device === 'mobile') {
+      entry.geometry.responsive = entry.geometry.responsive || {};
+      entry.geometry.responsive.mobile = { ...(entry.geometry.responsive.mobile || {}), [field]: value };
+    } else {
+      entry.geometry.base = { ...(entry.geometry.base || {}), [field]: value };
+    }
+    next.elements[element.id] = entry;
+    try { validateClientConfig(catalog, next); setConfig(next); }
+    catch (error) { showToast('error', error instanceof Error ? error.message : 'Geometria inválida.'); }
+  }, [catalog, config, device, rememberCurrent, showToast]);
+
+  const resetGeometry = useCallback((element: EditorElement) => {
+    if (!config || !element.geometry) return;
+    rememberCurrent(`geometry.${element.id}.reset`, config);
+    const next = clone(config);
+    if (next.elements[element.id]) delete next.elements[element.id].geometry;
+    setConfig(next);
+    showToast('info', 'Geometria original restaurada.');
+  }, [config, rememberCurrent, showToast]);
+
+  const alignGeometry = (axis: 'horizontal' | 'vertical') => sendPreview('ALIGN_SELECTION', { axis });
 
   const undo = useCallback(() => {
     if (!config || undoStack.current.length === 0) return;
@@ -618,6 +686,24 @@ export function App() {
                   );
                 })}
               </div>
+              {selectedElement.geometry && (
+                <section className="geometry-editor" aria-label="Geometria do elemento">
+                  <div className="geometry-heading"><div><span className="eyebrow">GEOMETRIA · {device === 'mobile' ? 'CELULAR' : 'DESKTOP'}</span><strong>Posição e tamanho</strong></div><span className="geometry-unit">px</span></div>
+                  <div className="geometry-fields">
+                    {(['x', 'y', 'width', 'height'] as const).map((field) => {
+                      const entry = config.elements[selectedElement.id]?.geometry;
+                      const fallback = field === 'width' || field === 'height' ? geometryMetrics[selectedElement.id]?.[field] : selectedElement.geometry!.default[field];
+                      const value = (device === 'mobile' ? entry?.responsive?.mobile?.[field] : undefined) ?? entry?.base?.[field] ?? selectedElement.geometry!.default[field] ?? fallback ?? 0;
+                      const limits = selectedElement.geometry!.limits[field];
+                      return <label key={field} className="geometry-field"><span>{field === 'x' ? 'X' : field === 'y' ? 'Y' : field === 'width' ? 'Largura' : 'Altura'}</span><input aria-label={`${field} em pixels`} type="number" step={1} min={limits.min} max={limits.max} value={value} onChange={(event) => updateGeometry(selectedElement, field, Number(event.target.value))} /></label>;
+                    })}
+                  </div>
+                  <p className="geometry-hint">{device === 'mobile' ? 'Ajustes de celular usam override próprio.' : 'Ajustes desktop não substituem o override de celular.'}</p>
+                  <div className="geometry-actions"><button className="button button-quiet" onClick={() => alignGeometry('horizontal')} title="Centralizar horizontalmente">↔ Centralizar</button><button className="button button-quiet" onClick={() => alignGeometry('vertical')} title="Centralizar verticalmente">↕ Centralizar</button></div>
+                  <button className="geometry-reset" onClick={() => resetGeometry(selectedElement)}>Restaurar geometria original</button>
+                  <p className="geometry-hint">Arraste o elemento selecionado; use as alças nos cantos para redimensionar.</p>
+                </section>
+              )}
               <div className="inspector-divider" />
               <div className="inspector-info"><span className="info-check">✓</span><p>Propriedades validadas pelo catálogo. O jogo aceita somente valores registrados.</p></div>
             </>

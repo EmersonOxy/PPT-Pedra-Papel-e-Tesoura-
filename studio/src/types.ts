@@ -20,6 +20,16 @@ export interface EditorElement {
   labelKey: string;
   target: { attribute: 'data-editor-id' };
   properties: EditorProperty[];
+  geometry?: {
+    type: 'flow-box-v1';
+    binding: 'css-flow-box-v1';
+    anchor: 'flow';
+    default: Record<string, number>;
+    supports: Array<'move' | 'resize'>;
+    units: 'css-px';
+    responsive: boolean;
+    limits: Record<'x' | 'y' | 'width' | 'height', { min: number; max: number }>;
+  };
 }
 
 export interface EditorCatalog {
@@ -32,6 +42,7 @@ export interface VisualConfig {
   elements: Record<string, {
     base: Record<string, string>;
     responsive?: Record<string, Record<string, string>>;
+    geometry?: { base?: Record<string, number>; responsive?: Record<string, Record<string, number>> };
   }>;
 }
 

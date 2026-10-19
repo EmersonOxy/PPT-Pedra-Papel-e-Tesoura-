@@ -104,6 +104,7 @@ Delegue em paralelo apenas perguntas independentes. Não permita que agentes edi
 - Nunca expor HTML, JavaScript, CSS arbitrário, selector executável, comando de sistema, asset remoto ou propriedade não validada no editor.
 - Valores visuais ficam em `config/visual.json`; experimentos de regra ficam em `config/gameplay.local.json` isolados. Parâmetros competitivos permanecem somente leitura até aprovação explícita.
 - Mudança incompatível de ID, tipo, default, unidade ou semântica requer incremento de versão, migração determinística, backup e teste de compatibilidade. Versões futuras não podem ser sobrescritas por cliente antigo.
+- O catálogo v2 permite apenas geometria registrada com binding aprovado e limites explícitos (`flow-box-v1` / CSS px nesta etapa). Studio, serviço de projeto e runtime validam a mesma allowlist; projetos v1 permanecem v1, sem migração automática. Mudanças de geometria incluem testes de limite, breakpoint móvel, alvo oculto e colisões retangulares relevantes. Nunca exponha CSS ou JavaScript arbitrário no inspetor.
 - O contrato detalhado e o procedimento para o Codex estão em `docs/EDITOR_ARCHITECTURE.md` e `docs/GAME_CONFIGURATION.md`; consulte-os ao implementar qualquer nova tela, poder, HUD, asset ou animação.
 
 ## Segurança do Studio e preview

@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "elements": {
     "game.title": { "base": { "text": "Pedra, papel e tesoura" } },
     "arena.background": { "base": { "backgroundColor": "#fafaf7" } },
