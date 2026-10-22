@@ -24,10 +24,21 @@ As dependências são de desenvolvimento: Vite `8.3.4` (MIT) e TypeScript `7.0.2
 - `src/game/config.ts`: validação tipada do balanceamento, topologia do campo, orientação das linhas e espaços especiais.
 - `src/game/targeting.ts`: estratégia substituível de alvos e orientação espelhada das linhas.
 - `src/game/ai.ts`: decisões básicas do adversário, usando as mesmas transições públicas.
+- `src/game/session-flow.ts`: configuração versionada da busca local, contagem regressiva, transição e permissões experimentais da preparação.
 - `src/game/simulation.ts`: relógio determinístico, cadências independentes e ordenação explícita dos eventos simultâneos.
-- `src/ui/`: composição DOM, entrada mouse/toque, ilustrações SVG e animações.
+- `src/ui/`: menu, navegação, composição DOM da arena, entrada mouse/toque, ilustrações SVG e animações.
 - `config/balance.experimental.json`: parâmetros experimentais que podem ser substituídos sem alterar o motor.
+- `config/session.experimental.json`: 900 ms de busca demonstrativa, 5 s de contagem, 900 ms de transição, 15 s de preparação e permissões de preparação por ID de carta.
 - `tests/engine.test.ts`: regras, estado, IA e resultados em cenários reproduzíveis.
+- `tests/session-flow.test.ts`: busca/cancelamento, contagem regressiva, ativação da arena e validação da configuração de sessão.
+
+## Menu e fluxo experimental de partida
+
+A aplicação abre na tela **Início**, com navegação inferior entre Início, Deck e Missões. O Deck exibe os 24 exemplares (12 modelos em duas cópias) e abre a apresentação de carta existente; edição e salvamento do deck ainda não existem e são indicados na interface. As três missões acompanham eventos reais apenas durante a sessão atual e exibem recompensas demonstrativas sem conceder recursos.
+
+O botão Batalha inicia uma busca local curta e cancelável. Depois que a **IA local** é encontrada, há uma contagem de cinco segundos e uma cortina preta vertical cobre a tela antes de ativar a arena. Não há serviço de matchmaking nem conexão PvP. A arena passa por 15 segundos de preparação e uma mensagem curta de início antes do combate. O lado adversário fica dessaturado e selado; mão, sigilos não revelados e escolhas estratégicas da IA não são mostrados.
+
+Durante a preparação, as permissões são configuradas por carta em `config/session.experimental.json`: as tropas podem ser posicionadas, movidas e recolhidas; sigilos podem ser posicionados mas não revelados; feitiços não podem ser lançados. O motor valida essas permissões, então chamadas diretas também são rejeitadas quando a fase ou a ação não permitem. A IA usa o mesmo relógio, pode preparar tropas e sigilos sem expor a mão e não causa efeitos de combate durante a preparação. Ao liberar a partida, todos os temporizadores de ataque começam um intervalo novo, sem ataques acumulados.
 
 ## Temporizadores e simultaneidade (v0.2 experimental)
 

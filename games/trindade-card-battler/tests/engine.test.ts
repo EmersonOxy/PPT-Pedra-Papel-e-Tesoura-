@@ -1,12 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { cardDefinitions, getCardDefinition } from '../src/game/cards.ts';
-import { castSpell, createGame, drawCard, endWithWinner, moveTroop, placeCard, placeSigil, returnTroop, revealSigil } from '../src/game/engine.ts';
+import { beginPreparation, castSpell, createGame, drawCard, endWithWinner, moveTroop, placeCard, placeSigil, releaseCombat, returnTroop, revealSigil } from '../src/game/engine.ts';
 import * as gameEngineApi from '../src/game/engine.ts';
 import { takeAiAction } from '../src/game/ai.ts';
 import { advanceTime } from '../src/game/simulation.ts';
 import { chooseAttackTarget } from '../src/game/targeting.ts';
 import { balance, boardSlotCount, sigilSlotCount, topology, validateExperimentalBalance } from '../src/game/config.ts';
+import { isPreparationActionAllowed, sessionConfig } from '../src/game/session-flow.ts';
 import type { CardInstance, GameState, Side } from '../src/game/types.ts';
 
 const makeCard = (owner: Side, definitionId: string, id: string, health?: number, nextAttackAtMs = 0): CardInstance => ({
@@ -320,4 +321,83 @@ test('restart factory creates fresh life, board, hand, and deterministic deck', 
   assert.equal(restarted.players.player.life, 20);
   assert.equal(restarted.players.player.slots.filter(Boolean).length, 0);
   assert.equal(restarted.players.player.hand[0]?.definitionId, second.players.player.hand[0]?.definitionId);
+});
+
+test('preparation permissions are explicit per card and block spells and sigil reveals', () => {
+  assert.equal(isPreparationActionAllowed('solemn-guardian', 'place'), true);
+  assert.equal(isPreparationActionAllowed('solemn-guardian', 'move'), true);
+  assert.equal(isPreparationActionAllowed('eclipse-seal', 'place'), true);
+  assert.equal(isPreparationActionAllowed('eclipse-seal', 'reveal'), false);
+  assert.equal(isPreparationActionAllowed('wandering-flame', 'cast'), false);
+  assert.equal(sessionConfig.preparationDurationMs, 15_000);
+
+  const state = fixture();
+  state.players.player.hand = [
+    makeCard('player', 'solemn-guardian', 'prep-troop'),
+    makeCard('player', 'eclipse-seal', 'prep-sigil'),
+    makeCard('player', 'wandering-flame', 'prep-spell'),
+  ];
+  const prep = beginPreparation(state).state;
+  assert.equal(prep.phase, 'preparation');
+  assert.equal(placeCard(prep, 'player', 'prep-troop', 0).events.length, 1);
+  assert.equal(placeSigil(prep, 'player', 'prep-sigil', 0).events.length, 1);
+  assert.equal(placeCard(prep, 'player', 'prep-spell', 1).events.length, 0);
+  assert.equal(castSpell(prep, 'player', 'prep-spell', { kind: 'life', side: 'enemy' }).events.length, 0);
+  assert.equal(drawCard(prep, 'player').events.length, 0);
+  assert.equal(revealSigil(prep, 'player', 0).events.length, 0);
+  const moved = moveTroop(placeCard(prep, 'player', 'prep-troop', 0).state, 'player', 0, 1);
+  assert.equal(moved.state.players.player.slots[1]?.instanceId, 'prep-troop');
+});
+
+test('preparation freezes attacks, gives the start announcement its own phase, and resets troop timers', () => {
+  const state = fixture();
+  state.players.player.hand = [];
+  state.players.enemy.hand = [];
+  state.players.enemy.deck = [];
+  state.players.player.slots[0] = makeCard('player', 'solemn-guardian', 'wait-for-battle', 4, 1000);
+  const prep = beginPreparation(state, 15_000).state;
+  const elapsedPrep = advanceTime(prep, 15_000);
+  assert.equal(elapsedPrep.state.phase, 'starting');
+  assert.equal(elapsedPrep.state.clockMs, 15_000);
+  assert.equal(elapsedPrep.events.some((event) => event.type === 'attack' || event.type === 'damage'), false);
+  assert.equal(elapsedPrep.state.players.player.slots[0]?.nextAttackAtMs, 1000);
+
+  const announcement = advanceTime(elapsedPrep.state, sessionConfig.battleAnnouncementMs - 1);
+  assert.equal(announcement.state.phase, 'starting');
+  assert.equal(announcement.events.some((event) => event.type === 'attack'), false);
+  const released = advanceTime(announcement.state, 1);
+  assert.equal(released.state.phase, 'playing');
+  assert.equal(released.state.players.player.slots[0]?.nextAttackAtMs, 15_000 + sessionConfig.battleAnnouncementMs + balance.attackIntervalMs);
+  assert.ok(released.events.some((event) => event.type === 'combat-start'));
+  assert.equal(released.events.some((event) => event.type === 'attack'), false);
+  const beforeTimer = advanceTime(released.state, balance.attackIntervalMs - 1);
+  assert.equal(beforeTimer.events.some((event) => event.type === 'attack'), false);
+  const atTimer = advanceTime(beforeTimer.state, 1);
+  assert.ok(atTimer.events.some((event) => event.type === 'attack'));
+});
+
+test('the AI can prepare an allowed troop while its hand and spells remain hidden and inactive', () => {
+  const state = fixture();
+  state.players.enemy.hand = [
+    makeCard('enemy', 'wandering-flame', 'enemy-prep-spell'),
+    makeCard('enemy', 'solemn-guardian', 'enemy-prep-troop'),
+  ];
+  state.players.enemy.deck = [];
+  const prep = beginPreparation(state).state;
+  const result = advanceTime(prep, balance.aiInitialDelayMs);
+  assert.equal(result.state.phase, 'preparation');
+  assert.equal(result.state.players.enemy.slots.filter(Boolean).length, 1);
+  assert.equal(result.state.players.enemy.slots.find(Boolean)?.instanceId, 'enemy-prep-troop');
+  assert.equal(result.state.players.enemy.hand.some((card) => card.instanceId === 'enemy-prep-spell'), true);
+  assert.equal(result.events.some((event) => event.type === 'spell' || event.type === 'damage' || event.type === 'attack'), false);
+});
+
+test('combat cannot be released through the start-announcement phase early', () => {
+  const state = fixture();
+  const prep = beginPreparation(state).state;
+  assert.equal(releaseCombat(prep).events.length, 0);
+  const starting = advanceTime(prep, sessionConfig.preparationDurationMs).state;
+  assert.equal(releaseCombat(starting).events.length, 0);
+  const ready = advanceTime(starting, sessionConfig.battleAnnouncementMs).state;
+  assert.equal(ready.phase, 'playing');
 });

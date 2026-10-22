@@ -2,6 +2,7 @@ export type Side = 'player' | 'enemy';
 export type CardKind = 'troop' | 'hidden' | 'spell';
 export type Foundation = 'guarda' | 'tecnica' | 'impacto';
 export type SpellEffect = 'damage' | 'heal';
+export type GamePhase = 'preparation' | 'starting' | 'playing' | 'finished';
 
 export interface CardDefinition {
   id: string;
@@ -35,9 +36,11 @@ export interface PlayerState {
 }
 
 export interface GameState {
-  phase: 'playing' | 'finished';
+  phase: GamePhase;
   winner: Side | null;
   clockMs: number;
+  preparationEndsAtMs: number | null;
+  startAnnouncementEndsAtMs: number | null;
   nextAiAtMs: number;
   aiStarted: boolean;
   attackIntervalMs: number;
@@ -48,6 +51,9 @@ export interface GameState {
 }
 
 export type GameEvent =
+  | { type: 'preparation-start'; endsAtMs: number }
+  | { type: 'preparation-end' }
+  | { type: 'combat-start' }
   | { type: 'draw'; side: Side; instanceId: string }
   | { type: 'place'; side: Side; instanceId: string; slot: number }
   | { type: 'move'; side: Side; instanceId: string; from: number; to: number }

@@ -1,4 +1,6 @@
 import { takeAiAction } from './ai.ts';
+import { releaseCombat } from './engine.ts';
+import { sessionConfig } from './session-flow.ts';
 import { getCardDefinition } from './cards.ts';
 import { chooseAttackTarget } from './targeting.ts';
 import type { GameEvent, GameState, PlayerState, Side } from './types.ts';
@@ -87,13 +89,42 @@ function resolveDueAttacks(state: GameState): { state: GameState; events: GameEv
 }
 
 export function advanceTime(state: GameState, deltaMs: number): { state: GameState; events: GameEvent[] } {
-  if (state.phase !== 'playing' || !Number.isFinite(deltaMs) || deltaMs <= 0) return { state, events: [] };
+  if (state.phase === 'finished' || !Number.isFinite(deltaMs) || deltaMs <= 0) return { state, events: [] };
   const endAt = state.clockMs + Math.min(deltaMs, 60_000);
   let next = { ...state };
   const events: GameEvent[] = [];
   let safety = 0;
-  while (next.phase === 'playing' && safety < 512) {
+  while (next.phase !== 'finished' && safety < 512) {
     safety += 1;
+    if (next.phase === 'preparation') {
+      const preparationEndsAt = next.preparationEndsAtMs ?? next.clockMs;
+      const aiDueAt = next.aiStarted && next.nextAiAtMs <= preparationEndsAt ? next.nextAiAtMs : Number.POSITIVE_INFINITY;
+      const nextPreparationEventAt = Math.min(preparationEndsAt, aiDueAt);
+      if (nextPreparationEventAt > endAt) break;
+      next.clockMs = Math.max(next.clockMs, nextPreparationEventAt);
+      if (aiDueAt === nextPreparationEventAt) {
+        // At an exact tie, one scheduled AI preparation action happens before preparation closes.
+        const ai = takeAiAction(next);
+        next = ai.state;
+        events.push(...ai.events);
+        next.nextAiAtMs = nextPreparationEventAt + next.aiActionIntervalMs;
+      } else {
+        next.phase = 'starting';
+        next.preparationEndsAtMs = null;
+        next.startAnnouncementEndsAtMs = nextPreparationEventAt + sessionConfig.battleAnnouncementMs;
+        events.push({ type: 'preparation-end' });
+      }
+      continue;
+    }
+    if (next.phase === 'starting') {
+      const combatStartsAt = next.startAnnouncementEndsAtMs ?? Number.POSITIVE_INFINITY;
+      if (combatStartsAt > endAt) break;
+      next.clockMs = Math.max(next.clockMs, combatStartsAt);
+      const combat = releaseCombat(next);
+      next = combat.state;
+      events.push(...combat.events);
+      continue;
+    }
     const attacks = dueAttacks(next);
     const nextAttackAt = attacks[0]?.at ?? Number.POSITIVE_INFINITY;
     const nextEventAt = Math.min(next.nextAiAtMs, nextAttackAt);

@@ -1,4 +1,5 @@
 import { balance, boardSlotCount, sigilSlotCount } from './config.ts';
+import { isPreparationActionAllowed, sessionConfig } from './session-flow.ts';
 import { cardDefinitions, getCardDefinition } from './cards.ts';
 import type { CardInstance, GameEvent, GameState, PlayerState, Side, SpellTarget, Transition } from './types.ts';
 
@@ -19,6 +20,11 @@ function replacePlayer(state: GameState, side: Side, player: PlayerState): GameS
 function wakeOpponent(state: GameState, side: Side): GameState {
   if (state.phase !== 'playing' || side !== 'player' || state.aiStarted) return state;
   return { ...state, aiStarted: true, nextAiAtMs: state.clockMs + balance.aiInitialDelayMs };
+}
+
+function actionAllowed(state: GameState, definitionId: string, action: 'place' | 'move' | 'return' | 'cast' | 'reveal'): boolean {
+  if (state.phase === 'playing') return true;
+  return state.phase === 'preparation' && isPreparationActionAllowed(definitionId, action);
 }
 
 function nextRandom(value: number): [number, number] {
@@ -76,6 +82,8 @@ export function createGame(seed = 0x7a31f22d): GameState {
     phase: 'playing',
     winner: null,
     clockMs: 0,
+    preparationEndsAtMs: null,
+    startAnnouncementEndsAtMs: null,
     nextAiAtMs: Number.POSITIVE_INFINITY,
     aiStarted: false,
     attackIntervalMs: balance.attackIntervalMs,
@@ -110,11 +118,12 @@ export function drawCard(state: GameState, side: Side): Transition {
 }
 
 export function placeCard(state: GameState, side: Side, instanceId: string, slot: number): Transition {
-  if (state.phase !== 'playing' || !Number.isInteger(slot) || slot < 0 || slot >= boardSlotCount) return { state, events: [] };
+  if ((state.phase !== 'playing' && state.phase !== 'preparation') || !Number.isInteger(slot) || slot < 0 || slot >= boardSlotCount) return { state, events: [] };
   const player = clonePlayer(state.players[side]);
   const handIndex = player.hand.findIndex((card) => card.instanceId === instanceId);
   const card = player.hand[handIndex];
   if (!card || player.slots[slot]) return { state, events: [] };
+  if (!actionAllowed(state, card.definitionId, 'place')) return { state, events: [] };
   const kind = getCardDefinition(card.definitionId).kind;
   if (kind === 'spell') return { state, events: [] };
   player.hand.splice(handIndex, 1);
@@ -123,20 +132,20 @@ export function placeCard(state: GameState, side: Side, instanceId: string, slot
 }
 
 export function moveTroop(state: GameState, side: Side, from: number, to: number): Transition {
-  if (state.phase !== 'playing' || !Number.isInteger(from) || !Number.isInteger(to) || from === to || from < 0 || from >= boardSlotCount || to < 0 || to >= boardSlotCount) return { state, events: [] };
+  if ((state.phase !== 'playing' && state.phase !== 'preparation') || !Number.isInteger(from) || !Number.isInteger(to) || from === to || from < 0 || from >= boardSlotCount || to < 0 || to >= boardSlotCount) return { state, events: [] };
   const player = clonePlayer(state.players[side]);
   const card = player.slots[from];
-  if (!card || getCardDefinition(card.definitionId).kind !== 'troop' || player.slots[to]) return { state, events: [] };
+  if (!card || getCardDefinition(card.definitionId).kind !== 'troop' || !actionAllowed(state, card.definitionId, 'move') || player.slots[to]) return { state, events: [] };
   player.slots[from] = null;
   player.slots[to] = card;
   return { state: wakeOpponent(replacePlayer(state, side, player), side), events: [{ type: 'move', side, instanceId: card.instanceId, from, to }] };
 }
 
 export function returnTroop(state: GameState, side: Side, slot: number): Transition {
-  if (state.phase !== 'playing' || !Number.isInteger(slot) || slot < 0 || slot >= boardSlotCount) return { state, events: [] };
+  if ((state.phase !== 'playing' && state.phase !== 'preparation') || !Number.isInteger(slot) || slot < 0 || slot >= boardSlotCount) return { state, events: [] };
   const player = clonePlayer(state.players[side]);
   const card = player.slots[slot];
-  if (!card || getCardDefinition(card.definitionId).kind !== 'troop' || player.hand.length >= balance.handLimit) return { state, events: [] };
+  if (!card || getCardDefinition(card.definitionId).kind !== 'troop' || !actionAllowed(state, card.definitionId, 'return') || player.hand.length >= balance.handLimit) return { state, events: [] };
   player.slots[slot] = null;
   player.hand.push({ ...card, nextAttackAtMs: 0 });
   return { state: wakeOpponent(replacePlayer(state, side, player), side), events: [{ type: 'return', side, instanceId: card.instanceId, slot }] };
@@ -175,7 +184,7 @@ export function castSpell(state: GameState, side: Side, instanceId: string, targ
   const card = caster.hand[handIndex];
   if (!card) return { state, events: [] };
   const definition = getCardDefinition(card.definitionId);
-  if (definition.kind !== 'spell' || !definition.effect) return { state, events: [] };
+  if (state.phase !== 'playing' || !actionAllowed(state, card.definitionId, 'cast') || definition.kind !== 'spell' || !definition.effect) return { state, events: [] };
   if (target.kind === 'unit' && (!Number.isInteger(target.slot) || target.slot < 0 || target.slot >= boardSlotCount || !state.players[target.side].slots[target.slot])) return { state, events: [] };
   const intendedSide = definition.effect === 'damage' ? (side === 'player' ? 'enemy' : 'player') : side;
   if (target.side !== intendedSide) return { state, events: [] };
@@ -209,20 +218,20 @@ export function castSpell(state: GameState, side: Side, instanceId: string, targ
 }
 
 export function revealSigil(state: GameState, side: Side, slot: number): Transition {
-  if (state.phase !== 'playing' || !Number.isInteger(slot) || slot < 0 || slot >= sigilSlotCount) return { state, events: [] };
+  if ((state.phase !== 'playing' && state.phase !== 'preparation') || !Number.isInteger(slot) || slot < 0 || slot >= sigilSlotCount) return { state, events: [] };
   const player = clonePlayer(state.players[side]);
   const card = player.sigils[slot];
-  if (!card || card.revealed) return { state, events: [] };
+  if (!card || card.revealed || !actionAllowed(state, card.definitionId, 'reveal')) return { state, events: [] };
   player.sigils[slot] = { ...card, revealed: true };
   return { state: wakeOpponent(replacePlayer(state, side, player), side), events: [{ type: 'reveal', side, instanceId: card.instanceId, slot }] };
 }
 
 export function placeSigil(state: GameState, side: Side, instanceId: string, slot: number): Transition {
-  if (state.phase !== 'playing' || !Number.isInteger(slot) || slot < 0 || slot >= sigilSlotCount) return { state, events: [] };
+  if ((state.phase !== 'playing' && state.phase !== 'preparation') || !Number.isInteger(slot) || slot < 0 || slot >= sigilSlotCount) return { state, events: [] };
   const player = clonePlayer(state.players[side]);
   const handIndex = player.hand.findIndex((card) => card.instanceId === instanceId);
   const card = player.hand[handIndex];
-  if (!card || player.sigils[slot] || getCardDefinition(card.definitionId).kind !== 'hidden') return { state, events: [] };
+  if (!card || !actionAllowed(state, card.definitionId, 'place') || player.sigils[slot] || getCardDefinition(card.definitionId).kind !== 'hidden') return { state, events: [] };
   player.hand.splice(handIndex, 1);
   player.sigils[slot] = { ...card, revealed: false };
   return { state: wakeOpponent(replacePlayer(state, side, player), side), events: [{ type: 'place', side, instanceId, slot }] };
@@ -234,4 +243,39 @@ export function endWithWinner(state: GameState, winner: Side): Transition {
   const events: GameEvent[] = [];
   setFinished(next, winner, events);
   return { state: next, events };
+}
+
+export function beginPreparation(state: GameState, durationMs = sessionConfig.preparationDurationMs): Transition {
+  if (state.phase !== 'playing' || !Number.isFinite(durationMs) || durationMs <= 0) return { state, events: [] };
+  const next: GameState = {
+    ...state,
+    phase: 'preparation',
+    preparationEndsAtMs: state.clockMs + durationMs,
+    startAnnouncementEndsAtMs: null,
+    aiStarted: true,
+    nextAiAtMs: state.clockMs + balance.aiInitialDelayMs,
+  };
+  return { state: next, events: [{ type: 'preparation-start', endsAtMs: next.preparationEndsAtMs! }] };
+}
+
+/** Releases combat after the short start announcement and gives deployed units a fresh attack interval. */
+export function releaseCombat(state: GameState): Transition {
+  if (state.phase !== 'starting' || state.startAnnouncementEndsAtMs === null || state.clockMs < state.startAnnouncementEndsAtMs) return { state, events: [] };
+  const players = { player: clonePlayer(state.players.player), enemy: clonePlayer(state.players.enemy) };
+  for (const side of ['player', 'enemy'] as const) {
+    players[side].slots = players[side].slots.map((card) => card && getCardDefinition(card.definitionId).kind === 'troop'
+      ? { ...card, nextAttackAtMs: state.clockMs + state.attackIntervalMs }
+      : card);
+  }
+  return {
+    state: {
+      ...state,
+      phase: 'playing',
+      preparationEndsAtMs: null,
+      startAnnouncementEndsAtMs: null,
+      nextAiAtMs: state.aiStarted && state.nextAiAtMs <= state.clockMs ? state.clockMs + state.aiActionIntervalMs : state.nextAiAtMs,
+      players,
+    },
+    events: [{ type: 'combat-start' }],
+  };
 }

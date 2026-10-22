@@ -8,6 +8,27 @@ function firstEmpty(values: Array<unknown | null>): number {
 }
 
 export function takeAiAction(state: GameState): { state: GameState; events: GameEvent[] } {
+  if (state.phase === 'preparation') {
+    const hand = [...state.players.enemy.hand];
+    for (const card of hand) {
+      const definition = getCardDefinition(card.definitionId);
+      if (definition.kind === 'troop') {
+        const slot = firstEmpty(state.players.enemy.slots);
+        if (slot >= 0) {
+          const action = placeCard(state, 'enemy', card.instanceId, slot);
+          if (action.events.length) return action;
+        }
+      }
+      if (definition.kind === 'hidden') {
+        const slot = firstEmpty(state.players.enemy.sigils);
+        if (slot >= 0) {
+          const action = placeSigil(state, 'enemy', card.instanceId, slot);
+          if (action.events.length) return action;
+        }
+      }
+    }
+    return { state, events: [] };
+  }
   if (state.phase !== 'playing') return { state, events: [] };
   let next = state;
   const events: GameEvent[] = [];
