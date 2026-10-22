@@ -1,6 +1,4 @@
-import type { CardDefinition } from '../game/types.ts';
-
-// Formas vetoriais reproduzidas do protótipo V3 fornecido pelo usuário.
+// Ilustrações vetoriais provisórias separadas dos dados de combate.
 const shapes: Record<string, string> = {
   guardian: '<path d="M70 24 99 40 96 85 70 109 44 85 41 40Z" fill="#304e60" stroke="#c3f2df" stroke-width="4"/><path d="M70 40 85 49 82 79 70 92 58 79 55 49Z" fill="#7cc5b5"/><path d="M70 42V92M55 64h30" stroke="#f3e0a1" stroke-width="3"/><path d="M53 35 70 22 88 35" stroke="#ebd79b" stroke-width="4" fill="none"/>',
   fox: '<path d="M27 113C12 78 24 44 50 49 34 40 36 19 43 13L61 38 74 38 96 13 102 51C126 60 131 89 114 111L91 100 70 110 50 99Z" fill="#5a3f65" stroke="#efceba" stroke-width="4"/><path d="m50 55 15 10-18 5m43-15-15 10 18 5" fill="#d6ffff"/><path d="M61 84 70 91 79 84" stroke="#ffcc9d" stroke-width="4" fill="none"/><path d="M22 91C11 48 27 34 31 37M116 93C132 54 111 39 109 40" fill="none" stroke="#cdb8ee" stroke-width="6"/>',
@@ -16,17 +14,7 @@ const shapes: Record<string, string> = {
   wildfire: '<path d="M70 113C31 108 33 81 47 65 54 58 60 47 59 18 76 36 83 48 79 68 92 55 97 40 95 29 123 70 117 107 70 113Z" fill="#bb584a" stroke="#f5be80" stroke-width="4"/><path d="M70 109C55 102 58 91 66 83 70 77 71 70 73 64 88 83 90 101 70 109Z" fill="#ffe2a0"/>',
 };
 
-const foundationColors: Record<CardDefinition['foundation'], [string, string]> = {
-  guarda: ['#5A7F78', '#092906'],
-  tecnica: ['#2779BB', '#010937'],
-  impacto: ['#FE6C2B', '#340016'],
-};
-
-export function cardArtwork(definition: CardDefinition, instanceId: string): string {
-  const safeId = instanceId.replace(/[^a-zA-Z0-9_-]/g, '-');
-  let [tone, dark] = foundationColors[definition.foundation];
-  if (definition.kind === 'hidden') [tone, dark] = ['#B10C43', '#02031A'];
-  if (definition.kind === 'spell') [tone, dark] = definition.foundation === 'impacto' ? ['#FD1205', '#020F59'] : ['#0762A4', '#020F59'];
-  const motif = shapes[definition.motif] ?? shapes.guardian;
-  return `<svg viewBox="0 0 140 128" preserveAspectRatio="xMidYMid slice" aria-hidden="true" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="art-${safeId}" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="${tone}"/><stop offset="100%" stop-color="${dark}"/></linearGradient><radialGradient id="light-${safeId}"><stop offset="0%" stop-color="#fff2bf" stop-opacity=".65"/><stop offset="100%" stop-color="#f6e3a8" stop-opacity="0"/></radialGradient></defs><rect width="140" height="128" fill="url(#art-${safeId})"/><circle cx="70" cy="64" r="75" fill="url(#light-${safeId})" opacity=".5"/><g stroke="#e6e0b0" opacity=".25" fill="none"><circle cx="70" cy="67" r="48"/><path d="M0 106 140 106M0 18 140 18M7 64H133M70-20V150"/></g><path d="M-10 119 18 98 40 112 69 93 94 113 122 98 151 122V148H-10Z" fill="#102535" opacity=".48"/>${motif}</svg>`;
+export function renderPlaceholderIllustration(motif: string): string {
+  const illustration = shapes[motif] ?? shapes.guardian;
+  return `<svg viewBox="0 0 140 128" preserveAspectRatio="xMidYMid meet" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">${illustration}</svg>`;
 }

@@ -4,9 +4,7 @@ import { advanceTime } from '../game/simulation.ts';
 import { frontRow } from '../game/targeting.ts';
 import { balance, boardSlotCount, topology } from '../game/config.ts';
 import type { CardInstance, GameEvent, GameState, Side, SpellTarget, Transition } from '../game/types.ts';
-
-const CARD_PLACEHOLDER_SRC = new URL('../assets/card-placeholder.jpg', import.meta.url).href;
-const TROOP_PLACEHOLDER_SRC = new URL('../assets/troop-placeholder.png', import.meta.url).href;
+import { renderCardBack, renderCardFace, renderDeckCardBack } from './card-presentation.ts';
 
 type ActiveDrag = {
   id: string;
@@ -83,7 +81,7 @@ export class GameApp {
             <div class="dock-header"><strong>SUA MÃO <span id="hand-count">${balance.handLimit}/${balance.handLimit}</span></strong><span class="selection-hint" id="action-hint">Toque ou arraste as cartas</span></div>
             <div class="dock-main">
               <div class="deck-column"><div class="player-cycle" role="status" aria-label="Ciclo do seu deck"><span class="enemy-cycle-icon" id="player-cycle">1</span></div>
-                <button class="deck-button" type="button" id="draw-deck" title="Comprar uma carta" aria-label="Comprar carta"><span class="deck-top" id="deck-mark">${sigil}</span><span class="deck-progress" id="deck-badge" role="progressbar" aria-label="Progresso do deck" aria-valuemin="0" aria-valuemax="${balance.deckSize}" aria-valuenow="${balance.handLimit}"></span></button>
+                <button class="deck-button" type="button" id="draw-deck" title="Comprar uma carta" aria-label="Comprar carta">${renderDeckCardBack()}<span class="deck-progress" id="deck-badge" role="progressbar" aria-label="Progresso do deck" aria-valuemin="0" aria-valuemax="${balance.deckSize}" aria-valuenow="${balance.handLimit}"></span></button>
               </div>
               <div class="hand-area" id="hand-area" data-zone="hand" aria-label="Sua mão: arraste uma tropa para cá para recolhê-la"></div>
             </div>
@@ -518,6 +516,9 @@ export class GameApp {
         for (const attribute of Array.from(desired.attributes)) {
           if (element.getAttribute(attribute.name) !== attribute.value) element.setAttribute(attribute.name, attribute.value);
         }
+        const existingFace = element.querySelector<HTMLElement>('.card-face');
+        const desiredFace = desired.querySelector<HTMLElement>('.card-face');
+        if (existingFace?.dataset.visualState !== desiredFace?.dataset.visualState && desiredFace) element.replaceChildren(desiredFace);
         wanted.push(element);
       } else wanted.push(desired);
     });
@@ -560,6 +561,12 @@ export class GameApp {
           const details = this.cardDetails(displayedCard);
           currentCard.setAttribute('aria-label', this.escapeAttribute(details));
           currentCard.setAttribute('title', this.escapeAttribute(details));
+          const definition = getCardDefinition(displayedCard.definitionId);
+          const nextFace = document.createElement('template');
+          nextFace.innerHTML = renderCardFace(definition, displayedCard, side, 'field').trim();
+          const currentFace = currentCard.querySelector<HTMLElement>('.card-face');
+          const desiredFace = nextFace.content.firstElementChild as HTMLElement;
+          if (currentFace?.dataset.visualState !== desiredFace.dataset.visualState) currentCard.replaceChildren(desiredFace);
         }
       }
       button.dataset.slotSide = side;
@@ -576,7 +583,7 @@ export class GameApp {
       const displayedCard = card && !this.isBeingDragged(card) ? card : null;
       const content = !displayedCard ? '<span class="empty-rune" aria-hidden="true">✧</span>' : displayedCard.revealed
         ? this.unitMarkup(displayedCard, side, true)
-        : `<img class="card-placeholder-image sigil-placeholder-image" src="${CARD_PLACEHOLDER_SRC}" alt="" draggable="false">`;
+        : renderCardBack(side);
       const label = `${side === 'player' ? 'Seu' : 'Adversário'}: sigilo ${slot + 1}${displayedCard?.revealed ? `, ${getCardDefinition(displayedCard.definitionId).name}` : displayedCard ? ', oculto' : ', vazio'}`;
       let button = target.children[slot] as HTMLButtonElement | undefined;
       if (!button) {
@@ -626,21 +633,19 @@ export class GameApp {
 
   private handMarkup(card: CardInstance, index: number, total: number): string {
     const definition = getCardDefinition(card.definitionId);
-    const artSrc = definition.kind === 'troop' ? TROOP_PLACEHOLDER_SRC : CARD_PLACEHOLDER_SRC;
     const area = this.root.querySelector<HTMLElement>('#hand-area');
     const width = area?.clientWidth || 360;
     const spacing = Math.min(61, Math.max(14, (width - 82) / Math.max(1, total - 1)));
     const offset = (index - (total - 1) / 2) * spacing;
     const angle = (index - (total - 1) / 2) * Math.min(2.1, 11 / Math.max(1, total - 1));
     const details = this.cardDetails(card);
-    return `<button class="hand-card kind-${definition.kind}${this.selectedId === card.instanceId ? ' is-selected' : ''}" type="button" data-card-id="${card.instanceId}" data-side="player" data-foundation="${definition.foundation}" style="left:calc(50% + ${offset}px);--angle:${angle}deg;z-index:${this.selectedId === card.instanceId ? 40 : index + 3}" aria-label="${this.escapeAttribute(`${details}. Selecionar ou arrastar`)}" title="${this.escapeAttribute(details)}"><img class="card-placeholder-image" src="${artSrc}" alt="" draggable="false"></button>`;
+    return `<button class="hand-card kind-${definition.kind}${this.selectedId === card.instanceId ? ' is-selected' : ''}" type="button" data-card-id="${card.instanceId}" data-side="player" data-foundation="${definition.foundation}" style="left:calc(50% + ${offset}px);--angle:${angle}deg;z-index:${this.selectedId === card.instanceId ? 40 : index + 3}" aria-label="${this.escapeAttribute(`${details}. Selecionar ou arrastar`)}" title="${this.escapeAttribute(details)}">${renderCardFace(definition, card, 'player', 'hand')}</button>`;
   }
 
   private unitMarkup(card: CardInstance, side: Side, secret = false): string {
     const definition = getCardDefinition(card.definitionId);
-    const artSrc = definition.kind === 'troop' ? TROOP_PLACEHOLDER_SRC : CARD_PLACEHOLDER_SRC;
     const details = this.cardDetails(card);
-    return `<div class="battle-card${side === 'enemy' ? ' enemy-unit' : ''}${secret ? ' sigil-card' : ''}" data-card-id="${card.instanceId}" data-side="${side}" data-foundation="${definition.foundation}" role="img" aria-label="${this.escapeAttribute(details)}" title="${this.escapeAttribute(details)}"><img class="card-placeholder-image" src="${artSrc}" alt="" draggable="false"></div>`;
+    return `<div class="battle-card${side === 'enemy' ? ' enemy-unit' : ''}${secret ? ' sigil-card' : ''}" data-card-id="${card.instanceId}" data-side="${side}" data-foundation="${definition.foundation}" title="${this.escapeAttribute(details)}">${renderCardFace(definition, card, side, 'field')}</div>`;
   }
 
   private showPreview(instanceId: string, side: Side): void {
@@ -651,8 +656,7 @@ export class GameApp {
     const wrap = this.root.querySelector<HTMLElement>('#card-preview-wrap');
     if (!overlay || !wrap) return;
     const details = this.cardDetails(card);
-    const artSrc = definition.kind === 'troop' ? TROOP_PLACEHOLDER_SRC : CARD_PLACEHOLDER_SRC;
-    wrap.innerHTML = `<div class="preview-shell ${definition.kind}" data-foundation="${definition.foundation}" role="img" aria-label="${this.escapeAttribute(details)}" title="${this.escapeAttribute(details)}"><img class="card-placeholder-image" src="${artSrc}" alt=""></div>`;
+    wrap.innerHTML = `<div class="preview-shell ${definition.kind}" data-foundation="${definition.foundation}" title="${this.escapeAttribute(details)}">${renderCardFace(definition, card, side, 'preview')}</div>`;
     overlay.classList.add('open'); overlay.setAttribute('aria-hidden', 'false');
   }
 

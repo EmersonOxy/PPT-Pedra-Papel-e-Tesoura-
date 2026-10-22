@@ -11,7 +11,6 @@ export interface CardDefinition {
   cost: number;
   attack: number;
   maxHealth: number;
-  motif: string;
   description: string;
   effect?: SpellEffect;
 }
