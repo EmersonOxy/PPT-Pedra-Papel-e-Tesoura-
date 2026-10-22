@@ -6,6 +6,26 @@ import { balance, boardSlotCount, topology } from '../game/config.ts';
 import type { CardInstance, GameEvent, GameState, Side, SpellTarget, Transition } from '../game/types.ts';
 
 const CARD_PLACEHOLDER_SRC = new URL('../assets/card-placeholder.png', import.meta.url).href;
+const TROOP_PLACEHOLDER_SRC = new URL('../assets/troop-placeholder.png', import.meta.url).href;
+
+type ActiveDrag = {
+  id: string;
+  side: Side;
+  origin: HTMLElement;
+  parent: Node;
+  nextSibling: Node | null;
+  originalStyle: string | null;
+  originalClassName: string;
+  pointerId: number;
+  x: number;
+  y: number;
+  startX: number;
+  startY: number;
+  offsetX: number;
+  offsetY: number;
+  started: boolean;
+  previewOpened: boolean;
+};
 
 const sigil = '<svg viewBox="0 0 60 60" fill="none" aria-hidden="true" xmlns="http://www.w3.org/2000/svg"><path d="M30 4L53 45H7L30 4Z" stroke="#ddc58e" stroke-width="2"/><circle cx="30" cy="32" r="15" stroke="#78c9bc" stroke-width="2"/><path d="M30 16V47M15 32H45" stroke="#dbc58d" stroke-width="1.7"/><circle cx="30" cy="32" r="4" fill="#edcf92"/></svg>';
 
@@ -14,10 +34,11 @@ export class GameApp {
   private state: GameState;
   private selectedId: string | null = null;
   private theme = 'mineral';
-  private drag: { id: string; side: Side; origin: HTMLElement; pointerId: number; x: number; y: number; startX: number; startY: number; started: boolean; ghost: HTMLElement | null } | null = null;
+  private drag: ActiveDrag | null = null;
   private pressTimer: number | undefined;
   private toastTimer: number | undefined;
   private lastFrame = 0;
+  private suppressClickUntil = 0;
 
   constructor(root: HTMLElement) {
     this.root = root;
@@ -79,15 +100,20 @@ export class GameApp {
   private bindEvents(): void {
     this.root.addEventListener('click', this.onClick);
     this.root.addEventListener('pointerdown', this.onPointerDown);
-    this.root.addEventListener('pointermove', this.onPointerMove);
-    this.root.addEventListener('pointerup', this.onPointerUp);
-    this.root.addEventListener('pointercancel', this.onPointerCancel);
+    window.addEventListener('pointermove', this.onPointerMove);
+    window.addEventListener('pointerup', this.onPointerUp);
+    window.addEventListener('pointercancel', this.onPointerCancel);
     this.root.querySelectorAll('.overlay').forEach((overlay) => overlay.addEventListener('click', (event) => {
       if (event.target === overlay && overlay.id !== 'result-overlay') this.closeOverlay(overlay.id);
     }));
   }
 
   private onClick = (event: MouseEvent): void => {
+    if (event.detail > 0 && performance.now() < this.suppressClickUntil) {
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
     const target = event.target;
     if (!(target instanceof Element)) return;
     const button = target.closest<HTMLElement>('button');
@@ -117,7 +143,7 @@ export class GameApp {
     const card = this.state.players.player.hand.find((item) => item.instanceId === instanceId);
     if (!card) return;
     this.selectedId = this.selectedId === instanceId ? null : instanceId;
-    this.render();
+    this.syncSelection();
     const definition = getCardDefinition(card.definitionId);
     if (definition.kind === 'spell') this.toast(definition.effect === 'damage' ? 'Toque em uma tropa inimiga ou na vida adversária.' : 'Toque em uma tropa aliada ferida ou na sua vida.');
     else if (definition.kind === 'hidden') this.toast('Escolha um espaço de sigilo vazio.');
@@ -143,11 +169,11 @@ export class GameApp {
       return;
     }
     const fieldCard = this.state.players.player.slots[slot];
-    if (fieldCard && this.selectedId === fieldCard.instanceId) { this.selectedId = null; this.render(); return; }
+    if (fieldCard && this.selectedId === fieldCard.instanceId) { this.selectedId = null; this.syncSelection(); return; }
     if (fieldCard) {
       const selectedBoard = this.selectedId ? this.findPlayerBoardSlot(this.selectedId) : -1;
       if (selectedBoard >= 0) { this.transition(moveTroop(this.state, 'player', selectedBoard, slot), 'O destino precisa estar vazio.'); return; }
-      if (!this.selectedId) { this.selectedId = fieldCard.instanceId; this.render(); return; }
+      if (!this.selectedId) { this.selectedId = fieldCard.instanceId; this.syncSelection(); return; }
     }
     if (fieldCard && this.isSelectedSpell('heal')) this.tryCast({ kind: 'unit', side: 'player', slot });
   }
@@ -192,13 +218,27 @@ export class GameApp {
     if (event.button !== 0 && event.pointerType === 'mouse') return;
     const target = event.target;
     if (!(target instanceof Element)) return;
-    const cardEl = target.closest<HTMLElement>('.hand-card[data-card-id], .battle-card[data-card-id]');
+    const directCard = target.closest<HTMLElement>('.hand-card[data-card-id], .battle-card[data-card-id]');
+    const playerSlot = target.closest<HTMLElement>('.slot[data-slot-side="player"]');
+    const cardEl = directCard ?? playerSlot?.querySelector<HTMLElement>('.battle-card[data-card-id]') ?? null;
     if (!cardEl) return;
     const id = cardEl.dataset.cardId;
     const side = (cardEl.dataset.side ?? 'player') as Side;
     if (!id) return;
-    this.drag = { id, side, origin: cardEl, pointerId: event.pointerId, x: event.clientX, y: event.clientY, startX: event.clientX, startY: event.clientY, started: false, ghost: null };
-    this.pressTimer = window.setTimeout(() => this.showPreview(id, side), 450);
+    const rect = cardEl.getBoundingClientRect();
+    this.drag = {
+      id, side, origin: cardEl, parent: cardEl.parentNode!, nextSibling: cardEl.nextSibling,
+      originalStyle: cardEl.getAttribute('style'), originalClassName: cardEl.className,
+      pointerId: event.pointerId, x: event.clientX, y: event.clientY,
+      startX: event.clientX, startY: event.clientY,
+      offsetX: event.clientX - rect.left, offsetY: event.clientY - rect.top,
+      started: false, previewOpened: false,
+    };
+    this.pressTimer = window.setTimeout(() => {
+      if (!this.drag || this.drag.pointerId !== event.pointerId || this.drag.started) return;
+      this.drag.previewOpened = true;
+      this.showPreview(id, side);
+    }, 450);
   };
 
   private onPointerMove = (event: PointerEvent): void => {
@@ -208,16 +248,26 @@ export class GameApp {
     const distance = Math.hypot(drag.x - drag.startX, drag.y - drag.startY);
     if (distance > 8) {
       window.clearTimeout(this.pressTimer);
+      if (drag.side !== 'player') return;
       if (!drag.started) {
         drag.started = true;
-        const ghost = drag.origin.cloneNode(true) as HTMLElement;
-        ghost.className = 'drag-ghost';
-        ghost.style.left = `${drag.x}px`; ghost.style.top = `${drag.y}px`;
-        document.body.appendChild(ghost);
-        drag.ghost = ghost;
-        drag.origin.classList.add('is-dragging');
+        drag.origin.classList.add('is-physical-dragging');
+        drag.origin.style.position = 'fixed';
+        drag.origin.style.left = `${drag.x - drag.offsetX}px`;
+        drag.origin.style.top = `${drag.y - drag.offsetY}px`;
+        drag.origin.style.width = `${drag.origin.getBoundingClientRect().width}px`;
+        drag.origin.style.height = `${drag.origin.getBoundingClientRect().height}px`;
+        drag.origin.style.maxHeight = 'none';
+        drag.origin.style.margin = '0';
+        drag.origin.style.transform = 'none';
+        drag.origin.style.transition = 'none';
+        drag.origin.style.zIndex = '250';
+        drag.origin.style.pointerEvents = 'none';
+        drag.origin.style.opacity = '1';
+        document.body.appendChild(drag.origin);
       }
-      if (drag.ghost) { drag.ghost.style.left = `${drag.x}px`; drag.ghost.style.top = `${drag.y}px`; }
+      drag.origin.style.left = `${drag.x - drag.offsetX}px`;
+      drag.origin.style.top = `${drag.y - drag.offsetY}px`;
     }
   };
 
@@ -225,14 +275,21 @@ export class GameApp {
     const drag = this.drag;
     if (!drag || drag.pointerId !== event.pointerId) return;
     window.clearTimeout(this.pressTimer);
-    drag.ghost?.remove();
-    drag.origin.classList.remove('is-dragging');
     if (drag.started) {
       const target = document.elementFromPoint(event.clientX, event.clientY)?.closest<HTMLElement>('[data-slot-side], #hand-area, #enemy-life-target, #player-life-target') ?? null;
-      if (drag.side === 'player') this.completePlayerDrop(drag.id, target);
-      else if (target?.dataset.slotSide === 'enemy' && this.isSelectedSpell('damage')) this.tryCast({ kind: 'unit', side: 'enemy', slot: Number(target.dataset.slot) });
+      const before = this.state;
+      this.suppressClickUntil = performance.now() + 100;
+      this.restoreDraggedCard(drag, false);
+      this.drag = null;
+      this.completePlayerDrop(drag.id, target);
+      if (this.state === before) {
+        this.restoreDraggedCard(drag, true);
+        this.render();
+      }
+    } else {
+      if (drag.previewOpened) this.suppressClickUntil = performance.now() + 100;
+      this.drag = null;
     }
-    this.drag = null;
   };
 
   private completePlayerDrop(instanceId: string, target: HTMLElement | null): void {
@@ -260,7 +317,24 @@ export class GameApp {
     else if (target.dataset.slotSide === 'player') this.transition(moveTroop(this.state, 'player', from, Number(target.dataset.slot)), 'O destino precisa estar vazio.');
   }
 
-  private onPointerCancel = (): void => { window.clearTimeout(this.pressTimer); this.drag?.ghost?.remove(); this.drag?.origin.classList.remove('is-dragging'); this.drag = null; };
+  private onPointerCancel = (): void => {
+    window.clearTimeout(this.pressTimer);
+    const drag = this.drag;
+    if (!drag) return;
+    if (drag.started) this.restoreDraggedCard(drag, true);
+    this.drag = null;
+    this.render();
+  };
+
+  private restoreDraggedCard(drag: ActiveDrag, reinsert: boolean): void {
+    const { origin } = drag;
+    if (drag.originalStyle === null) origin.removeAttribute('style');
+    else origin.setAttribute('style', drag.originalStyle);
+    origin.className = drag.originalClassName;
+    if (!reinsert) { origin.remove(); return; }
+    if (drag.nextSibling?.parentNode === drag.parent) drag.parent.insertBefore(origin, drag.nextSibling);
+    else drag.parent.appendChild(origin);
+  }
 
   private transition(result: Transition, failureMessage?: string): void {
     if (!result.events.length && failureMessage) { this.toast(failureMessage); return; }
@@ -402,8 +476,7 @@ export class GameApp {
     this.renderGrid('enemy', enemy.slots);
     this.renderSigils('player', player.sigils);
     this.renderSigils('enemy', enemy.sigils);
-    const hand = this.root.querySelector<HTMLElement>('#hand-area');
-    if (hand) hand.innerHTML = player.hand.length ? player.hand.map((card, index) => this.handMarkup(card, index, player.hand.length)).join('') : '<div class="hand-empty">Sua mão está vazia.<br>Compre uma carta no deck.</div>';
+    this.renderHand(player.hand);
     this.setText('#hand-count', `${player.hand.length}/${balance.handLimit}`);
     this.setText('#deck-count', String(player.deck.length));
     this.setText('#player-life-value', String(player.life));
@@ -420,7 +493,40 @@ export class GameApp {
     if (badge) { const drawn = Math.min(balance.deckSize, player.cardsDrawn); badge.style.setProperty('--deck-progress', `${drawn / balance.deckSize * 100}%`); badge.setAttribute('aria-valuemax', String(balance.deckSize)); badge.setAttribute('aria-valuenow', String(drawn)); }
     const status = this.root.querySelector<HTMLElement>('#player-status');
     if (status) status.textContent = this.state.phase === 'finished' ? 'Partida encerrada' : `${enemy.hand.length} cartas ocultas · sem acesso à mão adversária`;
-    this.root.querySelectorAll('.hand-card').forEach((element) => element.classList.toggle('is-selected', element.getAttribute('data-card-id') === this.selectedId));
+    this.syncSelection();
+  }
+
+  private renderHand(cards: CardInstance[]): void {
+    const hand = this.root.querySelector<HTMLElement>('#hand-area');
+    if (!hand) return;
+    const activeDragId = this.drag?.started ? this.drag.id : null;
+    const inHand = cards.filter((card) => card.instanceId !== activeDragId);
+    const existing = new Map(Array.from(hand.querySelectorAll<HTMLElement>('.hand-card[data-card-id]'), (el) => [el.dataset.cardId!, el]));
+    if (inHand.length === 0) {
+      existing.forEach((element) => element.remove());
+      if (!hand.querySelector('.hand-empty')) hand.innerHTML = '<div class="hand-empty">Sua mão está vazia.<br>Compre uma carta no deck.</div>';
+      return;
+    }
+    hand.querySelector('.hand-empty')?.remove();
+    const wanted: HTMLElement[] = [];
+    inHand.forEach((card, index) => {
+      const template = document.createElement('template');
+      template.innerHTML = this.handMarkup(card, index, cards.length).trim();
+      const desired = template.content.firstElementChild as HTMLElement;
+      const element = existing.get(card.instanceId);
+      if (element) {
+        for (const attribute of Array.from(desired.attributes)) {
+          if (element.getAttribute(attribute.name) !== attribute.value) element.setAttribute(attribute.name, attribute.value);
+        }
+        wanted.push(element);
+      } else wanted.push(desired);
+    });
+    const keep = new Set(wanted);
+    Array.from(hand.querySelectorAll<HTMLElement>('.hand-card[data-card-id]')).forEach((element) => { if (!keep.has(element)) element.remove(); });
+    wanted.forEach((element, index) => {
+      const current = hand.children[index];
+      if (current !== element) hand.insertBefore(element, current ?? null);
+    });
   }
 
   private renderGrid(side: Side, slots: Array<CardInstance | null>): void {
@@ -429,37 +535,112 @@ export class GameApp {
     const front = frontRow(side);
     grid.style.gridTemplateColumns = `repeat(${topology.columns}, minmax(0, 1fr))`;
     grid.style.gridTemplateRows = `repeat(${topology.rows}, minmax(0, 1fr))`;
-    grid.innerHTML = slots.map((card, slot) => {
+    slots.forEach((card, slot) => {
       const [row, col] = [Math.floor(slot / topology.columns), slot % topology.columns];
-      const filled = card ? this.unitMarkup(card, side) : `<span class="empty-rune" aria-hidden="true">✧<small>${row === front ? 'FRENTE' : 'RETAGUARDA'}</small></span>`;
-      return `<button class="slot ${side === 'enemy' ? 'enemy-slot' : 'player-slot'}${this.selectedId === card?.instanceId ? ' is-selected' : ''}" type="button" data-slot-side="${side}" data-side="${side}" data-slot="${slot}" data-row="${row}" data-column="${col}" aria-label="${side === 'player' ? 'Seu' : 'Adversário'}: ${row === front ? 'linha da frente' : 'retaguarda'}, coluna ${col + 1}${card ? `, ${getCardDefinition(card.definitionId).name}` : ', vazio'}">${filled}</button>`;
-    }).join('');
+      const displayedCard = card && !this.isBeingDragged(card) ? card : null;
+      const filled = displayedCard ? this.unitMarkup(displayedCard, side) : `<span class="empty-rune" aria-hidden="true">✧<small>${row === front ? 'FRENTE' : 'RETAGUARDA'}</small></span>`;
+      const label = `${side === 'player' ? 'Seu' : 'Adversário'}: ${row === front ? 'linha da frente' : 'retaguarda'}, coluna ${col + 1}${displayedCard ? `, ${getCardDefinition(displayedCard.definitionId).name}` : ', vazio'}`;
+      let button = grid.children[slot] as HTMLButtonElement | undefined;
+      if (!button || Number(button.dataset.slot) !== slot) {
+        const template = document.createElement('template');
+        template.innerHTML = `<button class="slot ${side === 'enemy' ? 'enemy-slot' : 'player-slot'}" type="button" data-slot-side="${side}" data-side="${side}" data-slot="${slot}" data-row="${row}" data-column="${col}" aria-label="${this.escapeAttribute(label)}">${filled}</button>`;
+        const created = template.content.firstElementChild as HTMLButtonElement;
+        if (button) grid.replaceChild(created, button); else grid.appendChild(created);
+        button = created;
+      } else {
+        button.className = `slot ${side === 'enemy' ? 'enemy-slot' : 'player-slot'}${this.selectedId === displayedCard?.instanceId ? ' is-selected' : ''}`;
+        button.setAttribute('aria-label', this.escapeAttribute(label));
+        const currentCard = button.querySelector<HTMLElement>('.battle-card[data-card-id]');
+        const currentId = currentCard?.dataset.cardId ?? null;
+        const shouldReplace = displayedCard
+          ? currentId !== displayedCard.instanceId || button.children.length !== 1
+          : currentId !== null || button.children.length !== 1 || !button.firstElementChild?.classList.contains('empty-rune');
+        if (shouldReplace) button.innerHTML = filled;
+        else if (displayedCard && currentCard) {
+          const details = this.cardDetails(displayedCard);
+          currentCard.setAttribute('aria-label', this.escapeAttribute(details));
+          currentCard.setAttribute('title', this.escapeAttribute(details));
+        }
+      }
+      button.dataset.slotSide = side;
+      button.dataset.side = side;
+      button.dataset.row = String(row);
+      button.dataset.column = String(col);
+    });
   }
 
   private renderSigils(side: Side, sigils: Array<CardInstance | null>): void {
     const target = this.root.querySelector<HTMLElement>(side === 'player' ? '#player-secrets' : '#enemy-secrets');
     if (!target) return;
-    target.innerHTML = sigils.map((card, slot) => {
-      const content = !card ? '<span class="empty-rune" aria-hidden="true">✧</span>' : card.revealed ? this.unitMarkup(card, side, true) : `<img class="card-placeholder-image sigil-placeholder-image" src="${CARD_PLACEHOLDER_SRC}" alt="" draggable="false">`;
-      return `<button class="slot secret-slot ${side === 'enemy' ? 'enemy-slot' : 'player-slot'}" type="button" data-slot-side="${side}" data-slot-kind="sigil" data-slot="${slot}" aria-label="${side === 'player' ? 'Seu' : 'Adversário'}: sigilo ${slot + 1}${card?.revealed ? `, ${getCardDefinition(card.definitionId).name}` : card ? ', oculto' : ', vazio'}">${content}</button>`;
-    }).join('');
+    sigils.forEach((card, slot) => {
+      const displayedCard = card && !this.isBeingDragged(card) ? card : null;
+      const content = !displayedCard ? '<span class="empty-rune" aria-hidden="true">✧</span>' : displayedCard.revealed
+        ? this.unitMarkup(displayedCard, side, true)
+        : `<img class="card-placeholder-image sigil-placeholder-image" src="${CARD_PLACEHOLDER_SRC}" alt="" draggable="false">`;
+      const label = `${side === 'player' ? 'Seu' : 'Adversário'}: sigilo ${slot + 1}${displayedCard?.revealed ? `, ${getCardDefinition(displayedCard.definitionId).name}` : displayedCard ? ', oculto' : ', vazio'}`;
+      let button = target.children[slot] as HTMLButtonElement | undefined;
+      if (!button) {
+        const template = document.createElement('template');
+        template.innerHTML = `<button class="slot secret-slot ${side === 'enemy' ? 'enemy-slot' : 'player-slot'}" type="button">${content}</button>`;
+        button = template.content.firstElementChild as HTMLButtonElement;
+        target.appendChild(button);
+      }
+      const cardId = displayedCard?.instanceId ?? '';
+      const revealed = displayedCard?.revealed ? 'true' : 'false';
+      const changed = button.dataset.sigilId !== cardId || button.dataset.sigilRevealed !== revealed;
+      button.className = `slot secret-slot ${side === 'enemy' ? 'enemy-slot' : 'player-slot'}${this.selectedId === displayedCard?.instanceId ? ' is-selected' : ''}`;
+      button.dataset.slotSide = side;
+      button.dataset.slotKind = 'sigil';
+      button.dataset.slot = String(slot);
+      button.dataset.sigilId = cardId;
+      button.dataset.sigilRevealed = revealed;
+      button.setAttribute('aria-label', this.escapeAttribute(label));
+      if (changed) button.innerHTML = content;
+      else if (displayedCard?.revealed) {
+        const unit = button.querySelector<HTMLElement>('.battle-card');
+        if (unit) {
+          const details = this.cardDetails(displayedCard);
+          unit.setAttribute('aria-label', this.escapeAttribute(details));
+          unit.setAttribute('title', this.escapeAttribute(details));
+        }
+      }
+    });
+    while (target.children.length > sigils.length) target.lastElementChild?.remove();
+  }
+
+  private isBeingDragged(card: CardInstance): boolean {
+    return Boolean(this.drag?.started && this.drag.id === card.instanceId);
+  }
+
+  private syncSelection(): void {
+    this.root.querySelectorAll<HTMLElement>('.hand-card[data-card-id]').forEach((element, index) => {
+      const selected = element.dataset.cardId === this.selectedId;
+      element.classList.toggle('is-selected', selected);
+      element.style.zIndex = selected ? '40' : String(index + 3);
+    });
+    this.root.querySelectorAll<HTMLElement>('.slot').forEach((slot) => {
+      const id = slot.querySelector<HTMLElement>('.battle-card[data-card-id]')?.dataset.cardId ?? slot.dataset.sigilId ?? null;
+      slot.classList.toggle('is-selected', this.selectedId !== null && id === this.selectedId);
+    });
   }
 
   private handMarkup(card: CardInstance, index: number, total: number): string {
     const definition = getCardDefinition(card.definitionId);
+    const artSrc = definition.kind === 'troop' ? TROOP_PLACEHOLDER_SRC : CARD_PLACEHOLDER_SRC;
     const area = this.root.querySelector<HTMLElement>('#hand-area');
     const width = area?.clientWidth || 360;
     const spacing = Math.min(61, Math.max(14, (width - 82) / Math.max(1, total - 1)));
     const offset = (index - (total - 1) / 2) * spacing;
     const angle = (index - (total - 1) / 2) * Math.min(2.1, 11 / Math.max(1, total - 1));
     const details = this.cardDetails(card);
-    return `<button class="hand-card kind-${definition.kind}${this.selectedId === card.instanceId ? ' is-selected' : ''}" type="button" data-card-id="${card.instanceId}" data-side="player" data-foundation="${definition.foundation}" style="left:calc(50% + ${offset}px);--angle:${angle}deg;z-index:${this.selectedId === card.instanceId ? 40 : index + 3}" aria-label="${this.escapeAttribute(`${details}. Selecionar ou arrastar`)}" title="${this.escapeAttribute(details)}"><img class="card-placeholder-image" src="${CARD_PLACEHOLDER_SRC}" alt="" draggable="false"></button>`;
+    return `<button class="hand-card kind-${definition.kind}${this.selectedId === card.instanceId ? ' is-selected' : ''}" type="button" data-card-id="${card.instanceId}" data-side="player" data-foundation="${definition.foundation}" style="left:calc(50% + ${offset}px);--angle:${angle}deg;z-index:${this.selectedId === card.instanceId ? 40 : index + 3}" aria-label="${this.escapeAttribute(`${details}. Selecionar ou arrastar`)}" title="${this.escapeAttribute(details)}"><img class="card-placeholder-image" src="${artSrc}" alt="" draggable="false"></button>`;
   }
 
   private unitMarkup(card: CardInstance, side: Side, secret = false): string {
     const definition = getCardDefinition(card.definitionId);
+    const artSrc = definition.kind === 'troop' ? TROOP_PLACEHOLDER_SRC : CARD_PLACEHOLDER_SRC;
     const details = this.cardDetails(card);
-    return `<div class="battle-card${side === 'enemy' ? ' enemy-unit' : ''}${secret ? ' sigil-card' : ''}" data-card-id="${card.instanceId}" data-side="${side}" data-foundation="${definition.foundation}" role="img" aria-label="${this.escapeAttribute(details)}" title="${this.escapeAttribute(details)}"><img class="card-placeholder-image" src="${CARD_PLACEHOLDER_SRC}" alt="" draggable="false"></div>`;
+    return `<div class="battle-card${side === 'enemy' ? ' enemy-unit' : ''}${secret ? ' sigil-card' : ''}" data-card-id="${card.instanceId}" data-side="${side}" data-foundation="${definition.foundation}" role="img" aria-label="${this.escapeAttribute(details)}" title="${this.escapeAttribute(details)}"><img class="card-placeholder-image" src="${artSrc}" alt="" draggable="false"></div>`;
   }
 
   private showPreview(instanceId: string, side: Side): void {
@@ -470,7 +651,8 @@ export class GameApp {
     const wrap = this.root.querySelector<HTMLElement>('#card-preview-wrap');
     if (!overlay || !wrap) return;
     const details = this.cardDetails(card);
-    wrap.innerHTML = `<div class="preview-shell ${definition.kind}" data-foundation="${definition.foundation}" role="img" aria-label="${this.escapeAttribute(details)}" title="${this.escapeAttribute(details)}"><img class="card-placeholder-image" src="${CARD_PLACEHOLDER_SRC}" alt=""></div>`;
+    const artSrc = definition.kind === 'troop' ? TROOP_PLACEHOLDER_SRC : CARD_PLACEHOLDER_SRC;
+    wrap.innerHTML = `<div class="preview-shell ${definition.kind}" data-foundation="${definition.foundation}" role="img" aria-label="${this.escapeAttribute(details)}" title="${this.escapeAttribute(details)}"><img class="card-placeholder-image" src="${artSrc}" alt=""></div>`;
     overlay.classList.add('open'); overlay.setAttribute('aria-hidden', 'false');
   }
 

@@ -76,7 +76,6 @@ button{font:inherit;cursor:pointer;color:inherit}button:focus-visible,[tabindex]
 .card-art{height:72%;min-height:0;position:relative}.hand-top{position:absolute;top:2px;left:2px;right:2px;display:flex;align-items:center;justify-content:space-between}.card-cost{display:grid;place-items:center;width:15px;height:15px;border-radius:50%;background:var(--night);border:1px solid var(--sun);color:var(--cream);font:900 8px system-ui}.card-footer{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:2px;background:linear-gradient(90deg,#02031A,#021B2B);border-top:1px solid var(--card-accent);min-height:0;max-width:100%}.card-title{font-size:7px;text-align:center;font-weight:900;width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.card-kind{display:none}.kind-hidden{--card-accent:var(--wine)}.kind-spell{--card-accent:var(--sun)}
 .toast{position:absolute;z-index:70;top:48%;left:50%;transform:translate(-50%,-50%) translateY(11px);opacity:0;pointer-events:none;min-width:170px;max-width:90%;padding:9px 12px;border-radius:8px;background:#02031af2;border:1px solid var(--sun);color:var(--cream);font-size:11px;font-weight:800;transition:opacity .2s,transform .2s;text-align:center;box-shadow:0 8px 22px #020001aa}.toast.visible{opacity:1;transform:translate(-50%,-50%) translateY(0)}
 .fly-card{position:fixed;z-index:200;pointer-events:none;width:48px;height:68px;border:2px solid var(--cream);border-radius:6px;background:radial-gradient(circle,#2779BB,#020F59);display:grid;place-items:center;box-shadow:0 8px 20px #000a,inset 0 0 0 3px #FBE18566}.fly-card svg{height:34px;width:34px}
-.drag-ghost{position:fixed;z-index:210;pointer-events:none;transform:translate(-50%,-56%) rotate(-3deg);width:80px;height:111px;border-radius:6px;background:var(--night);box-shadow:0 16px 30px #000b}.drag-ghost .hand-card{position:relative;top:0;left:0;transform:none;width:100%;height:100%;max-height:100%}.drag-ghost .battle-card{height:100%;width:100%}.drag-ghost .battle-card .unit-title{font-size:9px}
 .cast-burst{position:absolute;z-index:60;pointer-events:none;width:8px;height:8px;border:2px solid var(--sun);border-radius:50%;box-shadow:0 0 18px var(--sun);animation:burst .6s ease-out both}@keyframes burst{from{opacity:1;transform:translate(-50%,-50%) scale(.5)}to{opacity:0;transform:translate(-50%,-50%) scale(13)}}
 .place-pop{animation:popin .35s cubic-bezier(.17,1.7,.4,1)}@keyframes popin{0%{transform:scale(.77);filter:brightness(1.6)}to{transform:scale(1);filter:brightness(1)}}.flip-reveal{animation:flip .53s both}@keyframes flip{from{transform:rotateY(90deg);filter:brightness(2)}to{transform:rotateY(0)}}
 .overlay{position:absolute;inset:0;background:#02031aec;z-index:100;display:none;align-items:center;justify-content:center;padding:15px;backdrop-filter:blur(6px)}.overlay.open{display:flex}.help-panel{width:100%;max-height:min(85dvh,750px);overflow:auto;max-width:395px;background:linear-gradient(160deg,var(--arena-1),var(--bg-2));border:1px solid var(--sun);border-radius:13px;padding:20px 17px;box-shadow:0 25px 50px #000b}.help-tag{font-size:9px;color:var(--cream);letter-spacing:.16em;text-transform:uppercase}.help-panel h2{margin:6px 0 9px;font:700 19px Georgia,serif;color:var(--cream)}.help-panel p{font-size:12px;line-height:1.55;color:var(--paper)}.help-panel b{color:var(--sun)}.close-help,.theme-btn{display:block;width:100%;background:var(--river);border:1px solid var(--cream);border-radius:8px;padding:9px;margin-top:12px;font-weight:800;font-size:12px}.theme-btn.active{box-shadow:0 0 0 2px var(--sun);border-color:var(--sun)}.theme-swatches{display:grid;grid-template-columns:repeat(5,1fr);height:19px;overflow:hidden;border-radius:4px;border:1px solid #FBE18530;margin:5px 0 8px}.theme-swatches span{display:block}.theme-row{margin:11px 0}.theme-row label{font-size:11px;font-weight:800}.theme-option-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:7px}.theme-option-grid .theme-btn{font-size:10px;margin:6px 0 0;padding:9px 3px}
@@ -253,7 +252,6 @@ button{font:inherit;cursor:pointer;color:inherit}button:focus-visible,[tabindex]
 .field-band.enemy .sigil-side{margin-left:9px;padding:0}
 .field-band.player .sigil-side{margin-right:9px;padding:0}
 /* Sem efeito de seleção visual para feitiços */
-.hand-card.kind-spell.is-selected{transform:translateX(-50%) rotate(var(--angle))!important;box-shadow:0 8px 18px #000b!important}
 /* Preview da mesma carta: somente ampliá-la, sem painel azul ao redor */
 .card-preview-overlay,.card-preview-overlay.open{background:rgba(0,0,0,.36)!important;backdrop-filter:blur(2px)}
 .card-preview-overlay .card-preview-wrap{position:relative;display:block;flex:none;width:auto;height:auto;max-width:none;padding:0!important;overflow:visible;box-shadow:0 16px 50px #0009}
@@ -268,9 +266,6 @@ button{font:inherit;cursor:pointer;color:inherit}button:focus-visible,[tabindex]
 
 
 /* Compact mobile dock: allocate the recovered height to the arena, not dead space. */
-.drag-ghost{background:transparent!important;box-shadow:none!important;border:0!important;border-radius:0!important;overflow:visible!important;filter:drop-shadow(0 9px 12px #0009)}
-.drag-ghost .hand-card{position:relative!important;top:0!important;bottom:auto!important;left:0!important;width:100%!important;height:100%!important;max-height:none!important;transform:none!important;box-shadow:none!important;margin:0!important}
-.drag-ghost .battle-card{position:relative;width:100%;height:100%;box-shadow:none}
 @media(max-height:720px){.game-shell{grid-template-rows:6.5fr 35fr 1fr 35fr 22.5fr}}
 @media(min-height:900px){.game-shell{grid-template-rows:6.5fr 35.75fr 1fr 35.75fr 21fr}}
 
@@ -281,6 +276,7 @@ button{font:inherit;cursor:pointer;color:inherit}button:focus-visible,[tabindex]
 .preview-shell{display:block;width:min(74vw,270px);height:auto;max-height:calc(100dvh - 36px);aspect-ratio:433 / 577;border:0;border-radius:0;background:transparent;box-shadow:0 18px 40px #000c;overflow:visible;line-height:0}
 .secret-slot .sigil-placeholder-image{width:100%;height:100%;object-fit:contain}
 .game-shell,.game-shell *{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+.slot[data-slot-side="player"]{touch-action:none}
 
 /* Mensagens de rotina são anunciadas sem pop-up. Avisos ficam no cabeçalho, longe das cartas. */
 .toast{top:5px;left:50%;width:max-content;max-width:52%;min-width:0;padding:5px 8px;border-radius:6px;font-size:10px;line-height:1.25;transform:translateX(-50%) translateY(-5px);background:#091426f5;box-shadow:0 2px 6px #02031a99;white-space:normal;}
@@ -305,19 +301,20 @@ button{font:inherit;cursor:pointer;color:inherit}button:focus-visible,[tabindex]
 @keyframes rune-echo{0%{opacity:.9;transform:scale(.6)}100%{opacity:0;transform:scale(1.7)}}
 .fly-card{border-color:#FBE185b8;box-shadow:0 9px 21px #0008,0 0 15px #FAD75D19,inset 0 0 0 2px #FBE18542;will-change:transform,opacity}
 .fly-card::after{content:"";position:absolute;inset:-4px;border-radius:9px;box-shadow:0 0 16px #FBE18534;pointer-events:none}
-.hand-card.is-selected:not(.kind-spell){animation:hand-select 300ms var(--motion-out) both}
+.hand-card.is-selected{animation:hand-select 300ms var(--motion-out) both}
 @keyframes hand-select{from{transform:translateX(-50%) translateY(0) rotate(var(--angle)) scale(1)}to{transform:translateX(-50%) translateY(-13px) rotate(0deg) scale(1.055)}}
 .hand-card.just-drawn{animation:hand-arrive 330ms var(--motion-out) both}
 @keyframes hand-arrive{from{opacity:.35;filter:brightness(1.4)}to{opacity:1;filter:brightness(1)}}
-.drag-ghost{will-change:left,top,transform,opacity;transition:transform 115ms ease-out,opacity 140ms ease-out;filter:drop-shadow(0 12px 14px #000a)!important}
+.is-physical-dragging{position:fixed!important;z-index:250!important;transform:none!important;opacity:1!important;pointer-events:none!important;touch-action:none!important;filter:drop-shadow(0 12px 14px #000a)!important;will-change:left,top}
+.hand-card.kind-spell.is-selected{transform:translateX(-50%) translateY(-13px) rotate(0deg) scale(1.055)!important;box-shadow:0 0 0 1px #FBE185aa,0 12px 24px #0009!important}
 .card-preview-overlay.open{animation:preview-backdrop 190ms ease-out both}
 .card-preview-overlay.open .card-preview-wrap{animation:preview-in 240ms var(--motion-out) both;will-change:transform,opacity}
 @keyframes preview-backdrop{from{opacity:0}to{opacity:1}}
 @keyframes preview-in{from{opacity:.7;transform:translateY(8px) scale(.96)}to{opacity:1;transform:translateY(0) scale(1)}}
 .deck-button:active{transform:translateY(2px) scale(.98);transition:transform 130ms ease}
 @media(prefers-reduced-motion:reduce){
- .hand-card,.slot,.drag-ghost{transition:none!important}
- .place-pop,.flip-reveal,.cast-burst,.hand-card.just-drawn,.hand-card.is-selected:not(.kind-spell),.card-preview-overlay.open,.card-preview-overlay.open .card-preview-wrap{animation:none!important}
+ .hand-card,.slot,.is-physical-dragging{transition:none!important}
+ .place-pop,.flip-reveal,.cast-burst,.hand-card.just-drawn,.hand-card.is-selected,.card-preview-overlay.open,.card-preview-overlay.open .card-preview-wrap{animation:none!important}
  .fly-card{transition:none!important}
 }
 
