@@ -1,0 +1,57 @@
+@import './prototype-theme.css';
+
+:root { color-scheme: dark; --motion-out: cubic-bezier(.2,.78,.24,1); --motion-settle: cubic-bezier(.17,.82,.22,1); }
+html, body, #app { width: 100%; height: 100%; margin: 0; }
+body { overscroll-behavior: none; }
+.app-frame { height: 100dvh; width: 100%; display: flex; align-items: center; justify-content: center; isolation: isolate; }
+.game-shell { grid-template-rows: 6.5fr 31fr 2fr 31fr 29.5fr; }
+.side-life { appearance: none; border: 0; padding: 0; background: transparent; color: inherit; }
+.side-life.is-targetable { pointer-events: auto; cursor: pointer; }
+.side-life:focus-visible, .top-btn:focus-visible, .deck-button:focus-visible, .slot:focus-visible, .hand-card:focus-visible, .theme-btn:focus-visible, .close-help:focus-visible { outline: 2px solid #fbe185; outline-offset: 2px; }
+.life-label { writing-mode: vertical-rl; font: 700 7px system-ui, sans-serif; letter-spacing: .1em; color: var(--cream); }
+.side-life .life-track { pointer-events: none; }
+.side-life .life-value { pointer-events: none; }
+.slot, .top-btn, .theme-btn, .close-help, .deck-button, .side-life { color: var(--cream); font: inherit; }
+.slot { appearance: none; }
+.battle-card { cursor: grab; }
+.hand-card.kind-spell.is-selected { box-shadow: 0 0 0 2px var(--sun), 0 8px 18px #000b; }
+.slot .battle-card { pointer-events: none; }
+.slot[data-slot-side="enemy"] { cursor: crosshair; }
+.slot[data-slot-side="player"] { cursor: pointer; }
+.empty-rune small { font-family: system-ui, sans-serif; }
+.combat-projectile { position: fixed; z-index: 220; width: 15px; height: 15px; border-radius: 50%; pointer-events: none; background: radial-gradient(circle, #fff2bf 0 13%, #fbe185 25%, #ff6c2b 55%, transparent 73%); filter: drop-shadow(0 0 8px #fbe185); animation: attack-flight 470ms cubic-bezier(.2,.7,.3,1) forwards; }
+.combat-projectile--enemy { background: radial-gradient(circle, #fff 0 13%, #ff5b6f 35%, #c70c3b 58%, transparent 74%); filter: drop-shadow(0 0 8px #ff385e); }
+.battle-card.is-attacking { animation: unit-lunge 420ms var(--motion-out); }
+.battle-card.is-hit { animation: unit-impact 420ms ease-out; }
+.battle-card.is-healing { animation: unit-heal 520ms ease-out; }
+.destruction-ghost { position: fixed; z-index: 230; pointer-events: none; animation: unit-destroy 500ms ease-in forwards; }
+.place-pop { animation: card-settle 430ms var(--motion-settle) both; }
+.side-life.is-hit { filter: brightness(1.8); box-shadow: 0 0 14px #ff264d; }
+.side-life.is-healing { filter: brightness(1.7); box-shadow: 0 0 14px #44ff9b; }
+.impact-number { position: absolute; z-index: 230; left: 50%; top: 14%; color: #fff4d3; font: 900 17px system-ui; text-shadow: 0 2px 6px #000, 0 0 9px #ff2f46; pointer-events: none; animation: float-impact 820ms ease-out forwards; }
+.impact-number.is-healing { color: #c8ffc7; text-shadow: 0 2px 6px #000, 0 0 9px #40f079; }
+.result-overlay { z-index: 130; }
+.field-divider { position: relative; z-index: 4; display: grid; place-items: center; overflow: visible; background: linear-gradient(90deg,#010300,var(--bg-2),#010300); border-block: 1px solid #FAD75D50; }
+.field-divider .midline-symbol { height: 16px; width: 16px; display: grid; place-items: center; }
+.field-divider .midline-symbol svg { width: 100%; height: 100%; filter: drop-shadow(0 0 5px #FAD75D88); }
+.top-status, .my-status { min-width: 0; }
+.my-status { display: flex; align-items: center; justify-content: space-between; }
+.my-status .metrics { display: flex; flex-direction: column; gap: 0; }
+.my-status .metrics strong { color: var(--cream); }
+.my-status .metrics small { font-size: 7px; }
+.dock-header { display: flex; align-items: center; justify-content: space-between; padding: 4px 9px 0; font-size: 9px; color: var(--cream); }
+.selection-hint { display: block; color: #bbdec6; font-size: 8px; }
+.enemy-grid .battle-card { cursor: default; }
+.slot .battle-card .unit-title { font-size: clamp(6px,1.4vw,8px); }
+.back-small { font-size: 22px; }
+.help-panel p { margin-block: 8px; }
+@keyframes attack-flight { 0% { transform: translate(0,0) scale(.55); opacity: .4; } 25% { opacity: 1; } 100% { transform: translate(var(--dx),var(--dy)) scale(1.1); opacity: 0; } }
+@keyframes unit-lunge { 0%,100% { transform: translateY(0) scale(1); } 35% { transform: translateY(-5px) scale(1.04); } }
+@keyframes unit-impact { 0%,100% { filter: none; } 25%,60% { filter: brightness(2.1) saturate(.6); } 45% { transform: translateX(-3px); } 75% { transform: translateX(3px); } }
+@keyframes unit-heal { 0%,100% { filter: none; } 40% { filter: brightness(1.7) hue-rotate(70deg); box-shadow: 0 0 18px #55ff9b; } }
+@keyframes unit-destroy { 0% { opacity: 1; transform: scale(1); filter: brightness(1); } 45% { opacity: .85; transform: scale(1.06) rotate(2deg); filter: brightness(2); } 100% { opacity: 0; transform: scale(.75) translateY(-10px); filter: blur(7px); } }
+@keyframes float-impact { 0% { transform: translate(-50%,0) scale(.75); opacity: 0; } 18% { transform: translate(-50%,-5px) scale(1.1); opacity: 1; } 100% { transform: translate(-50%,-38px) scale(1); opacity: 0; } }
+@media (max-width: 450px) { .app-frame { align-items: stretch; } .game-shell { width: 100%; height: 100dvh; border-inline: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .combat-projectile, .battle-card.is-attacking, .battle-card.is-hit, .battle-card.is-healing, .impact-number, .destruction-ghost, .place-pop { animation-duration: .01ms !important; }
+}

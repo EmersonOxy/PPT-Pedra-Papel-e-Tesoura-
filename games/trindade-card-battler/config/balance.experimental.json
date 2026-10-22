@@ -1,0 +1,19 @@
+{
+  "rulesetId": "trindade-demo-experimental-v1",
+  "startingLife": 20,
+  "deckSize": 24,
+  "copiesPerDefinition": 2,
+  "handLimit": 6,
+  "fieldTopology": {
+    "rows": 2,
+    "columns": 3,
+    "frontRow": { "player": 0, "enemy": 1 },
+    "specialSpaces": [{ "kind": "sigil", "count": 2 }]
+  },
+  "attackIntervalMs": 3000,
+  "aiInitialDelayMs": 4000,
+  "aiActionIntervalMs": 4000,
+  "spellDamage": 2,
+  "spellHealing": 2,
+  "note": "Regras temporárias para playtest; não representam balanceamento ou decisões finais de design."
+}
