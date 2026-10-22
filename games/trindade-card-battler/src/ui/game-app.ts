@@ -5,7 +5,7 @@ import { frontRow } from '../game/targeting.ts';
 import { balance, boardSlotCount, topology } from '../game/config.ts';
 import type { CardInstance, GameEvent, GameState, Side, SpellTarget, Transition } from '../game/types.ts';
 
-const CARD_PLACEHOLDER_SRC = new URL('../assets/card-placeholder.png', import.meta.url).href;
+const CARD_PLACEHOLDER_SRC = new URL('../assets/card-placeholder.jpg', import.meta.url).href;
 const TROOP_PLACEHOLDER_SRC = new URL('../assets/troop-placeholder.png', import.meta.url).href;
 
 type ActiveDrag = {
