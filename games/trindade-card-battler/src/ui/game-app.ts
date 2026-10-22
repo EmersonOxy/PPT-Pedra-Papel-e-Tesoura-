@@ -4,7 +4,8 @@ import { advanceTime } from '../game/simulation.ts';
 import { frontRow } from '../game/targeting.ts';
 import { balance, boardSlotCount, topology } from '../game/config.ts';
 import type { CardInstance, GameEvent, GameState, Side, SpellTarget, Transition } from '../game/types.ts';
-import { cardArtwork } from './card-art.ts';
+
+const CARD_PLACEHOLDER_SRC = new URL('../assets/card-placeholder.png', import.meta.url).href;
 
 const sigil = '<svg viewBox="0 0 60 60" fill="none" aria-hidden="true" xmlns="http://www.w3.org/2000/svg"><path d="M30 4L53 45H7L30 4Z" stroke="#ddc58e" stroke-width="2"/><circle cx="30" cy="32" r="15" stroke="#78c9bc" stroke-width="2"/><path d="M30 16V47M15 32H45" stroke="#dbc58d" stroke-width="1.7"/><circle cx="30" cy="32" r="4" fill="#edcf92"/></svg>';
 
@@ -439,7 +440,7 @@ export class GameApp {
     const target = this.root.querySelector<HTMLElement>(side === 'player' ? '#player-secrets' : '#enemy-secrets');
     if (!target) return;
     target.innerHTML = sigils.map((card, slot) => {
-      const content = !card ? '<span class="empty-rune" aria-hidden="true">✧</span>' : card.revealed ? this.unitMarkup(card, side, true) : '<span class="back-small" aria-hidden="true">✦</span>';
+      const content = !card ? '<span class="empty-rune" aria-hidden="true">✧</span>' : card.revealed ? this.unitMarkup(card, side, true) : `<img class="card-placeholder-image sigil-placeholder-image" src="${CARD_PLACEHOLDER_SRC}" alt="" draggable="false">`;
       return `<button class="slot secret-slot ${side === 'enemy' ? 'enemy-slot' : 'player-slot'}" type="button" data-slot-side="${side}" data-slot-kind="sigil" data-slot="${slot}" aria-label="${side === 'player' ? 'Seu' : 'Adversário'}: sigilo ${slot + 1}${card?.revealed ? `, ${getCardDefinition(card.definitionId).name}` : card ? ', oculto' : ', vazio'}">${content}</button>`;
     }).join('');
   }
@@ -451,12 +452,14 @@ export class GameApp {
     const spacing = Math.min(61, Math.max(14, (width - 82) / Math.max(1, total - 1)));
     const offset = (index - (total - 1) / 2) * spacing;
     const angle = (index - (total - 1) / 2) * Math.min(2.1, 11 / Math.max(1, total - 1));
-    return `<button class="hand-card kind-${definition.kind}${this.selectedId === card.instanceId ? ' is-selected' : ''}" type="button" data-card-id="${card.instanceId}" data-side="player" data-foundation="${definition.foundation}" style="left:calc(50% + ${offset}px);--angle:${angle}deg;z-index:${this.selectedId === card.instanceId ? 40 : index + 3}" aria-label="${definition.name}, ${definition.kind === 'troop' ? 'tropa' : definition.kind === 'hidden' ? 'sigilo' : 'feitiço'}, selecionar ou arrastar"><div class="card-art">${cardArtwork(definition, card.instanceId)}<div class="hand-top"><span class="card-cost" aria-label="custo demonstrativo">${definition.cost}</span><span class="foundation-symbol">${definition.foundation[0].toUpperCase()}</span></div></div><div class="card-footer"><span class="card-title">${definition.name}</span><span class="card-kind">${definition.kind}</span></div></button>`;
+    const details = this.cardDetails(card);
+    return `<button class="hand-card kind-${definition.kind}${this.selectedId === card.instanceId ? ' is-selected' : ''}" type="button" data-card-id="${card.instanceId}" data-side="player" data-foundation="${definition.foundation}" style="left:calc(50% + ${offset}px);--angle:${angle}deg;z-index:${this.selectedId === card.instanceId ? 40 : index + 3}" aria-label="${this.escapeAttribute(`${details}. Selecionar ou arrastar`)}" title="${this.escapeAttribute(details)}"><img class="card-placeholder-image" src="${CARD_PLACEHOLDER_SRC}" alt="" draggable="false"></button>`;
   }
 
   private unitMarkup(card: CardInstance, side: Side, secret = false): string {
     const definition = getCardDefinition(card.definitionId);
-    return `<div class="battle-card${side === 'enemy' ? ' enemy-unit' : ''}${secret ? ' sigil-card' : ''}" data-card-id="${card.instanceId}" data-side="${side}" data-foundation="${definition.foundation}" role="img" aria-label="${definition.name}"><div class="unit-art">${cardArtwork(definition, card.instanceId)}<div class="art-title"><span class="foundation-symbol">${definition.foundation[0].toUpperCase()}</span><span class="unit-level">${definition.cost}</span></div></div><div class="unit-bottom"><span class="unit-title">${definition.name}</span>${definition.kind === 'troop' ? `<span class="unit-stats"><span class="stat">${definition.attack}</span><span class="stat hp">${card.health}</span></span>` : ''}</div>${definition.kind === 'troop' ? '<span class="ready-line"></span>' : ''}</div>`;
+    const details = this.cardDetails(card);
+    return `<div class="battle-card${side === 'enemy' ? ' enemy-unit' : ''}${secret ? ' sigil-card' : ''}" data-card-id="${card.instanceId}" data-side="${side}" data-foundation="${definition.foundation}" role="img" aria-label="${this.escapeAttribute(details)}" title="${this.escapeAttribute(details)}"><img class="card-placeholder-image" src="${CARD_PLACEHOLDER_SRC}" alt="" draggable="false"></div>`;
   }
 
   private showPreview(instanceId: string, side: Side): void {
@@ -466,8 +469,22 @@ export class GameApp {
     const overlay = this.root.querySelector<HTMLElement>('#card-preview-overlay');
     const wrap = this.root.querySelector<HTMLElement>('#card-preview-wrap');
     if (!overlay || !wrap) return;
-    wrap.innerHTML = `<div class="preview-shell ${definition.kind}" data-foundation="${definition.foundation}"><div class="preview-art">${cardArtwork(definition, card.instanceId)}<div class="preview-head"><span class="card-cost">${definition.cost}</span><span class="foundation-symbol">${definition.foundation[0].toUpperCase()}</span></div></div><div class="preview-body"><div class="preview-name">${definition.name}</div><div class="preview-kind">${definition.kind} · ${definition.foundation}</div><div class="preview-text">${definition.description}</div>${definition.kind === 'troop' ? `<div class="preview-stats"><span class="stat">${definition.attack}</span><span class="stat hp">${card.health}</span></div>` : ''}</div></div>`;
+    const details = this.cardDetails(card);
+    wrap.innerHTML = `<div class="preview-shell ${definition.kind}" data-foundation="${definition.foundation}" role="img" aria-label="${this.escapeAttribute(details)}" title="${this.escapeAttribute(details)}"><img class="card-placeholder-image" src="${CARD_PLACEHOLDER_SRC}" alt=""></div>`;
     overlay.classList.add('open'); overlay.setAttribute('aria-hidden', 'false');
+  }
+
+  private cardDetails(card: CardInstance): string {
+    const definition = getCardDefinition(card.definitionId);
+    const kind = definition.kind === 'troop' ? 'tropa' : definition.kind === 'hidden' ? 'sigilo' : 'feitiço';
+    const values = [definition.name, kind, `custo ${definition.cost}`];
+    if (definition.kind === 'troop') values.push(`${definition.attack} ataque`, `${card.health} vida`);
+    values.push(definition.description);
+    return values.join(' · ');
+  }
+
+  private escapeAttribute(value: string): string {
+    return value.replaceAll('&', '&amp;').replaceAll('"', '&quot;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
   }
 
   private setText(selector: string, value: string): void { const element = this.root.querySelector<HTMLElement>(selector); if (element) element.textContent = value; }

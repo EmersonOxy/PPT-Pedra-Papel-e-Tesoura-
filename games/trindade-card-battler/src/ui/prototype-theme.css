@@ -274,6 +274,14 @@ button{font:inherit;cursor:pointer;color:inherit}button:focus-visible,[tabindex]
 @media(max-height:720px){.game-shell{grid-template-rows:6.5fr 35fr 1fr 35fr 22.5fr}}
 @media(min-height:900px){.game-shell{grid-template-rows:6.5fr 35.75fr 1fr 35.75fr 21fr}}
 
+/* TEMPORARY CARD ART REVIEW: show the supplied complete card face at every face-up size. */
+.card-placeholder-image{display:block;width:100%;height:100%;object-fit:contain;object-position:center;pointer-events:none;user-select:none;-webkit-user-drag:none}
+.hand-card{padding:0;border:0;background:transparent;line-height:0}
+.battle-card{display:block;border:0;border-radius:0;background:transparent;box-shadow:none;line-height:0}
+.preview-shell{display:block;width:min(74vw,270px);height:auto;max-height:calc(100dvh - 36px);aspect-ratio:433 / 577;border:0;border-radius:0;background:transparent;box-shadow:0 18px 40px #000c;overflow:visible;line-height:0}
+.secret-slot .sigil-placeholder-image{width:100%;height:100%;object-fit:contain}
+.game-shell,.game-shell *{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+
 /* Mensagens de rotina são anunciadas sem pop-up. Avisos ficam no cabeçalho, longe das cartas. */
 .toast{top:5px;left:50%;width:max-content;max-width:52%;min-width:0;padding:5px 8px;border-radius:6px;font-size:10px;line-height:1.25;transform:translateX(-50%) translateY(-5px);background:#091426f5;box-shadow:0 2px 6px #02031a99;white-space:normal;}
 .toast.visible{transform:translateX(-50%) translateY(0);}
