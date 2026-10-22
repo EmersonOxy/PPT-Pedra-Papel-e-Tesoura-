@@ -22,7 +22,7 @@ Todos os arquivos mantêm a proporção 63:88 da moldura. O fundo amarelo está 
 4. Nome, números e descrição como texto HTML dinâmico.
 5. `frame.png`, cujo canal alfa deixa as camadas inferiores visíveis.
 
-As posições usam percentuais da tela 63:88: título em `left 8% / top 4.1%`, ilustração em `left 8% / top 13% / width 84% / height 49%`, indicadores em `top 66.2%`, descrição em `top 79%` e cristal em `right 5.7% / top 7.5%`. Assim, a composição mantém a escala entre mão, campo e ampliação.
+As posições usam percentuais da tela 63:88: título em `left 8% / top 4.1%`, ilustração em `left 8% / top 13% / width 84% / height 49%`, indicadores em `top 66.2%`, descrição em `top 79%` e cristal sobre a referência da moldura em `right 0% / top 7.8% / width 15.5% / height 16%`, com deslocamento de `-8.2%` na horizontal e `3.3%` na vertical, relativo à própria imagem, e escala `1.08`. Esses deslocamentos correspondem a cerca de 2 px para a direita e 2 px para baixo no tamanho da captura de referência, escalando com a carta nos outros contextos.
 
 ## Dados e novas cartas
 
