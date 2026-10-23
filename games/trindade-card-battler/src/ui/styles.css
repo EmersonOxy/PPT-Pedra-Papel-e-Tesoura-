@@ -320,3 +320,7 @@ body { overscroll-behavior: none; }
 .dock-main { grid-template-columns: minmax(0,1fr); }
 
 .arena-board .side-life .life-track i { border-radius: 0; }
+/* Absolute dimensions avoid an empty grid row collapsing the central draw button. */
+.arena-board .deck-button { position: absolute; inset: 6% 8%; width: 84%; height: 88%; display: block; touch-action: manipulation; }
+.arena-board .secret-slot > .card-back, .arena-board .secret-slot > .battle-card { position: absolute; inset: 3%; width: 94%; height: 94%; min-width: 0; min-height: 0; aspect-ratio: auto; transform: none; }
+.arena-board .side-life .life-value { position: absolute; top: 50%; left: 0; width: 100%; margin: 0; transform: translateY(-50%); text-align: center; }
