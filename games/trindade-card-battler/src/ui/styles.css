@@ -331,6 +331,6 @@ body { overscroll-behavior: none; }
 .arena-board .enemy-life .life-track i { top: 0; bottom: auto; }
 .enemy-deck-display { position: absolute; left: 59%; top: 41.5%; width: 17%; height: 17%; pointer-events: none; }
 .enemy-deck-display .deck-card-back { object-fit: contain; }
-.enemy-deck-display { left: calc(59% - 2px); }
+.enemy-deck-display { left: calc(59% + 2px); }
 .arena-board .deck-column::after { content: attr(data-draw-status); position: absolute; top: 100%; left: 50%; transform: translateX(-50%); width: max-content; max-width: 160%; padding: 3px 5px; border-radius: 4px; background: #07121bea; color: #fff0bd; font: 700 8px/1.25 system-ui,sans-serif; text-align: center; pointer-events: none; }
 .arena-board .deck-button:disabled { filter: brightness(.65); }
