@@ -5,7 +5,7 @@ import { cardDefinitions, getCardDefinition } from '../src/game/cards.ts';
 import { attackIntervalFor } from '../src/game/config.ts';
 import { createGame } from '../src/game/engine.ts';
 import { advanceTime } from '../src/game/simulation.ts';
-import { attackProfileClass, attackProjectileClass, handFanSpacing, shouldHighlightDeck } from '../src/ui/combat-presentation.ts';
+import { attackProfileClass, attackProjectileClass, cooldownSweepDegrees, handFanSpacing, shouldHighlightDeck } from '../src/ui/combat-presentation.ts';
 import type { CardInstance, GameState, Side } from '../src/game/types.ts';
 
 const previousStats: Record<string, { attack: number; health: number }> = {
@@ -65,11 +65,21 @@ test('the six-card mobile fan keeps every card inside its available width', () =
   assert.equal(handFanSpacing(width, 1, cardWidth), 0);
 });
 
+test('cooldown wipe starts fully shaded and clears clockwise as the troop becomes ready', () => {
+  assert.equal(cooldownSweepDegrees(6500, 6500), 0);
+  assert.equal(cooldownSweepDegrees(3250, 6500), 180);
+  assert.equal(cooldownSweepDegrees(0, 6500), 360);
+  assert.equal(cooldownSweepDegrees(8000, 6500), 0);
+  assert.equal(cooldownSweepDegrees(100, 0), 360);
+});
+
 test('presentation stylesheet includes all attack profiles, impact feedback, field tilt, and reduced-motion handling', async () => {
   const css = await readFile(new URL('../src/ui/styles.css', import.meta.url), 'utf8');
   for (const profile of ['advance', 'impact', 'spin', 'pulse']) assert.ok(css.includes(`attack-profile--${profile}`));
   assert.ok(css.includes('.battle-card.is-hit .damage-aura'));
   assert.ok(css.includes('.battle-card.destruction-ghost.is-destroyed'));
+  assert.ok(css.includes('.attack-cooldown-shade.is-cooling'));
+  assert.ok(css.includes('conic-gradient(from 0deg'));
   assert.ok(css.includes('--field-tilt-angle'));
   assert.ok(css.includes('prefers-reduced-motion: reduce'));
 });

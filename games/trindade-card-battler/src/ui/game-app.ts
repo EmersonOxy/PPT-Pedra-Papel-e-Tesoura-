@@ -7,7 +7,7 @@ import type { CardInstance, GameEvent, GameState, Side, SpellTarget, Transition 
 import { advanceMatchFlow, beginDemoMatchSearch, cancelDemoMatchSearch, createMatchFlow, isPreparationActionAllowed, sessionConfig, setMatchFlowPhase } from '../game/session-flow.ts';
 import type { MatchFlowState } from '../game/session-flow.ts';
 import { renderCardBack, renderCardFace, renderDeckCardBack } from './card-presentation.ts';
-import { attackProfileClass, attackProjectileClass, handFanSpacing, shouldHighlightDeck } from './combat-presentation.ts';
+import { attackProfileClass, attackProjectileClass, cooldownSweepDegrees, handFanSpacing, shouldHighlightDeck } from './combat-presentation.ts';
 import type { AttackAnimationProfile } from '../game/types.ts';
 
 type ActiveDrag = {
@@ -979,7 +979,7 @@ export class GameApp {
     const definition = getCardDefinition(card.definitionId);
     const details = this.cardDetails(card);
     const cooldown = definition.kind === 'troop' && !secret ? `<span class="attack-cooldown" data-cooldown-id="${card.instanceId}" aria-hidden="true"><i></i><small></small></span>` : '';
-    return `<div class="battle-card${side === 'enemy' ? ' enemy-unit' : ''}${secret ? ' sigil-card' : ''}" data-card-id="${card.instanceId}" data-side="${side}" data-foundation="${definition.foundation}" title="${this.escapeAttribute(details)}"><span class="damage-aura" aria-hidden="true"></span>${renderCardFace(definition, card, side, 'field')}${cooldown}</div>`;
+    return `<div class="battle-card${side === 'enemy' ? ' enemy-unit' : ''}${secret ? ' sigil-card' : ''}" data-card-id="${card.instanceId}" data-side="${side}" data-foundation="${definition.foundation}" title="${this.escapeAttribute(details)}"><span class="damage-aura" aria-hidden="true"></span>${renderCardFace(definition, card, side, 'field')}${definition.kind === 'troop' && !secret ? '<span class="attack-cooldown-shade" data-cooldown-shade aria-hidden="true"></span>' : ''}${cooldown}</div>`;
   }
 
   private updateAttackCooldowns(): void {
@@ -988,10 +988,12 @@ export class GameApp {
       const card = cardId ? [...this.state.players.player.slots, ...this.state.players.enemy.slots].find((unit) => unit?.instanceId === cardId) : undefined;
       const fill = indicator.querySelector<HTMLElement>('i');
       const label = indicator.querySelector<HTMLElement>('small');
+      const shade = indicator.closest<HTMLElement>('.battle-card')?.querySelector<HTMLElement>('[data-cooldown-shade]');
       if (!card || !fill || !label) return;
       if (this.state.phase !== 'playing') {
         label.textContent = this.state.phase === 'preparation' ? 'PREP' : this.state.phase === 'starting' ? '...' : '';
         fill.style.transform = 'scaleX(0)';
+        shade?.classList.remove('is-cooling');
         return;
       }
       const remaining = Math.max(0, card.nextAttackAtMs - this.state.clockMs);
@@ -999,6 +1001,10 @@ export class GameApp {
       const progress = remaining === 0 ? 1 : 1 - Math.min(1, remaining / interval);
       fill.style.transform = `scaleX(${progress})`;
       label.textContent = remaining === 0 ? 'PRONTO' : `ATAQUE ${Math.ceil(remaining / 1000)}s`;
+      if (shade) {
+        shade.style.setProperty('--cooldown-angle', `${cooldownSweepDegrees(remaining, interval)}deg`);
+        shade.classList.toggle('is-cooling', remaining > 0);
+      }
     });
   }
 

@@ -115,6 +115,10 @@ body { overscroll-behavior: none; }
 .attack-cooldown { position: absolute; z-index: 8; left: 31%; right: 31%; bottom: 10%; display: flex; flex-direction: column; align-items: center; gap: 2px; pointer-events: none; }
 .attack-cooldown i { display: block; width: 100%; height: 2px; border-radius: 2px; background: linear-gradient(90deg,#8ee0c3,#f7d879); box-shadow: 0 0 4px #f7d87999; transform: scaleX(0); transform-origin: left; }
 .attack-cooldown small { display: block; max-width: 100%; padding: 1px 3px; overflow: hidden; border-radius: 3px; color: #fff4cf; background: #061421d9; font: 800 clamp(4px,1.35cqw,6px)/1 system-ui,sans-serif; white-space: nowrap; letter-spacing: .01em; }
+.attack-cooldown-shade { --cooldown-angle: 0deg; position: absolute; z-index: 7; inset: 0; border-radius: inherit; opacity: 0; visibility: hidden; pointer-events: none; background: conic-gradient(from 0deg,transparent 0deg var(--cooldown-angle),#02091480 var(--cooldown-angle) 1turn); transition: opacity 140ms ease, --cooldown-angle 100ms linear, visibility 140ms; }
+.attack-cooldown-shade.is-cooling { opacity: 1; visibility: visible; }
+@property --cooldown-angle { syntax: "<angle>"; inherits: false; initial-value: 0deg; }
+@media (prefers-reduced-motion: reduce) { .attack-cooldown-shade { transition: none; } }
 
 /* Clicking a deck item opens both the card face and its readable structured data. */
 .card-preview-overlay.open { overflow-y: auto; align-items: center; }

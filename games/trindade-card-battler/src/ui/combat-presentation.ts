@@ -10,6 +10,13 @@ export function attackProjectileClass(side: Side, profile: AttackAnimationProfil
   return `combat-projectile combat-projectile--${side}${profile === 'pulse' ? ' combat-projectile--profile-pulse' : ''}`;
 }
 
+/** Clockwise reveal angle for a dark cooldown wipe, from fully covered to clear. */
+export function cooldownSweepDegrees(remainingMs: number, intervalMs: number): number {
+  if (intervalMs <= 0 || remainingMs <= 0) return 360;
+  const progress = 1 - Math.min(1, remainingMs / intervalMs);
+  return Math.max(0, Math.min(360, progress * 360));
+}
+
 export function shouldHighlightDeck(input: {
   phase: string;
   handCount: number;
