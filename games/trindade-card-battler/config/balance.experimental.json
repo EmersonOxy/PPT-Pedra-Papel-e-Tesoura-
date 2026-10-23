@@ -21,9 +21,19 @@
     "prism-sentinel": 1.08,
     "ember-knight": 1.0
   },
+  "initialAttackDelayMsByDefinitionId": {
+    "solemn-guardian": 0,
+    "astral-fox": 0,
+    "moss-colossus": 2500,
+    "amber-phoenix": 4000,
+    "veil-oracle": 1500,
+    "vesper-blade": 0,
+    "prism-sentinel": 3000,
+    "ember-knight": 5000
+  },
   "aiInitialDelayMs": 4000,
   "aiActionIntervalMs": 4000,
   "spellDamage": 2,
   "spellHealing": 2,
-  "note": "Parâmetros temporários de ritmo; intervalos e atributos por carta são experimentais e não representam balanceamento final."
+  "note": "Parâmetros temporários de ritmo; intervalos e esperas iniciais por carta são experimentais e não representam balanceamento final."
 }

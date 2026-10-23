@@ -1,4 +1,4 @@
-import { attackIntervalFor, balance, boardSlotCount, sigilSlotCount } from './config.ts';
+import { attackIntervalFor, balance, boardSlotCount, initialAttackDelayFor, sigilSlotCount } from './config.ts';
 import { isAttackTargetExposed } from './targeting.ts';
 import { isPreparationActionAllowed, sessionConfig } from './session-flow.ts';
 import { cardDefinitions, getCardDefinition } from './cards.ts';
@@ -286,7 +286,7 @@ export function releaseCombat(state: GameState): Transition {
   const players = { player: clonePlayer(state.players.player), enemy: clonePlayer(state.players.enemy) };
   for (const side of ['player', 'enemy'] as const) {
     players[side].slots = players[side].slots.map((card) => card && getCardDefinition(card.definitionId).kind === 'troop'
-      ? { ...card, nextAttackAtMs: state.clockMs + attackIntervalFor(card.definitionId, state.attackIntervalMs) }
+      ? { ...card, nextAttackAtMs: state.clockMs + attackIntervalFor(card.definitionId, state.attackIntervalMs) + initialAttackDelayFor(card.definitionId) }
       : card);
   }
   return {

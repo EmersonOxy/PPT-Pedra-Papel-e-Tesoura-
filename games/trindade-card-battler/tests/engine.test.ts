@@ -6,7 +6,7 @@ import * as gameEngineApi from '../src/game/engine.ts';
 import { takeAiAction } from '../src/game/ai.ts';
 import { advanceTime } from '../src/game/simulation.ts';
 import { chooseAttackTarget } from '../src/game/targeting.ts';
-import { attackIntervalFor, balance, boardSlotCount, sigilSlotCount, topology, validateExperimentalBalance } from '../src/game/config.ts';
+import { attackIntervalFor, balance, boardSlotCount, initialAttackDelayFor, sigilSlotCount, topology, validateExperimentalBalance } from '../src/game/config.ts';
 import { isPreparationActionAllowed, sessionConfig } from '../src/game/session-flow.ts';
 import type { CardInstance, GameState, Side } from '../src/game/types.ts';
 
@@ -400,6 +400,25 @@ test('preparation freezes attacks, gives the start announcement its own phase, a
   assert.equal(beforeTimer.events.some((event) => event.type === 'attack'), false);
   const atTimer = advanceTime(beforeTimer.state, 1);
   assert.ok(atTimer.events.some((event) => event.type === 'attack'));
+});
+
+test('opening attacks are staggered by the experimental delay configured per troop', () => {
+  const state = fixture();
+  state.phase = 'starting';
+  state.clockMs = 12_000;
+  state.startAnnouncementEndsAtMs = state.clockMs;
+  state.players.player.slots[0] = makeCard('player', 'solemn-guardian', 'opening-fast');
+  state.players.player.slots[1] = makeCard('player', 'moss-colossus', 'opening-slow');
+  state.players.enemy.slots[0] = makeCard('enemy', 'ember-knight', 'opening-slowest');
+
+  const released = releaseCombat(state).state;
+  const fastAt = released.players.player.slots[0]!.nextAttackAtMs;
+  const slowAt = released.players.player.slots[1]!.nextAttackAtMs;
+  const slowestAt = released.players.enemy.slots[0]!.nextAttackAtMs;
+  assert.equal(fastAt, state.clockMs + attackIntervalFor('solemn-guardian'));
+  assert.equal(slowAt, state.clockMs + attackIntervalFor('moss-colossus') + initialAttackDelayFor('moss-colossus'));
+  assert.equal(slowestAt, state.clockMs + attackIntervalFor('ember-knight') + initialAttackDelayFor('ember-knight'));
+  assert.ok(fastAt < slowAt && slowAt < slowestAt);
 });
 
 test('the AI can prepare an allowed troop while its hand and spells remain hidden and inactive', () => {

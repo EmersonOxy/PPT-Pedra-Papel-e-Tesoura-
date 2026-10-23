@@ -17,6 +17,7 @@ export interface ExperimentalBalance {
   fieldTopology: FieldTopology;
   attackIntervalMs: number;
   attackIntervalMultiplierByDefinitionId: Record<string, number>;
+  initialAttackDelayMsByDefinitionId: Record<string, number>;
   aiInitialDelayMs: number;
   aiActionIntervalMs: number;
   spellDamage: number;
@@ -72,6 +73,18 @@ export function validateExperimentalBalance(input: unknown, definitionCount: num
       throw new Error(`Multiplicador de ataque inválido para ${definitionId}; esperado entre 0.5 e 2.`);
     }
   }
+  const initialDelays = value.initialAttackDelayMsByDefinitionId;
+  if (!initialDelays || typeof initialDelays !== 'object' || Array.isArray(initialDelays)) {
+    throw new Error('initialAttackDelayMsByDefinitionId precisa mapear a espera inicial por tropa.');
+  }
+  for (const [definitionId, delay] of Object.entries(initialDelays as Record<string, unknown>)) {
+    if (!cardDefinitions.some((definition) => definition.id === definitionId && definition.kind === 'troop')) {
+      throw new Error(`Espera inicial configurada para carta que não é tropa: ${definitionId}.`);
+    }
+    if (!Number.isInteger(delay) || (delay as number) < 0 || (delay as number) > 10_000) {
+      throw new Error(`Espera inicial inválida para ${definitionId}; esperado de 0 a 10000 ms.`);
+    }
+  }
   if (!Number.isInteger(value.copiesPerDefinition) || (value.copiesPerDefinition as number) <= 0) throw new Error('copiesPerDefinition precisa ser inteiro positivo.');
   const expectedDeckSize = definitionCount * (value.copiesPerDefinition as number);
   if (value.deckSize !== expectedDeckSize) {
@@ -88,4 +101,7 @@ export const boardSlotCount = topology.rows * topology.columns;
 export const sigilSlotCount = topology.specialSpaces.find((space) => space.kind === 'sigil')?.count ?? 0;
 export function attackIntervalFor(definitionId: string, baseIntervalMs = balance.attackIntervalMs): number {
   return Math.round(baseIntervalMs * (balance.attackIntervalMultiplierByDefinitionId[definitionId] ?? 1));
+}
+export function initialAttackDelayFor(definitionId: string): number {
+  return balance.initialAttackDelayMsByDefinitionId[definitionId] ?? 0;
 }

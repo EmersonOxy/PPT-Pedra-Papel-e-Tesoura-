@@ -83,6 +83,7 @@ test('presentation stylesheet includes all attack profiles, impact feedback, fie
   assert.ok(css.includes('conic-gradient(from 0deg'));
   assert.ok(css.includes('--field-tilt-angle'));
   assert.match(css, /--field-tilt-angle:\s*12deg/);
+  assert.match(css, /--field-tilt-opponent-angle:\s*12deg/);
   assert.match(css, /\.battle-grid,\s*\.sigil-side\s*\{\s*transform:\s*perspective\(450px\)/);
   assert.match(homeCss, /\.field-band\.enemy::after[^}]*transform:\s*none/);
   assert.doesNotMatch(homeCss, /\.game-shell\.is-preparing \.field-band\.enemy \.battle-grid[^}]*blur\(/);
