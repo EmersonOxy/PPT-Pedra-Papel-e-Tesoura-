@@ -75,12 +75,17 @@ test('cooldown wipe starts fully shaded and clears clockwise as the troop become
 
 test('presentation stylesheet includes all attack profiles, impact feedback, field tilt, and reduced-motion handling', async () => {
   const css = await readFile(new URL('../src/ui/styles.css', import.meta.url), 'utf8');
+  const homeCss = await readFile(new URL('../src/ui/home.css', import.meta.url), 'utf8');
   for (const profile of ['advance', 'impact', 'spin', 'pulse']) assert.ok(css.includes(`attack-profile--${profile}`));
   assert.ok(css.includes('.battle-card.is-hit .damage-aura'));
   assert.ok(css.includes('.battle-card.destruction-ghost.is-destroyed'));
   assert.ok(css.includes('.attack-cooldown-shade.is-cooling'));
   assert.ok(css.includes('conic-gradient(from 0deg'));
   assert.ok(css.includes('--field-tilt-angle'));
+  assert.match(css, /--field-tilt-angle:\s*12deg/);
+  assert.match(css, /\.battle-grid,\s*\.sigil-side\s*\{\s*transform:\s*perspective\(450px\)/);
+  assert.match(homeCss, /\.field-band\.enemy::after[^}]*transform:\s*none/);
+  assert.doesNotMatch(homeCss, /\.game-shell\.is-preparing \.field-band\.enemy \.battle-grid[^}]*blur\(/);
   assert.ok(css.includes('prefers-reduced-motion: reduce'));
 });
 

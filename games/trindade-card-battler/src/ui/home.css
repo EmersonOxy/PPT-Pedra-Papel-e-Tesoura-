@@ -166,8 +166,8 @@
 .game-shell.is-preparing .top-zone { filter: grayscale(1); opacity: .68; }
 .game-shell.is-preparing .enemy-cycle { visibility: hidden; }
 .game-shell.is-preparing .field-band.enemy { position: relative; isolation: isolate; }
-.game-shell.is-preparing .field-band.enemy .battle-grid, .game-shell.is-preparing .field-band.enemy .sigil-side { filter: grayscale(1) blur(4px); opacity: .12; }
-.game-shell.is-preparing .field-band.enemy::after { position: absolute; z-index: 10; inset: 5px 22px; display: grid; place-items: center; border: 1px solid #d5d5bd40; border-radius: 10px; color: #ddd9beaa; background: #07152255; content: "CAMPO SELADO"; font: 800 8px system-ui,sans-serif; letter-spacing: .18em; pointer-events: none; }
+.game-shell.is-preparing .field-band.enemy .battle-grid, .game-shell.is-preparing .field-band.enemy .sigil-side { filter: grayscale(.72); opacity: .62; }
+.game-shell.is-preparing .field-band.enemy::after { position: absolute; z-index: 10; inset: 5px 22px; top: 5px; right: 22px; bottom: 5px; left: 22px; width: auto; height: auto; display: grid; place-items: center; transform: none; border: 1px solid #d5d5bd55; border-radius: 10px; color: #eee4c8; background: #07152270; content: "CAMPO SELADO"; font: 800 8px system-ui,sans-serif; letter-spacing: .18em; pointer-events: none; text-align: center; }
 .game-shell.is-preparing .enemy-life { z-index: 11; }
 .transition-curtain { position: fixed; z-index: 1000; inset: -1px 0; display: none; background: #02040b; pointer-events: none; transform: translateY(-101%); }
 .transition-curtain.active { display: block; animation: trindade-curtain-pass 900ms cubic-bezier(.7,0,.3,1) both; }

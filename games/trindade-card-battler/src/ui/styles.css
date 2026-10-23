@@ -80,9 +80,9 @@ body { overscroll-behavior: none; }
 @keyframes damage-aura-pulse { 0% { opacity: 0; transform: scale(.92); } 22% { opacity: .95; transform: scale(1.02); } 62% { opacity: .72; transform: scale(1.04); } 100% { opacity: 0; transform: scale(1.12); } }
 
 /* Perspectiva configurável. Use 0deg para desativar sem alterar a topologia. */
-:root { --field-tilt-angle: 1deg; --field-tilt-opponent-angle: -1deg; }
-.battle-grid { transform: perspective(1100px) rotateX(var(--field-tilt-opponent-angle)); transform-origin: center; }
-.field-band.player .battle-grid { transform: perspective(1100px) rotateX(var(--field-tilt-angle)); }
+:root { --field-tilt-angle: 12deg; --field-tilt-opponent-angle: -12deg; }
+.battle-grid, .sigil-side { transform: perspective(450px) rotateX(var(--field-tilt-opponent-angle)); transform-origin: center; }
+.field-band.player .battle-grid, .field-band.player .sigil-side { transform: perspective(450px) rotateX(var(--field-tilt-angle)); }
 
 /* A mão é empilhada da direita para a esquerda: os cristais ficam expostos. */
 .hand-card.is-selected { z-index: 40 !important; }
