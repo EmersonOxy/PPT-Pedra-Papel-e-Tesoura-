@@ -2,6 +2,7 @@ import { takeAiAction } from './ai.ts';
 import { releaseCombat } from './engine.ts';
 import { sessionConfig } from './session-flow.ts';
 import { getCardDefinition } from './cards.ts';
+import { attackIntervalFor } from './config.ts';
 import { chooseAttackTarget } from './targeting.ts';
 import type { GameEvent, GameState, PlayerState, Side } from './types.ts';
 
@@ -45,7 +46,7 @@ function resolveDueAttacks(state: GameState): { state: GameState; events: GameEv
     events.push({ type: 'attack', side, attackerId: card.instanceId, targetSide: target.side, targetSlot: target.slot, targetId: targetCard?.instanceId, direct: target.direct });
     const currentAttacker = next.players[side].slots[slot];
     if (currentAttacker?.instanceId === card.instanceId) {
-      next.players[side].slots[slot] = { ...currentAttacker, nextAttackAtMs: snapshot.clockMs + snapshot.attackIntervalMs };
+      next.players[side].slots[slot] = { ...currentAttacker, nextAttackAtMs: snapshot.clockMs + attackIntervalFor(card.definitionId, snapshot.attackIntervalMs) };
     }
     if (target.direct) {
       lifeDamage.set(target.side, (lifeDamage.get(target.side) ?? 0) + definition.attack);

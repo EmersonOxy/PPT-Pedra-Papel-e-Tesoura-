@@ -16,6 +16,7 @@ export interface ExperimentalBalance {
   handLimit: number;
   fieldTopology: FieldTopology;
   attackIntervalMs: number;
+  attackIntervalMultiplierByDefinitionId: Record<string, number>;
   aiInitialDelayMs: number;
   aiActionIntervalMs: number;
   spellDamage: number;
@@ -59,6 +60,18 @@ export function validateExperimentalBalance(input: unknown, definitionCount: num
   for (const key of ['startingLife', 'deckSize', 'attackIntervalMs', 'aiActionIntervalMs']) {
     if ((value[key] as number) <= 0) throw new Error(`${key} precisa ser maior que zero.`);
   }
+  const attackMultipliers = value.attackIntervalMultiplierByDefinitionId;
+  if (!attackMultipliers || typeof attackMultipliers !== 'object' || Array.isArray(attackMultipliers)) {
+    throw new Error('attackIntervalMultiplierByDefinitionId precisa mapear os intervalos por carta.');
+  }
+  for (const [definitionId, multiplier] of Object.entries(attackMultipliers as Record<string, unknown>)) {
+    if (!cardDefinitions.some((definition) => definition.id === definitionId && definition.kind === 'troop')) {
+      throw new Error(`Intervalo configurado para carta que não é tropa: ${definitionId}.`);
+    }
+    if (!Number.isFinite(multiplier) || (multiplier as number) < 0.5 || (multiplier as number) > 2) {
+      throw new Error(`Multiplicador de ataque inválido para ${definitionId}; esperado entre 0.5 e 2.`);
+    }
+  }
   if (!Number.isInteger(value.copiesPerDefinition) || (value.copiesPerDefinition as number) <= 0) throw new Error('copiesPerDefinition precisa ser inteiro positivo.');
   const expectedDeckSize = definitionCount * (value.copiesPerDefinition as number);
   if (value.deckSize !== expectedDeckSize) {
@@ -73,3 +86,6 @@ export const balance = validateExperimentalBalance(rawBalance, cardDefinitions.l
 export const topology = balance.fieldTopology;
 export const boardSlotCount = topology.rows * topology.columns;
 export const sigilSlotCount = topology.specialSpaces.find((space) => space.kind === 'sigil')?.count ?? 0;
+export function attackIntervalFor(definitionId: string, baseIntervalMs = balance.attackIntervalMs): number {
+  return Math.round(baseIntervalMs * (balance.attackIntervalMultiplierByDefinitionId[definitionId] ?? 1));
+}

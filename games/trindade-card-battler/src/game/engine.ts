@@ -1,4 +1,4 @@
-import { balance, boardSlotCount, sigilSlotCount } from './config.ts';
+import { attackIntervalFor, balance, boardSlotCount, sigilSlotCount } from './config.ts';
 import { isAttackTargetExposed } from './targeting.ts';
 import { isPreparationActionAllowed, sessionConfig } from './session-flow.ts';
 import { cardDefinitions, getCardDefinition } from './cards.ts';
@@ -128,7 +128,7 @@ export function placeCard(state: GameState, side: Side, instanceId: string, slot
   const kind = getCardDefinition(card.definitionId).kind;
   if (kind === 'spell') return { state, events: [] };
   player.hand.splice(handIndex, 1);
-  player.slots[slot] = { ...card, nextAttackAtMs: kind === 'troop' ? state.clockMs + state.attackIntervalMs : 0, attackTargetId: undefined };
+  player.slots[slot] = { ...card, nextAttackAtMs: kind === 'troop' ? state.clockMs + attackIntervalFor(card.definitionId, state.attackIntervalMs) : 0, attackTargetId: undefined };
   return { state: wakeOpponent(replacePlayer(state, side, player), side), events: [{ type: 'place', side, instanceId, slot }] };
 }
 
@@ -286,7 +286,7 @@ export function releaseCombat(state: GameState): Transition {
   const players = { player: clonePlayer(state.players.player), enemy: clonePlayer(state.players.enemy) };
   for (const side of ['player', 'enemy'] as const) {
     players[side].slots = players[side].slots.map((card) => card && getCardDefinition(card.definitionId).kind === 'troop'
-      ? { ...card, nextAttackAtMs: state.clockMs + state.attackIntervalMs }
+      ? { ...card, nextAttackAtMs: state.clockMs + attackIntervalFor(card.definitionId, state.attackIntervalMs) }
       : card);
   }
   return {

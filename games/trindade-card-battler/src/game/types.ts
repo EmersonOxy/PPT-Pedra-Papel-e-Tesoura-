@@ -2,6 +2,7 @@ export type Side = 'player' | 'enemy';
 export type CardKind = 'troop' | 'hidden' | 'spell';
 export type Foundation = 'guarda' | 'tecnica' | 'impacto';
 export type SpellEffect = 'damage' | 'heal';
+export type AttackAnimationProfile = 'advance' | 'impact' | 'spin' | 'pulse';
 export type GamePhase = 'preparation' | 'starting' | 'playing' | 'finished';
 
 export interface CardDefinition {
@@ -14,6 +15,8 @@ export interface CardDefinition {
   maxHealth: number;
   description: string;
   effect?: SpellEffect;
+  /** Presentation-only profile. It never participates in combat resolution. */
+  attackAnimationProfile?: AttackAnimationProfile;
 }
 
 export interface CardInstance {

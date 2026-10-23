@@ -2,11 +2,13 @@ import { cardDefinitions, getCardDefinition } from '../game/cards.ts';
 import { assignAttackTarget, beginPreparation, castSpell, drawCard, moveTroop, placeCard, placeSigil, returnTroop, revealSigil } from '../game/engine.ts';
 import { advanceTime } from '../game/simulation.ts';
 import { frontRow, isAttackTargetExposed } from '../game/targeting.ts';
-import { balance, boardSlotCount, topology } from '../game/config.ts';
+import { attackIntervalFor, balance, boardSlotCount, topology } from '../game/config.ts';
 import type { CardInstance, GameEvent, GameState, Side, SpellTarget, Transition } from '../game/types.ts';
 import { advanceMatchFlow, beginDemoMatchSearch, cancelDemoMatchSearch, createMatchFlow, isPreparationActionAllowed, sessionConfig, setMatchFlowPhase } from '../game/session-flow.ts';
 import type { MatchFlowState } from '../game/session-flow.ts';
 import { renderCardBack, renderCardFace, renderDeckCardBack } from './card-presentation.ts';
+import { attackProfileClass, attackProjectileClass, handFanSpacing, shouldHighlightDeck } from './combat-presentation.ts';
+import type { AttackAnimationProfile } from '../game/types.ts';
 
 type ActiveDrag = {
   id: string;
@@ -67,6 +69,9 @@ export class GameApp {
   }
 
   private mount(): void {
+    const troopIntervals = cardDefinitions.filter((definition) => definition.kind === 'troop').map((definition) => attackIntervalFor(definition.id));
+    const minAttackInterval = Math.min(...troopIntervals) / 1000;
+    const maxAttackInterval = Math.max(...troopIntervals) / 1000;
     this.root.innerHTML = `
       <div class="app-frame">
       <main class="home-shell" id="home" aria-label="Menu principal do Trindade">
@@ -135,7 +140,7 @@ export class GameApp {
           </div>
         </section>
         <div id="toast" class="toast" role="status" aria-live="polite"></div>
-        <div class="overlay" id="help-overlay" aria-hidden="true"><div class="help-panel"><div class="help-tag">Experimento separado · versão jogável inicial</div><h2>Como experimentar</h2><p><b>Comprar:</b> toque no deck enquanto houver espaço na mão (máximo de ${balance.handLimit} cartas).</p><p><b>Posicionar:</b> arraste uma tropa a um espaço vazio. A linha próxima do centro protege a linha posterior na mesma coluna.</p><p><b>Mover ou recolher:</b> arraste uma tropa sua para um espaço vazio ou para a mão. Arraste uma tropa do campo até um alvo inimigo exposto para marcá-lo; a seta aparece e a unidade fica no lugar.</p><p><b>Feitiços:</b> Chama Errante causa ${balance.spellDamage} de dano; Pulso Rúnico restaura ${balance.spellHealing} de vida. Selecione um feitiço e toque no alvo compatível.</p><p><b>Sigilos:</b> coloque um sigilo em um dos ${balance.fieldTopology.specialSpaces[0]?.count ?? 0} espaços e toque nele para revelar sua carta. Eles são visuais nesta versão e ainda não têm gatilhos.</p><p><b>Combate:</b> cada tropa tem uma recarga de ${balance.attackIntervalMs / 1000} segundos, exibida na própria carta. Os custos são somente demonstrativos; não há mana.</p><p><b>Limite experimental:</b> ${balance.startingLife} de vida, ${balance.deckSize} cartas por deck e IA básica. Os valores não são regras finais.</p><button class="close-help" id="close-help" type="button">Entendi</button></div></div>
+        <div class="overlay" id="help-overlay" aria-hidden="true"><div class="help-panel"><div class="help-tag">Experimento separado · versão jogável inicial</div><h2>Como experimentar</h2><p><b>Comprar:</b> toque no deck enquanto houver espaço na mão (máximo de ${balance.handLimit} cartas).</p><p><b>Posicionar:</b> arraste uma tropa a um espaço vazio. A linha próxima do centro protege a linha posterior na mesma coluna.</p><p><b>Mover ou recolher:</b> arraste uma tropa sua para um espaço vazio ou para a mão. Arraste uma tropa do campo até um alvo inimigo exposto para marcá-lo; a seta aparece e a unidade fica no lugar.</p><p><b>Feitiços:</b> Chama Errante causa ${balance.spellDamage} de dano; Pulso Rúnico restaura ${balance.spellHealing} de vida. Selecione um feitiço e toque no alvo compatível.</p><p><b>Sigilos:</b> coloque um sigilo em um dos ${balance.fieldTopology.specialSpaces[0]?.count ?? 0} espaços e toque nele para revelar sua carta. Eles são visuais nesta versão e ainda não têm gatilhos.</p><p><b>Combate:</b> cada tropa tem sua recarga individual exibida na carta (de ${minAttackInterval.toFixed(2)} a ${maxAttackInterval.toFixed(2)} segundos). O valor varia por carta e é experimental. Os custos são somente demonstrativos; não há mana.</p><p><b>Limite experimental:</b> ${balance.startingLife} de vida, ${balance.deckSize} cartas por deck e IA básica. Os valores não são regras finais.</p><button class="close-help" id="close-help" type="button">Entendi</button></div></div>
         <div class="overlay" id="palette-overlay" aria-hidden="true"><div class="help-panel"><div class="help-tag">Identidade visual V3</div><h2>Atmosfera da arena</h2><div class="theme-option-grid"><button type="button" class="theme-btn active" data-theme-set="mineral">Verde mineral</button><button type="button" class="theme-btn" data-theme-set="abissal">Azul abissal</button><button type="button" class="theme-btn" data-theme-set="rubro">Rubro arcano</button></div><button class="close-help" id="close-palette" type="button">Voltar à arena</button></div></div>
         <div class="overlay" id="result-overlay" aria-hidden="true"><div class="help-panel"><div class="help-tag">Fim da partida</div><h2 id="result-title">Vitória</h2><p id="result-copy"></p><button class="close-help" id="play-again" type="button">Voltar ao início</button></div></div>
       </main><svg class="attack-aim-overlay" id="attack-aim-overlay" aria-hidden="true"><defs><marker id="attack-arrowhead" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0 0L10 5L0 10Z"></path></marker></defs><line id="attack-aim-line" x1="0" y1="0" x2="0" y2="0"></line></svg><div class="overlay card-preview-overlay" id="card-preview-overlay" aria-hidden="true"><div class="card-preview-wrap" id="card-preview-wrap"></div></div><div class="transition-curtain" id="transition-curtain" aria-hidden="true"></div></div>`;
@@ -585,11 +590,12 @@ export class GameApp {
 
   private transition(result: Transition, failureMessage?: string): void {
     if (!result.events.length && failureMessage) { this.toast(failureMessage); return; }
+    const attackProfiles = this.captureAttackProfiles(result.events, this.state);
     this.captureDestructions(result.events);
     this.state = result.state;
     if (result.events.some((event) => event.type === 'place' || event.type === 'spell' || event.type === 'return' || event.type === 'move' || event.type === 'target')) this.selectedId = null;
     this.render();
-    this.playEvents(result.events);
+    this.playEvents(result.events, attackProfiles);
   }
 
   private tick = (now: number): void => {
@@ -603,10 +609,12 @@ export class GameApp {
       if (flow.events.includes('mount-arena')) this.mountArenaForPreparation();
       if (flow.events.includes('transition-complete')) this.root.querySelector('#transition-curtain')?.classList.remove('active');
       if (arenaWasActive && this.matchHasStarted && this.state.phase !== 'finished') {
+        const priorState = this.state;
         const result = advanceTime(this.state, delta);
+        const attackProfiles = this.captureAttackProfiles(result.events, priorState);
         this.state = result.state;
         this.syncMatchFlowWithEngine();
-        if (result.events.length) { this.captureDestructions(result.events); this.render(); this.playEvents(result.events); }
+        if (result.events.length) { this.captureDestructions(result.events); this.render(); this.playEvents(result.events, attackProfiles); }
       }
       this.renderMatchStatus();
       this.renderPhaseStatus();
@@ -615,10 +623,20 @@ export class GameApp {
     requestAnimationFrame(this.tick);
   };
 
-  private playEvents(events: GameEvent[]): void {
+  private captureAttackProfiles(events: GameEvent[], state: GameState): Map<string, AttackAnimationProfile | undefined> {
+    const profiles = new Map<string, AttackAnimationProfile | undefined>();
+    for (const event of events) {
+      if (event.type !== 'attack') continue;
+      const card = [...state.players.player.slots, ...state.players.enemy.slots].find((unit) => unit?.instanceId === event.attackerId);
+      profiles.set(event.attackerId, card ? getCardDefinition(card.definitionId).attackAnimationProfile : undefined);
+    }
+    return profiles;
+  }
+
+  private playEvents(events: GameEvent[], attackProfiles = new Map<string, AttackAnimationProfile | undefined>()): void {
     let missionsChanged = false;
     for (const event of events) {
-      if (event.type === 'attack') this.animateAttack(event);
+      if (event.type === 'attack') this.animateAttack(event, attackProfiles.get(event.attackerId));
       if (event.type === 'target') {
         const target = this.state.players.enemy.slots.find((card) => card?.instanceId === event.targetId);
         if (target) this.toast(`Alvo marcado: ${getCardDefinition(target.definitionId).name}.`);
@@ -651,24 +669,37 @@ export class GameApp {
     if (missionsChanged) this.renderHome();
   }
 
-  private animateAttack(event: Extract<GameEvent, { type: 'attack' }>): void {
+  private animateAttack(event: Extract<GameEvent, { type: 'attack' }>, profile?: AttackAnimationProfile): void {
     const attacker = this.root.querySelector<HTMLElement>(`[data-card-id="${CSS.escape(event.attackerId)}"]`);
     const targetId = event.targetId;
     const target = (targetId ? this.root.querySelector<HTMLElement>(`[data-card-id="${CSS.escape(targetId)}"]`) : null)
       ?? (event.targetSlot !== undefined ? this.root.querySelector<HTMLElement>(`[data-slot-side="${event.targetSide}"][data-slot="${event.targetSlot}"]`) : null)
       ?? this.root.querySelector<HTMLElement>(event.targetSide === 'player' ? '#player-life-target' : '#enemy-life-target');
     if (!attacker || !target) return;
-    attacker.classList.add('is-attacking');
-    window.setTimeout(() => attacker.classList.remove('is-attacking'), 460);
     const from = attacker.getBoundingClientRect(); const to = target.getBoundingClientRect();
+    const dx = to.left + to.width / 2 - from.left - from.width / 2;
+    const dy = to.top + to.height / 2 - from.top - from.height / 2;
+    const distance = Math.max(1, Math.hypot(dx, dy));
+    const profileClass = attackProfileClass(profile);
+    attacker.classList.remove('is-attacking', profileClass);
+    attacker.style.setProperty('--attack-x', `${dx / distance * 16}px`);
+    attacker.style.setProperty('--attack-y', `${dy / distance * 16}px`);
+    attacker.classList.add('is-attacking', profileClass);
+    const finishAttack = (animation: AnimationEvent) => {
+      if (animation.target !== attacker) return;
+      attacker.classList.remove('is-attacking', profileClass);
+      attacker.style.removeProperty('--attack-x'); attacker.style.removeProperty('--attack-y');
+      attacker.removeEventListener('animationend', finishAttack);
+    };
+    attacker.addEventListener('animationend', finishAttack);
     const projectile = document.createElement('i');
-    projectile.className = `combat-projectile combat-projectile--${event.side}`;
+    projectile.className = attackProjectileClass(event.side, profile);
     projectile.style.left = `${from.left + from.width / 2}px`;
     projectile.style.top = `${from.top + from.height / 2}px`;
-    projectile.style.setProperty('--dx', `${to.left + to.width / 2 - from.left - from.width / 2}px`);
-    projectile.style.setProperty('--dy', `${to.top + to.height / 2 - from.top - from.height / 2}px`);
+    projectile.style.setProperty('--dx', `${dx}px`);
+    projectile.style.setProperty('--dy', `${dy}px`);
     document.body.appendChild(projectile);
-    window.setTimeout(() => projectile.remove(), 520);
+    projectile.addEventListener('animationend', () => projectile.remove(), { once: true });
   }
 
   private captureDestructions(events: GameEvent[]): void {
@@ -678,11 +709,14 @@ export class GameApp {
       if (!target) continue;
       const rect = target.getBoundingClientRect();
       const ghost = target.cloneNode(true) as HTMLElement;
-      ghost.classList.add('destruction-ghost');
+      ghost.classList.add('destruction-ghost', 'is-destroyed', 'is-hit');
+      const damage = document.createElement('span');
+      damage.className = 'impact-number'; damage.textContent = `−${event.amount}`;
+      ghost.appendChild(damage);
       ghost.style.left = `${rect.left}px`; ghost.style.top = `${rect.top}px`;
       ghost.style.width = `${rect.width}px`; ghost.style.height = `${rect.height}px`;
       document.body.appendChild(ghost);
-      window.setTimeout(() => ghost.remove(), 520);
+      ghost.addEventListener('animationend', (animation) => { if (animation.target === ghost) ghost.remove(); });
     }
   }
 
@@ -703,12 +737,19 @@ export class GameApp {
   private animateImpact(instanceId: string, amount: number): void {
     const target = this.root.querySelector<HTMLElement>(`[data-card-id="${CSS.escape(instanceId)}"]`);
     if (!target) return;
+    target.classList.remove('is-hit');
+    void target.offsetWidth;
     target.classList.add('is-hit');
     const number = document.createElement('span');
     number.className = 'impact-number';
     number.textContent = `−${amount}`;
     target.appendChild(number);
-    window.setTimeout(() => { target.classList.remove('is-hit', 'is-healing'); number.remove(); }, 850);
+    const finishImpact = (animation: AnimationEvent) => {
+      if (animation.target !== target) return;
+      target.classList.remove('is-hit', 'is-healing'); number.remove();
+      target.removeEventListener('animationend', finishImpact);
+    };
+    target.addEventListener('animationend', finishImpact);
   }
 
   private animateHeal(instanceId: string, amount: number): void {
@@ -758,7 +799,16 @@ export class GameApp {
     if (playerLife) playerLife.style.height = `${Math.max(0, player.life / balance.startingLife * 100)}%`;
     if (enemyLife) enemyLife.style.height = `${Math.max(0, enemy.life / balance.startingLife * 100)}%`;
     const deck = this.root.querySelector<HTMLButtonElement>('#draw-deck');
-    if (deck) deck.disabled = player.hand.length >= balance.handLimit || player.deck.length === 0 || this.state.phase !== 'playing';
+    const canDraw = player.hand.length < balance.handLimit && player.deck.length > 0 && this.state.phase === 'playing';
+    const needsDraw = shouldHighlightDeck({
+      phase: this.state.phase, handCount: player.hand.length, handLimit: balance.handLimit,
+      deckCount: player.deck.length, hasTroopInHand: player.hand.some((card) => getCardDefinition(card.definitionId).kind === 'troop'),
+    });
+    if (deck) {
+      deck.disabled = !canDraw;
+      deck.classList.toggle('is-draw-suggested', needsDraw);
+      deck.setAttribute('aria-label', needsDraw ? 'Comprar carta; sua mão não tem tropas' : 'Comprar carta');
+    }
     const badge = this.root.querySelector<HTMLElement>('#deck-badge');
     if (badge) { const drawn = Math.min(balance.deckSize, player.cardsDrawn); badge.style.setProperty('--deck-progress', `${drawn / balance.deckSize * 100}%`); badge.setAttribute('aria-valuemax', String(balance.deckSize)); badge.setAttribute('aria-valuenow', String(drawn)); }
     const status = this.root.querySelector<HTMLElement>('#player-status');
@@ -904,7 +954,7 @@ export class GameApp {
     this.root.querySelectorAll<HTMLElement>('.hand-card[data-card-id]').forEach((element, index) => {
       const selected = element.dataset.cardId === this.selectedId;
       element.classList.toggle('is-selected', selected);
-      element.style.zIndex = selected ? '40' : String(index + 3);
+      element.style.zIndex = selected ? '40' : String(20 - index);
     });
     this.root.querySelectorAll<HTMLElement>('.slot').forEach((slot) => {
       const id = slot.querySelector<HTMLElement>('.battle-card[data-card-id]')?.dataset.cardId ?? slot.dataset.sigilId ?? null;
@@ -916,18 +966,20 @@ export class GameApp {
     const definition = getCardDefinition(card.definitionId);
     const area = this.root.querySelector<HTMLElement>('#hand-area');
     const width = area?.clientWidth || 360;
-    const spacing = Math.min(61, Math.max(14, (width - 82) / Math.max(1, total - 1)));
+    const measuredCardWidth = area?.querySelector<HTMLElement>('.hand-card')?.getBoundingClientRect().width;
+    const cardWidth = measuredCardWidth && Number.isFinite(measuredCardWidth) ? measuredCardWidth : Math.min(95, Math.max(60, width * 0.31));
+    const spacing = handFanSpacing(width, total, cardWidth);
     const offset = (index - (total - 1) / 2) * spacing;
     const angle = (index - (total - 1) / 2) * Math.min(2.1, 11 / Math.max(1, total - 1));
     const details = this.cardDetails(card);
-    return `<button class="hand-card kind-${definition.kind}${this.selectedId === card.instanceId ? ' is-selected' : ''}" type="button" data-card-id="${card.instanceId}" data-side="player" data-foundation="${definition.foundation}" style="left:calc(50% + ${offset}px);--angle:${angle}deg;z-index:${this.selectedId === card.instanceId ? 40 : index + 3}" aria-label="${this.escapeAttribute(`${details}. Selecionar ou arrastar`)}" title="${this.escapeAttribute(details)}">${renderCardFace(definition, card, 'player', 'hand')}</button>`;
+    return `<button class="hand-card kind-${definition.kind}${this.selectedId === card.instanceId ? ' is-selected' : ''}" type="button" data-card-id="${card.instanceId}" data-side="player" data-foundation="${definition.foundation}" style="left:calc(50% + ${offset}px);--angle:${angle}deg;z-index:${this.selectedId === card.instanceId ? 40 : 20 - index}" aria-label="${this.escapeAttribute(`${details}. Selecionar ou arrastar`)}" title="${this.escapeAttribute(details)}">${renderCardFace(definition, card, 'player', 'hand')}</button>`;
   }
 
   private unitMarkup(card: CardInstance, side: Side, secret = false): string {
     const definition = getCardDefinition(card.definitionId);
     const details = this.cardDetails(card);
     const cooldown = definition.kind === 'troop' && !secret ? `<span class="attack-cooldown" data-cooldown-id="${card.instanceId}" aria-hidden="true"><i></i><small></small></span>` : '';
-    return `<div class="battle-card${side === 'enemy' ? ' enemy-unit' : ''}${secret ? ' sigil-card' : ''}" data-card-id="${card.instanceId}" data-side="${side}" data-foundation="${definition.foundation}" title="${this.escapeAttribute(details)}">${renderCardFace(definition, card, side, 'field')}${cooldown}</div>`;
+    return `<div class="battle-card${side === 'enemy' ? ' enemy-unit' : ''}${secret ? ' sigil-card' : ''}" data-card-id="${card.instanceId}" data-side="${side}" data-foundation="${definition.foundation}" title="${this.escapeAttribute(details)}"><span class="damage-aura" aria-hidden="true"></span>${renderCardFace(definition, card, side, 'field')}${cooldown}</div>`;
   }
 
   private updateAttackCooldowns(): void {
@@ -943,7 +995,8 @@ export class GameApp {
         return;
       }
       const remaining = Math.max(0, card.nextAttackAtMs - this.state.clockMs);
-      const progress = remaining === 0 ? 1 : 1 - Math.min(1, remaining / this.state.attackIntervalMs);
+      const interval = attackIntervalFor(card.definitionId, this.state.attackIntervalMs);
+      const progress = remaining === 0 ? 1 : 1 - Math.min(1, remaining / interval);
       fill.style.transform = `scaleX(${progress})`;
       label.textContent = remaining === 0 ? 'PRONTO' : `ATAQUE ${Math.ceil(remaining / 1000)}s`;
     });

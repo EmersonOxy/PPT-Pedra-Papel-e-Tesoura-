@@ -10,10 +10,20 @@
     "frontRow": { "player": 0, "enemy": 1 },
     "specialSpaces": [{ "kind": "sigil", "count": 2 }]
   },
-  "attackIntervalMs": 5000,
+  "attackIntervalMs": 6500,
+  "attackIntervalMultiplierByDefinitionId": {
+    "solemn-guardian": 1.08,
+    "astral-fox": 0.92,
+    "moss-colossus": 1.08,
+    "amber-phoenix": 1.0,
+    "veil-oracle": 0.92,
+    "vesper-blade": 0.92,
+    "prism-sentinel": 1.08,
+    "ember-knight": 1.0
+  },
   "aiInitialDelayMs": 4000,
   "aiActionIntervalMs": 4000,
   "spellDamage": 2,
   "spellHealing": 2,
-  "note": "Regras temporárias para playtest; não representam balanceamento ou decisões finais de design."
+  "note": "Parâmetros temporários de ritmo; intervalos e atributos por carta são experimentais e não representam balanceamento final."
 }

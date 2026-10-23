@@ -56,6 +56,45 @@ body { overscroll-behavior: none; }
   .combat-projectile, .battle-card.is-attacking, .battle-card.is-hit, .battle-card.is-healing, .impact-number, .destruction-ghost, .place-pop { animation-duration: .01ms !important; }
 }
 
+/* Perfis reutilizáveis de ataque; a simulação não aguarda as animações. */
+.battle-card { isolation: isolate; }
+.battle-card.is-attacking.attack-profile--advance { animation: attack-advance 390ms cubic-bezier(.2,.75,.3,1) both; }
+.battle-card.is-attacking.attack-profile--impact { animation: attack-impact 390ms cubic-bezier(.2,.75,.3,1) both; }
+.battle-card.is-attacking.attack-profile--spin { animation: attack-spin 420ms cubic-bezier(.2,.75,.3,1) both; }
+.battle-card.is-attacking.attack-profile--pulse { animation: attack-pulse 430ms ease-out both; }
+.combat-projectile--profile-pulse { width: 10px; height: 10px; background: radial-gradient(circle,#fff 0 18%,#a9f5e4 40%,#37c5ca 65%,transparent 76%); filter: drop-shadow(0 0 7px #72f4e0); }
+@keyframes attack-advance { 0%,100% { transform: translate(0,0) scale(1); } 36% { transform: translate(var(--attack-x),var(--attack-y)) scale(1.035); } 62% { transform: translate(var(--attack-x),var(--attack-y)) scale(1.015); } }
+@keyframes attack-impact { 0%,100% { transform: translateY(0) scale(1); } 28% { transform: translateY(-7px) scale(1.025); } 58% { transform: translateY(2px) scale(.985); } }
+@keyframes attack-spin { 0%,100% { transform: rotate(0deg) scale(1); } 34% { transform: rotate(-8deg) scale(1.035); } 68% { transform: rotate(5deg) scale(1.015); } }
+@keyframes attack-pulse { 0%,100% { filter: brightness(1); } 35% { filter: brightness(1.22) drop-shadow(0 0 7px #77f3e4); } 70% { filter: brightness(1.08) drop-shadow(0 0 4px #77f3e4); } }
+
+/* Dano vem do evento do motor: tremor curto, aura atrás da carta e valor legível. */
+.damage-aura { position: absolute; z-index: 0; inset: -12%; border-radius: 16%; opacity: 0; pointer-events: none; background: radial-gradient(ellipse at center,transparent 45%,#ff314b45 66%,#fa173b8a 78%,transparent 100%); filter: blur(5px); }
+.battle-card.is-hit { animation: card-hit-feedback 720ms ease-out both; }
+.battle-card.is-hit .damage-aura { animation: damage-aura-pulse 820ms ease-out both; }
+.battle-card.is-destroyed .damage-aura { animation-duration: 520ms; background: radial-gradient(ellipse at center,transparent 32%,#ff244f77 56%,#ff123bbb 74%,transparent 100%); filter: blur(3px); }
+.impact-number { z-index: 15; top: 18%; font-size: clamp(14px,4cqw,22px); }
+.destruction-ghost { animation: unit-destroy 560ms ease-in forwards; filter: drop-shadow(0 0 10px #ff284d); }
+.battle-card.destruction-ghost.is-destroyed { animation: unit-destroy 560ms ease-in forwards; }
+@keyframes card-hit-feedback { 0%,100% { transform: translateX(0); filter: none; } 18%,54% { transform: translateX(-2px); filter: drop-shadow(0 0 5px #ff284d99); } 36%,72% { transform: translateX(2px); filter: drop-shadow(0 0 7px #ff284d); } }
+@keyframes damage-aura-pulse { 0% { opacity: 0; transform: scale(.92); } 22% { opacity: .95; transform: scale(1.02); } 62% { opacity: .72; transform: scale(1.04); } 100% { opacity: 0; transform: scale(1.12); } }
+
+/* Perspectiva configurável. Use 0deg para desativar sem alterar a topologia. */
+:root { --field-tilt-angle: 1deg; --field-tilt-opponent-angle: -1deg; }
+.battle-grid { transform: perspective(1100px) rotateX(var(--field-tilt-opponent-angle)); transform-origin: center; }
+.field-band.player .battle-grid { transform: perspective(1100px) rotateX(var(--field-tilt-angle)); }
+
+/* A mão é empilhada da direita para a esquerda: os cristais ficam expostos. */
+.hand-card.is-selected { z-index: 40 !important; }
+
+/* Sugestão discreta: a compra segue manual e só pulsa quando pode acontecer. */
+.deck-button.is-draw-suggested { animation: deck-draw-pulse 1700ms ease-in-out infinite; }
+.deck-button:disabled.is-draw-suggested { animation: none; }
+@keyframes deck-draw-pulse { 0%,100% { filter: drop-shadow(0 0 2px #f7d87966); } 50% { filter: drop-shadow(0 0 9px #f7d879) drop-shadow(0 0 15px #70dfbe77); } }
+@media (prefers-reduced-motion: reduce) {
+  .battle-card.is-attacking, .battle-card.is-hit, .battle-card.is-hit .damage-aura, .impact-number, .destruction-ghost, .combat-projectile, .deck-button.is-draw-suggested { animation-duration: .01ms !important; animation-iteration-count: 1 !important; }
+}
+
 /* Prevent iOS long-press text/image selection across the game and its navigation. */
 .app-frame, .app-frame * { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
 .app-frame img { -webkit-user-drag: none; user-drag: none; }
