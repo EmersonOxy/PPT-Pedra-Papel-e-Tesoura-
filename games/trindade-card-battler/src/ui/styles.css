@@ -290,3 +290,33 @@ body { overscroll-behavior: none; }
 .mission-reward-preview { position: relative; width: 64px; aspect-ratio: 63 / 88; overflow: hidden; }
 .field-band.enemy .side-life { right: max(24px, calc(50% - 172px)) !important; top: 16%; bottom: 16%; }
 .field-band.player .side-life { right: max(38px, calc(50% - 172px)) !important; top: 16%; bottom: 16%; }
+/* Original 1800 x 2400 arena: every target shares the artwork coordinate space. */
+.game-shell { grid-template-rows: 6.5fr 71fr 22.5fr !important; }
+.arena-stage { container-type: size; display: grid; place-items: center; min-height: 0; overflow: hidden; background: #07121b; }
+.arena-board { position: relative; width: min(100cqw,75cqh); aspect-ratio: 3 / 4; background: url('../assets/arena/arena sem fundo.png') center / 100% 100% no-repeat, url('../assets/arena/fundo da arena.png') center / cover no-repeat; }
+.arena-board .field-band { position: absolute; inset: 0; width: 100%; height: 100%; display: block; padding: 0 !important; background: none; transform: none; pointer-events: none; }
+.arena-board .field-band::before, .arena-board .field-band::after { display: none !important; }
+.arena-board .battle-grid, .arena-board .sigil-side { position: absolute; margin: 0; padding: 0; transform: none; pointer-events: auto; }
+.arena-board .battle-grid { width: 52%; height: 35.7%; grid-template-columns: repeat(3,minmax(0,1fr)); grid-template-rows: repeat(2,minmax(0,1fr)); gap: 1.4%; }
+.arena-board .enemy .battle-grid { left: 5.7%; top: .7%; }
+.arena-board .player .battle-grid { left: 41.8%; top: 63.7%; }
+.arena-board .sigil-side { width: 17.3%; height: 36.7%; }
+.arena-board .enemy .sigil-side { left: 61%; top: 0; }
+.arena-board .player .sigil-side { left: 21.1%; top: 63.1%; }
+.arena-board .secret-slots { width: 100%; height: 100%; grid-template-rows: repeat(2,minmax(0,1fr)); gap: 1.8%; }
+.arena-board .slot, .arena-board .battle-grid .slot, .arena-board .secret-slots .slot { width: 100%; height: 100%; min-height: 0; aspect-ratio: auto; border: 0; border-radius: 3px; padding: 3%; background: transparent; box-shadow: none; }
+.arena-board .slot::before, .arena-board .empty-rune { display: none; }
+.arena-board .field-band .side-life { position: absolute; top: 1% !important; bottom: auto !important; right: auto !important; left: 83.5% !important; width: 11.7%; height: 56%; gap: 0; padding: 0; pointer-events: auto; }
+.arena-board .field-band.player .side-life { left: 4.2% !important; top: 43% !important; width: 11.6%; height: 56.4%; }
+.arena-board .side-life .life-track { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; border-radius: 0; background: #182630; clip-path: polygon(0 0,100% 0,100% 92%,0 100%); }
+.arena-board .player .side-life .life-track { clip-path: polygon(0 8%,100% 0,100% 100%,0 100%); }
+.arena-board .side-life .life-value { position: relative; z-index: 2; margin-top: 22%; color: #fff5d3; font-size: clamp(10px,3cqw,16px); text-shadow: 0 1px 3px #000; }
+.arena-board .side-life .life-label { display: none; }
+.game-shell.is-preparing .arena-board .enemy .battle-grid, .game-shell.is-preparing .arena-board .enemy .sigil-side { opacity: .45; }
+.arena-board .deck-column { position: absolute; z-index: 8; left: 21.5%; top: 40.4%; width: 19.3%; height: 19.4%; padding: 0; display: grid; place-items: center; }
+.arena-board .deck-button { width: 84%; height: 88%; max-height: none; min-height: 0; border: 0; box-shadow: none; padding: 0; }
+.arena-board .player-cycle { position: absolute; z-index: 3; top: -12%; right: -8%; width: 22px; min-width: 22px; height: 22px; }
+.arena-board .player-cycle .enemy-cycle-icon { width: 17px; height: 17px; font-size: 10px; }
+.dock-main { grid-template-columns: minmax(0,1fr); }
+
+.arena-board .side-life .life-track i { border-radius: 0; }

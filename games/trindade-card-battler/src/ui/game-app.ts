@@ -120,6 +120,7 @@ export class GameApp {
             <div class="top-actions"><button class="top-btn" id="themes" type="button" aria-label="Escolher tema">◒</button><button class="top-btn" id="help" type="button" aria-label="Como jogar">?</button><button class="top-btn" id="restart" type="button" aria-label="Voltar ao menu" title="Voltar ao menu">⌂</button></div>
           </div>
         </section>
+        <div class="arena-stage"><div class="arena-board">
         <section class="field-band enemy" data-zone="enemy-field" aria-label="Campo adversário">
             <div class="battle-grid enemy-grid" id="enemy-grid" aria-label="${boardSlotCount} espaços do adversário"></div>
           <aside class="sigil-side enemy"><span class="sigil-label">SIGILOS</span><div class="secret-slots" id="enemy-secrets" aria-label="${balance.fieldTopology.specialSpaces[0]?.count ?? 0} sigilos adversários"></div></aside>
@@ -134,14 +135,14 @@ export class GameApp {
             <span class="life-label">VIDA</span><span class="life-value" id="player-life-value">${balance.startingLife}</span><span class="life-track"><i id="player-life-fill"></i></span>
           </button>
         </section>
+        <div class="deck-column"><div class="player-cycle" role="status" aria-label="Ciclo do seu deck"><span class="enemy-cycle-icon" id="player-cycle">1</span></div><button class="deck-button" type="button" id="draw-deck" title="Comprar uma carta" aria-label="Comprar carta">${renderDeckCardBack()}<span class="deck-progress" id="deck-badge" role="progressbar" aria-label="Progresso do deck" aria-valuemin="0" aria-valuemax="${balance.deckSize}" aria-valuenow="${balance.handLimit}"></span></button></div>
+        </div></div>
         <section class="bottom-zone" aria-label="Sua mão e deck">
           <div class="my-status"><div class="status-stack"><div class="status-title">TRINDADE</div><div class="status-sub" id="player-status">Regras experimentais · partida local</div></div><div class="metrics"><strong id="deck-count">18</strong><small>no deck</small></div></div>
           <div class="hand-dock">
             <div class="dock-header"><strong>SUA MÃO <span id="hand-count">${balance.handLimit}/${balance.handLimit}</span></strong><span class="selection-hint" id="action-hint">Toque ou arraste as cartas</span></div>
             <div class="dock-main">
-              <div class="deck-column"><div class="player-cycle" role="status" aria-label="Ciclo do seu deck"><span class="enemy-cycle-icon" id="player-cycle">1</span></div>
-                <button class="deck-button" type="button" id="draw-deck" title="Comprar uma carta" aria-label="Comprar carta">${renderDeckCardBack()}<span class="deck-progress" id="deck-badge" role="progressbar" aria-label="Progresso do deck" aria-valuemin="0" aria-valuemax="${balance.deckSize}" aria-valuenow="${balance.handLimit}"></span></button>
-              </div>
+
               <div class="hand-area" id="hand-area" data-zone="hand" aria-label="Sua mão: arraste uma tropa para cá para recolhê-la"></div>
             </div>
           </div>
