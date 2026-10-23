@@ -1,25 +1,32 @@
 {
   "rulesetId": "trindade-demo-experimental-v1",
   "startingLife": 20,
-  "deckSize": 24,
+  "deckSize": 22,
   "copiesPerDefinition": 2,
   "handLimit": 6,
   "fieldTopology": {
     "rows": 2,
     "columns": 3,
-    "frontRow": { "player": 0, "enemy": 1 },
-    "specialSpaces": [{ "kind": "sigil", "count": 2 }]
+    "frontRow": {
+      "player": 0,
+      "enemy": 1
+    },
+    "specialSpaces": [
+      {
+        "kind": "sigil",
+        "count": 2
+      }
+    ]
   },
   "attackIntervalMs": 6500,
   "attackIntervalMultiplierByDefinitionId": {
     "solemn-guardian": 1.08,
     "astral-fox": 0.92,
     "moss-colossus": 1.08,
-    "amber-phoenix": 1.0,
+    "amber-phoenix": 1,
     "veil-oracle": 0.92,
     "vesper-blade": 0.92,
-    "prism-sentinel": 1.08,
-    "ember-knight": 1.0
+    "ember-knight": 1
   },
   "initialAttackDelayMsByDefinitionId": {
     "solemn-guardian": 0,
@@ -28,7 +35,6 @@
     "amber-phoenix": 4000,
     "veil-oracle": 1500,
     "vesper-blade": 0,
-    "prism-sentinel": 3000,
     "ember-knight": 5000
   },
   "aiInitialDelayMs": 4000,

@@ -12,7 +12,7 @@ const previousStats: Record<string, { attack: number; health: number }> = {
   'solemn-guardian': { attack: 2, health: 4 }, 'astral-fox': { attack: 3, health: 2 },
   'moss-colossus': { attack: 2, health: 6 }, 'amber-phoenix': { attack: 5, health: 2 },
   'veil-oracle': { attack: 3, health: 3 }, 'vesper-blade': { attack: 4, health: 2 },
-  'prism-sentinel': { attack: 2, health: 5 }, 'ember-knight': { attack: 4, health: 3 },
+  'ember-knight': { attack: 4, health: 3 },
 };
 
 function makeUnit(side: Side, id: string, definitionId: string, nextAttackAtMs: number): CardInstance {
@@ -103,6 +103,6 @@ test('representative deterministic troop duels survive longer under the experime
   }
   const oldAverage = oldTotal / matchups; const newAverage = newTotal / matchups;
   console.log(`Pacing experiment: ${matchups} matchups; average first-elimination time ${Math.round(oldAverage)} ms -> ${Math.round(newAverage)} ms (+${Math.round((newAverage / oldAverage - 1) * 100)}%).`);
-  assert.equal(matchups, 64);
+  assert.equal(matchups, troops.length ** 2);
   assert.ok(newAverage > oldAverage);
 });

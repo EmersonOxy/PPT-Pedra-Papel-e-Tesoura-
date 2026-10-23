@@ -25,13 +25,12 @@ const suggestionIds: Record<string, DeckSynergySuggestion[]> = {
   'astral-fox': [{ cardId: 'runic-pulse', reason: 'A cura pode prolongar a presença da tropa.' }, { cardId: 'vesper-blade', reason: 'Duas tropas de golpes rápidos pressionam alvos.' }],
   'moss-colossus': [{ cardId: 'solemn-guardian', reason: 'Outra tropa resistente reforça a formação.' }, { cardId: 'sleeping-thorns', reason: 'Um sigilo pode complementar uma linha defensiva.' }],
   'amber-phoenix': [{ cardId: 'wandering-flame', reason: 'O feitiço também causa dano direto.' }, { cardId: 'ember-knight', reason: 'A dupla concentra pressão ofensiva.' }],
-  'veil-oracle': [{ cardId: 'prism-sentinel', reason: 'As duas tropas têm descrições ligadas à leitura e guarda.' }, { cardId: 'runic-pulse', reason: 'A cura oferece suporte a tropas em campo.' }],
+  'veil-oracle': [{ cardId: 'moss-colossus', reason: 'As duas tropas têm descrições ligadas à leitura e guarda.' }, { cardId: 'runic-pulse', reason: 'A cura oferece suporte a tropas em campo.' }],
   'vesper-blade': [{ cardId: 'astral-fox', reason: 'Duas tropas de golpes precisos pressionam alvos.' }, { cardId: 'runic-pulse', reason: 'A cura pode prolongar a presença da tropa.' }],
-  'prism-sentinel': [{ cardId: 'solemn-guardian', reason: 'As duas tropas têm foco em guarda.' }, { cardId: 'runic-pulse', reason: 'A cura oferece suporte a tropas em campo.' }],
   'ember-knight': [{ cardId: 'wandering-flame', reason: 'O feitiço também causa dano direto.' }, { cardId: 'amber-phoenix', reason: 'A dupla concentra pressão ofensiva.' }],
   'eclipse-seal': [{ cardId: 'veil-oracle', reason: 'O sigilo e a tropa compartilham tema ligado ao véu.' }, { cardId: 'sleeping-thorns', reason: 'Dois sigilos podem compor uma defesa preparada.' }],
   'sleeping-thorns': [{ cardId: 'moss-colossus', reason: 'A tropa resistente combina com uma defesa preparada.' }, { cardId: 'eclipse-seal', reason: 'Dois sigilos podem compor uma defesa preparada.' }],
-  'runic-pulse': [{ cardId: 'solemn-guardian', reason: 'A cura pode manter a tropa resistente em campo.' }, { cardId: 'prism-sentinel', reason: 'A cura oferece suporte a uma tropa defensiva.' }],
+  'runic-pulse': [{ cardId: 'solemn-guardian', reason: 'A cura pode manter a tropa resistente em campo.' }, { cardId: 'moss-colossus', reason: 'A cura oferece suporte a uma tropa defensiva.' }],
   'wandering-flame': [{ cardId: 'amber-phoenix', reason: 'A tropa e o feitiço concentram dano.' }, { cardId: 'ember-knight', reason: 'A tropa e o feitiço concentram dano.' }],
 };
 

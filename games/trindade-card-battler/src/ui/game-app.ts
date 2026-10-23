@@ -86,7 +86,7 @@ export class GameApp {
         <header class="home-header"><div class="home-brand"><span class="home-brand-mark" aria-hidden="true">${sigil}</span><span><strong>TRINDADE</strong><small>CARD BATTLES · EXPERIMENTO</small></span></div><div class="home-profile"><span class="home-avatar" aria-hidden="true">T</span><span><strong>JOGADOR</strong><small>LOCAL</small></span></div></header>
         <div class="home-scroll" id="home-scroll">
           <section class="home-page home-page--start" data-home-page="home">
-            <div class="home-hero"><div class="hero-kicker"><i></i> ARENA EXPERIMENTAL · IA LOCAL</div><div class="hero-emblem" aria-hidden="true">${sigil}</div><h1>As três forças<br>se encontram.</h1><p>Monte sua formação e enfrente a Casa Carmesim em uma partida local de demonstração.</p><div class="hero-facts"><span><b>3 × 2</b> arena</span><span><b>24</b> cartas</span><span><b>IA</b> local</span></div><button class="battle-cta" id="start-battle" type="button"><span class="battle-cta-icon" aria-hidden="true">⚔</span><span><strong>BATALHA</strong><small>Encontrar adversário</small></span><span class="battle-cta-arrow" aria-hidden="true">→</span></button>
+            <div class="home-hero"><div class="hero-kicker"><i></i> ARENA EXPERIMENTAL · IA LOCAL</div><div class="hero-emblem" aria-hidden="true">${sigil}</div><h1>As três forças<br>se encontram.</h1><p>Monte sua formação e enfrente a Casa Carmesim em uma partida local de demonstração.</p><div class="hero-facts"><span><b>3 × 2</b> arena</span><span><b>${balance.deckSize}</b> cartas</span><span><b>IA</b> local</span></div><button class="battle-cta" id="start-battle" type="button"><span class="battle-cta-icon" aria-hidden="true">⚔</span><span><strong>BATALHA</strong><small>Encontrar adversário</small></span><span class="battle-cta-arrow" aria-hidden="true">→</span></button>
               <div class="match-panel" id="match-panel" hidden aria-live="polite"><div class="match-orbit" aria-hidden="true"><span>${sigil}</span></div><div class="match-copy"><strong id="match-title">Buscando adversário</strong><small id="match-detail">Partida experimental contra IA local</small></div><strong class="match-countdown" id="match-countdown" hidden></strong><button class="cancel-search" id="cancel-search" type="button">Cancelar busca</button></div>
               <div class="hero-disclaimer">Esta versão usa IA local. Ainda não existe PvP online.</div>
             </div>
@@ -149,7 +149,7 @@ export class GameApp {
           </div>
         </section>
         <div id="toast" class="toast" role="status" aria-live="polite"></div>
-        <div class="overlay" id="help-overlay" aria-hidden="true"><div class="help-panel"><div class="help-tag">Experimento separado · versão jogável inicial</div><h2>Como experimentar</h2><p><b>Comprar:</b> toque no deck enquanto houver espaço na mão (máximo de ${balance.handLimit} cartas).</p><p><b>Posicionar:</b> arraste uma tropa a um espaço vazio. A linha próxima do centro protege a linha posterior na mesma coluna.</p><p><b>Mover ou recolher:</b> arraste uma tropa sua para um espaço vazio ou para a mão. Para definir seu alvo, arraste ou selecione a tropa e toque em qualquer tropa inimiga exposta; a coluna da atacante não limita o alvo. A carta atacante mostra quem está priorizando. Se o alvo sair do campo ou ficar protegido, ela informa que retomou o alvo automático.</p><p><b>Feitiços:</b> Chama Errante causa ${balance.spellDamage} de dano; Pulso Rúnico restaura ${balance.spellHealing} de vida. Selecione um feitiço e toque no alvo compatível.</p><p><b>Sigilos:</b> coloque um sigilo em um dos ${balance.fieldTopology.specialSpaces[0]?.count ?? 0} espaços e toque nele para revelar sua carta. Eles são visuais nesta versão e ainda não têm gatilhos.</p><p><b>Combate:</b> cada tropa tem sua recarga individual exibida na carta (de ${minAttackInterval.toFixed(2)} a ${maxAttackInterval.toFixed(2)} segundos). O valor varia por carta e é experimental. Os custos são somente demonstrativos; não há mana.</p><p><b>Limite experimental:</b> ${balance.startingLife} de vida, ${balance.deckSize} cartas por deck e IA básica. Os valores não são regras finais.</p><button class="close-help" id="close-help" type="button">Entendi</button></div></div>
+        <div class="overlay" id="help-overlay" aria-hidden="true"><div class="help-panel"><div class="help-tag">Experimento separado · versão jogável inicial</div><h2>Como experimentar</h2><p><b>Comprar:</b> toque no deck enquanto houver espaço na mão (máximo de ${balance.handLimit} cartas).</p><p><b>Posicionar:</b> arraste uma tropa a um espaço vazio. A linha próxima do centro protege a linha posterior na mesma coluna.</p><p><b>Mover ou recolher:</b> arraste uma tropa sua para um espaço vazio ou para a mão. Para definir seu alvo, arraste ou selecione a tropa e toque em qualquer tropa inimiga exposta; a coluna da atacante não limita o alvo. A carta atacante mostra quem está priorizando. Se o alvo sair do campo ou ficar protegido, ela informa que retomou o alvo automático.</p><p><b>Feitiços:</b> Bola de Fogo causa ${balance.spellDamage} de dano; Cura Equivalente restaura ${balance.spellHealing} de vida. Selecione um feitiço e toque no alvo compatível.</p><p><b>Sigilos:</b> coloque um sigilo em um dos ${balance.fieldTopology.specialSpaces[0]?.count ?? 0} espaços e toque nele para revelar sua carta. Eles são visuais nesta versão e ainda não têm gatilhos.</p><p><b>Combate:</b> cada tropa tem sua recarga individual exibida na carta (de ${minAttackInterval.toFixed(2)} a ${maxAttackInterval.toFixed(2)} segundos). O valor varia por carta e é experimental. Os custos são somente demonstrativos; não há mana.</p><p><b>Limite experimental:</b> ${balance.startingLife} de vida, ${balance.deckSize} cartas por deck e IA básica. Os valores não são regras finais.</p><button class="close-help" id="close-help" type="button">Entendi</button></div></div>
         <div class="overlay" id="palette-overlay" aria-hidden="true"><div class="help-panel"><div class="help-tag">Identidade visual V3</div><h2>Atmosfera da arena</h2><div class="theme-option-grid"><button type="button" class="theme-btn active" data-theme-set="mineral">Verde mineral</button><button type="button" class="theme-btn" data-theme-set="abissal">Azul abissal</button><button type="button" class="theme-btn" data-theme-set="rubro">Rubro arcano</button></div><button class="close-help" id="close-palette" type="button">Voltar à arena</button></div></div>
         <div class="overlay" id="result-overlay" aria-hidden="true"><div class="help-panel"><div class="help-tag">Fim da partida</div><h2 id="result-title">Vitória</h2><p id="result-copy"></p><button class="close-help" id="play-again" type="button">Voltar ao início</button></div></div>
       </main><svg class="attack-aim-overlay" id="attack-aim-overlay" aria-hidden="true"><defs><marker id="attack-arrowhead" markerWidth="18" markerHeight="18" refX="15" refY="9" markerUnits="userSpaceOnUse" orient="auto"><path d="M1 2L16 9L1 16L5 9Z"></path></marker></defs><path id="attack-aim-line" d=""></path></svg><div class="overlay card-preview-overlay" id="card-preview-overlay" aria-hidden="true"><div class="card-preview-wrap" id="card-preview-wrap"></div></div><div class="transition-curtain" id="transition-curtain" aria-hidden="true"></div></div>`;
@@ -706,12 +706,39 @@ export class GameApp {
 
   private transition(result: Transition, failureMessage?: string): void {
     if (!result.events.length && failureMessage) { this.toast(failureMessage); return; }
+    const origins = new Map<string, DOMRect>();
+    for (const event of result.events) {
+      if (event.type !== 'draw' && event.type !== 'move' && event.type !== 'place' && event.type !== 'return') continue;
+      const source = event.type === 'draw'
+        ? this.root.querySelector<HTMLElement>(event.side === 'player' ? '#draw-deck' : '.enemy-deck-display')
+        : this.root.querySelector<HTMLElement>(`#game [data-card-id="${CSS.escape(event.instanceId)}"]`);
+      if (source) origins.set(event.instanceId, source.getBoundingClientRect());
+    }
     const attackProfiles = this.captureAttackProfiles(result.events, this.state);
     this.captureDestructions(result.events);
     this.state = result.state;
     if (result.events.some((event) => event.type === 'place' || event.type === 'spell' || event.type === 'return' || event.type === 'move' || event.type === 'target')) this.selectedId = null;
     this.render();
+    this.animateCardTransfers(origins);
     this.playEvents(result.events, attackProfiles);
+  }
+
+  private animateCardTransfers(origins: Map<string, DOMRect>): void {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    for (const [id, from] of origins) {
+      const target = this.root.querySelector<HTMLElement>(`#game [data-card-id="${CSS.escape(id)}"]`);
+      if (!target) continue;
+      const to = target.getBoundingClientRect();
+      if (!from.width || !from.height || !to.width || !to.height) continue;
+      const dx = from.x + from.width / 2 - to.x - to.width / 2;
+      const dy = from.y + from.height / 2 - to.y - to.height / 2;
+      const base = getComputedStyle(target).transform === 'none' ? '' : getComputedStyle(target).transform;
+      target.animate([
+        { transform: `translate(${dx}px,${dy}px) scale(${from.width / to.width},${from.height / to.height}) rotateY(-12deg) ${base}`, opacity: .7 },
+        { transform: `translate(0,-8px) scale(1.04) rotateY(5deg) ${base}`, opacity: 1, offset: .78 },
+        { transform: base || 'none', opacity: 1 },
+      ], { duration: 480, easing: 'cubic-bezier(.2,.75,.25,1)' });
+    }
   }
 
   private tick = (now: number): void => {

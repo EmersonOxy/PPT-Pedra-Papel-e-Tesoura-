@@ -25,14 +25,14 @@ function fixture(seed = 42): GameState {
   return state;
 }
 
-test('deck has 24 cards, two copies of each demo and six opening cards per side', () => {
-  assert.equal(cardDefinitions.length, 12);
+test('deck has the configured number of cards, two copies of each demo and six opening cards per side', () => {
+  assert.equal(cardDefinitions.length, 11);
   const game = createGame(123);
   for (const side of ['player', 'enemy'] as const) {
     assert.equal(game.players[side].hand.length, 6);
-    assert.equal(game.players[side].deck.length, 18);
-    assert.equal(game.players[side].deck.length + game.players[side].hand.length, 24);
-    assert.equal(new Set([...game.players[side].deck, ...game.players[side].hand].map((card) => card.instanceId)).size, 24);
+    assert.equal(game.players[side].deck.length, balance.deckSize - balance.handLimit);
+    assert.equal(game.players[side].deck.length + game.players[side].hand.length, balance.deckSize);
+    assert.equal(new Set([...game.players[side].deck, ...game.players[side].hand].map((card) => card.instanceId)).size, balance.deckSize);
   }
 });
 
@@ -68,7 +68,7 @@ test('draw respects the six-card hand limit and consumes one deck card', () => {
   const placed = placeCard(state, 'player', troop.instanceId, 0);
   const drawn = drawCard(placed.state, 'player');
   assert.equal(drawn.state.players.player.hand.length, 6);
-  assert.equal(drawn.state.players.player.deck.length, 17);
+  assert.equal(drawn.state.players.player.deck.length, balance.deckSize - balance.handLimit - 1);
   assert.equal(drawn.events[0]?.type, 'draw');
 });
 

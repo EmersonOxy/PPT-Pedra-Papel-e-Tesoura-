@@ -352,3 +352,14 @@ body { overscroll-behavior: none; }
 /* Keep both supplied backs square; the gold support is already drawn in the arena. */
 .arena-board .deck-button { border-radius: 0; overflow: visible; }
 .arena-board .deck-button .deck-card-back, .enemy-deck-display .deck-card-back { border-radius: 0; object-fit: contain; }
+/* Card lift stays in presentation; engine events resolve immediately. */
+.hand-card, .quick-card-preview { perspective: 900px; }
+.hand-card .card-face { transition: transform 260ms cubic-bezier(.2,.75,.25,1), filter 260ms ease; transform-origin: center; }
+.hand-card.is-selected .card-face { transform: translateY(-5px) rotateX(9deg) rotateY(-5deg); filter: drop-shadow(0 9px 7px #0008); }
+.quick-card-preview .preview-shell { animation: card-inspect-float 2800ms ease-in-out infinite; transform-style: preserve-3d; }
+@keyframes card-inspect-float { 0%,100% { transform: perspective(900px) translateY(0) rotateX(3deg) rotateY(-3deg); } 50% { transform: perspective(900px) translateY(-7px) rotateX(-2deg) rotateY(3deg); } }
+.card-face--hand .card-face__description, .card-face--field .card-face__description { display: flex; font-size: clamp(3px,3.5cqw,9px); line-height: 1.1; }
+@media (prefers-reduced-motion: reduce) { .quick-card-preview .preview-shell { animation: none; transform: none; } .hand-card.is-selected .card-face { transform: none; } }
+.hand-card.is-selected .card-face { animation: selected-card-hover 2200ms ease-in-out infinite; }
+@keyframes selected-card-hover { 0%,100% { transform: translateY(-5px) rotateX(9deg) rotateY(-5deg); } 50% { transform: translateY(-10px) rotateX(5deg) rotateY(-2deg); } }
+@media (prefers-reduced-motion: reduce) { .hand-card.is-selected .card-face { animation: none; } }

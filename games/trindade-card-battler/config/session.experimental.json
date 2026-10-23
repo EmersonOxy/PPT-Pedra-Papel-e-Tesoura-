@@ -7,17 +7,82 @@
   "preparationDurationMs": 15000,
   "battleAnnouncementMs": 650,
   "preparationActions": {
-    "solemn-guardian": { "place": true, "move": true, "return": true, "cast": false, "reveal": false },
-    "astral-fox": { "place": true, "move": true, "return": true, "cast": false, "reveal": false },
-    "moss-colossus": { "place": true, "move": true, "return": true, "cast": false, "reveal": false },
-    "amber-phoenix": { "place": true, "move": true, "return": true, "cast": false, "reveal": false },
-    "veil-oracle": { "place": true, "move": true, "return": true, "cast": false, "reveal": false },
-    "vesper-blade": { "place": true, "move": true, "return": true, "cast": false, "reveal": false },
-    "prism-sentinel": { "place": true, "move": true, "return": true, "cast": false, "reveal": false },
-    "ember-knight": { "place": true, "move": true, "return": true, "cast": false, "reveal": false },
-    "eclipse-seal": { "place": true, "move": false, "return": false, "cast": false, "reveal": false },
-    "sleeping-thorns": { "place": true, "move": false, "return": false, "cast": false, "reveal": false },
-    "runic-pulse": { "place": false, "move": false, "return": false, "cast": false, "reveal": false },
-    "wandering-flame": { "place": false, "move": false, "return": false, "cast": false, "reveal": false }
+    "solemn-guardian": {
+      "place": true,
+      "move": true,
+      "return": true,
+      "cast": false,
+      "reveal": false
+    },
+    "astral-fox": {
+      "place": true,
+      "move": true,
+      "return": true,
+      "cast": false,
+      "reveal": false
+    },
+    "moss-colossus": {
+      "place": true,
+      "move": true,
+      "return": true,
+      "cast": false,
+      "reveal": false
+    },
+    "amber-phoenix": {
+      "place": true,
+      "move": true,
+      "return": true,
+      "cast": false,
+      "reveal": false
+    },
+    "veil-oracle": {
+      "place": true,
+      "move": true,
+      "return": true,
+      "cast": false,
+      "reveal": false
+    },
+    "vesper-blade": {
+      "place": true,
+      "move": true,
+      "return": true,
+      "cast": false,
+      "reveal": false
+    },
+    "ember-knight": {
+      "place": true,
+      "move": true,
+      "return": true,
+      "cast": false,
+      "reveal": false
+    },
+    "eclipse-seal": {
+      "place": true,
+      "move": false,
+      "return": false,
+      "cast": false,
+      "reveal": false
+    },
+    "sleeping-thorns": {
+      "place": true,
+      "move": false,
+      "return": false,
+      "cast": false,
+      "reveal": false
+    },
+    "runic-pulse": {
+      "place": false,
+      "move": false,
+      "return": false,
+      "cast": false,
+      "reveal": false
+    },
+    "wandering-flame": {
+      "place": false,
+      "move": false,
+      "return": false,
+      "cast": false,
+      "reveal": false
+    }
   }
 }

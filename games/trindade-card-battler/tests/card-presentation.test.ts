@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { existsSync } from 'node:fs';
 import { cardDefinitions } from '../src/game/cards.ts';
 import type { CardInstance } from '../src/game/types.ts';
 import { cardPresentationCatalog, renderCardBack, renderCardFace, renderDeckCardBack, sigilByCardKind } from '../src/ui/card-presentation.ts';
@@ -7,6 +8,17 @@ import { cardPresentationCatalog, renderCardBack, renderCardFace, renderDeckCard
 function instance(definitionId: string, health = 4): CardInstance {
   return { instanceId: `test-${definitionId}`, definitionId, owner: 'player', health, nextAttackAtMs: 0, revealed: true };
 }
+
+test('the supplied art replaces temporary cards and the old peasant', () => {
+  assert.equal(cardDefinitions.length, 11);
+  assert.ok(cardDefinitions.some(card => card.name === 'Camponês Briguento'));
+  assert.ok(!cardDefinitions.some(card => card.name === 'Camponês' || card.id === 'prism-sentinel'));
+  for (const card of cardDefinitions) {
+    const illustration = cardPresentationCatalog[card.id]!.illustration;
+    assert.equal(illustration.kind, 'image', card.name);
+    if (illustration.kind === 'image') assert.ok(existsSync(new URL(illustration.src)), card.name);
+  }
+});
 
 test('every catalog card has an independent visual configuration using supplied backgrounds and symbols', () => {
   assert.deepEqual(Object.keys(cardPresentationCatalog).sort(), cardDefinitions.map((card) => card.id).sort());
@@ -32,7 +44,7 @@ test('one face renderer covers hand, field, and preview while combat stats remai
     assert.match(html, /card-face__sigil/);
     assert.match(html, /card-face__stat--blue[^>]*>2</);
     assert.match(html, /card-face__stat--red[^>]*>2</);
-    assert.match(html, /Ilustração provisória/);
+    assert.match(html, /card-face__art-image/);
   }
   assert.match(renderCardFace(troop, instance(troop.id, 1), 'player', 'field'), /card-face__stat--red[^>]*>1</);
 });
