@@ -11,6 +11,7 @@ import { attackProfileClass, attackProjectileClass, cooldownSweepDegrees, handFa
 import { deckStatsFor, synergiesFor } from './deck-card-details.ts';
 import type { AttackAnimationProfile } from '../game/types.ts';
 
+const missionRewards: Record<string, string> = { 'first-match': 'runic-pulse', 'first-win': 'amber-phoenix', 'first-formation': 'solemn-guardian' };
 type ActiveDrag = {
   id: string;
   side: Side;
@@ -99,7 +100,7 @@ export class GameApp {
             <div class="deck-grid" id="deck-grid" aria-label="As ${balance.deckSize} cartas do deck"></div>
           </section>
           <section class="home-page" data-home-page="missions" hidden>
-            <div class="page-heading"><span class="page-overline">OBJETIVOS DE TREINO</span><h1>Missões</h1><p>Conclua objetivos, resgate tickets e escolha a carta que vai melhorar.</p></div>
+            <div class="page-heading"><span class="page-overline">OBJETIVOS DE TREINO</span><h1>Missões</h1><p>Conclua objetivos e resgate tickets exclusivos das cartas indicadas.</p></div>
             <div class="mission-list" id="mission-list"></div>
             <p class="mission-footnote">Tickets ficam salvos neste dispositivo e só podem melhorar a carta correspondente.</p>
           </section>
@@ -203,6 +204,7 @@ export class GameApp {
   }
 
   private claimMission(missionId: string, definitionId: string): void {
+    definitionId = missionRewards[missionId] ?? '';
     if (this.claimedMissions.has(missionId)) return;
     const available = new Set([
       ...(this.matchesCompleted > 0 ? ['first-match'] : []),
@@ -354,13 +356,13 @@ export class GameApp {
       { id: 'first-win', title: 'Vitória da Trindade', objective: 'Vença a IA local uma vez.', progress: Math.min(this.playerWins, 1), goal: 1 },
       { id: 'first-formation', title: 'Formação inicial', objective: 'Coloque três cartas na arena.', progress: Math.min(this.cardsPlaced, 3), goal: 3 },
     ];
-    list.innerHTML = missions.map((mission, index) => {
+    list.innerHTML = missions.map((mission) => {
       const complete = mission.progress >= mission.goal;
       const claimed = this.claimedMissions.has(mission.id);
-      const choices = cardDefinitions.filter((definition) => definition.kind !== 'hidden').map((definition) => `<option value="${definition.id}">${this.escapeAttribute(definition.name)}</option>`).join('');
-      const reward = '5 tickets da carta selecionada';
-      const claim = complete && !claimed ? `<div class="mission-reward-choice"><label for="mission-card-${mission.id}">Escolha a carta</label><select id="mission-card-${mission.id}" data-mission-card="${mission.id}">${choices}</select><button class="mission-claim" type="button" data-claim-mission="${mission.id}">Resgatar tickets</button></div>` : '';
-      return `<article class="mission-card${complete ? ' is-complete' : ''}"><span class="mission-index">0${index + 1}</span><div class="mission-content"><div class="mission-status">${claimed ? 'RECOMPENSA RESGATADA' : complete ? 'CONCLUÍDA' : 'EM ANDAMENTO'}</div><h2>${mission.title}</h2><p>${mission.objective}</p><div class="mission-progress"><span style="width:${Math.min(100, mission.progress / mission.goal * 100)}%"></span></div><small>${mission.progress}/${mission.goal} · Recompensa: ${reward}</small>${claim}</div><span class="mission-check" aria-hidden="true">${claimed ? '✓' : complete ? '✧' : '◇'}</span></article>`;
+      const definition = getCardDefinition(missionRewards[mission.id]);
+      const rewardCard = this.deckPreviewCards.find(card => card.definitionId === definition.id)!;
+      const reward = `5 tickets de ${definition.name}`;
+      return `<article class="mission-card${complete ? ' is-complete' : ''}"><div class="mission-reward-preview">${renderCardFace(definition, rewardCard, 'player', 'preview')}</div><div class="mission-content"><div class="mission-status">${claimed ? 'RECOMPENSA RESGATADA' : complete ? 'CONCLUÍDA' : 'EM ANDAMENTO'}</div><h2>${mission.title}</h2><p>${mission.objective}</p><div class="mission-progress"><span style="width:${Math.min(100, mission.progress / mission.goal * 100)}%"></span></div><small>${mission.progress}/${mission.goal} · Recompensa: ${reward}</small>${complete && !claimed ? `<button class="mission-claim" type="button" data-claim-mission="${mission.id}">Resgatar tickets</button>` : ''}</div><span class="mission-check" aria-hidden="true">${claimed ? '✓' : complete ? '✧' : '◇'}</span></article>`;
     }).join('');
   }
 

@@ -278,3 +278,15 @@ body { overscroll-behavior: none; }
 .hand-card, .battle-card { touch-action: none; }
 @media (max-width: 520px) { .quick-card-preview { width: min(94vw,440px); grid-template-columns: minmax(0, .8fr) minmax(0,1fr); gap: 9px; padding: 10px; } .quick-card-preview .card-preview-details { padding: 9px; } .quick-card-preview .card-preview-heading strong { font-size: 12px; } .quick-card-preview .card-preview-facts { gap: 6px; font-size: 9px; } .quick-card-preview .card-preview-details p { font-size: 10px; } }
 @media (max-width: 350px) { .quick-card-preview { grid-template-columns: minmax(0,1fr); width: min(80vw,300px); } .quick-card-preview .preview-shell { width: min(55vw,180px); justify-self: center; max-height: 43dvh; } }
+.quick-card-preview, .quick-card-preview * { box-sizing: border-box; }
+.quick-card-preview { max-width: 94vw; max-height: 90dvh; overflow-y: auto; }
+.quick-card-preview .preview-shell { min-width: 0; min-height: 0; height: auto; aspect-ratio: 63 / 88; }
+.quick-card-preview .card-preview-details { min-width: 0; overflow-wrap: anywhere; }
+@media (max-width: 520px) {
+ .quick-card-preview { grid-template-columns: minmax(0,1fr); width: min(92vw,360px); }
+ .quick-card-preview .preview-shell { width: min(48vw,190px); max-height: none; justify-self: center; }
+}
+.mission-card { grid-template-columns: 64px minmax(0,1fr) 16px; }
+.mission-reward-preview { position: relative; width: 64px; aspect-ratio: 63 / 88; overflow: hidden; }
+.field-band.enemy .side-life { right: max(24px, calc(50% - 172px)) !important; top: 16%; bottom: 16%; }
+.field-band.player .side-life { right: max(38px, calc(50% - 172px)) !important; top: 16%; bottom: 16%; }
