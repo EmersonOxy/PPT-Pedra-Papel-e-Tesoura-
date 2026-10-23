@@ -922,9 +922,16 @@ export class GameApp {
       deckCount: player.deck.length, hasTroopInHand: player.hand.some((card) => getCardDefinition(card.definitionId).kind === 'troop'),
     });
     if (deck) {
+      const drawStatus = player.deck.length === 0 ? 'Deck esgotado'
+        : this.state.phase === 'finished' ? 'Partida encerrada'
+          : this.state.phase !== 'playing' ? 'Aguarde o combate'
+            : player.hand.length >= balance.handLimit ? 'Mão cheia'
+              : `${player.deck.length} cartas · Comprar`;
+      deck.parentElement?.setAttribute('data-draw-status', drawStatus);
+      deck.title = drawStatus;
       deck.disabled = !canDraw;
       deck.classList.toggle('is-draw-suggested', needsDraw);
-      deck.setAttribute('aria-label', needsDraw ? 'Comprar carta; sua mão não tem tropas' : 'Comprar carta');
+      deck.setAttribute('aria-label', `${drawStatus}${needsDraw ? '; sua mão não tem tropas' : ''}`);
     }
     const badge = this.root.querySelector<HTMLElement>('#deck-badge');
     if (badge) { const drawn = Math.min(balance.deckSize, player.cardsDrawn); badge.style.setProperty('--deck-progress', `${drawn / balance.deckSize * 100}%`); badge.setAttribute('aria-valuemax', String(balance.deckSize)); badge.setAttribute('aria-valuenow', String(drawn)); }
