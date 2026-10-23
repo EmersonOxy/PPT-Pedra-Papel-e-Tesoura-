@@ -1,7 +1,7 @@
 import { cardDefinitions, getCardDefinition } from '../game/cards.ts';
-import { beginPreparation, castSpell, drawCard, moveTroop, placeCard, placeSigil, returnTroop, revealSigil } from '../game/engine.ts';
+import { assignAttackTarget, beginPreparation, castSpell, drawCard, moveTroop, placeCard, placeSigil, returnTroop, revealSigil } from '../game/engine.ts';
 import { advanceTime } from '../game/simulation.ts';
-import { frontRow } from '../game/targeting.ts';
+import { frontRow, isAttackTargetExposed } from '../game/targeting.ts';
 import { balance, boardSlotCount, topology } from '../game/config.ts';
 import type { CardInstance, GameEvent, GameState, Side, SpellTarget, Transition } from '../game/types.ts';
 import { advanceMatchFlow, beginDemoMatchSearch, cancelDemoMatchSearch, createMatchFlow, isPreparationActionAllowed, sessionConfig, setMatchFlowPhase } from '../game/session-flow.ts';
@@ -17,6 +17,7 @@ type ActiveDrag = {
   originalStyle: string | null;
   originalClassName: string;
   pointerId: number;
+  source: 'hand' | 'board';
   x: number;
   y: number;
   startX: number;
@@ -24,7 +25,6 @@ type ActiveDrag = {
   offsetX: number;
   offsetY: number;
   started: boolean;
-  previewOpened: boolean;
 };
 
 const sigil = '<svg viewBox="0 0 60 60" fill="none" aria-hidden="true" xmlns="http://www.w3.org/2000/svg"><path d="M30 4L53 45H7L30 4Z" stroke="#ddc58e" stroke-width="2"/><circle cx="30" cy="32" r="15" stroke="#78c9bc" stroke-width="2"/><path d="M30 16V47M15 32H45" stroke="#dbc58d" stroke-width="1.7"/><circle cx="30" cy="32" r="4" fill="#edcf92"/></svg>';
@@ -35,7 +35,6 @@ export class GameApp {
   private selectedId: string | null = null;
   private theme = 'mineral';
   private drag: ActiveDrag | null = null;
-  private pressTimer: number | undefined;
   private toastTimer: number | undefined;
   private lastFrame = 0;
   private suppressClickUntil = 0;
@@ -103,7 +102,7 @@ export class GameApp {
         <section class="top-zone" aria-label="Informações do adversário">
           <div class="top-status">
             <div class="logo-mark" aria-hidden="true">${sigil}</div>
-            <div class="status-stack"><div class="status-title">Casa Carmesim</div><div class="status-sub">Adversário experimental</div></div>
+            <div class="status-stack"><div class="status-title">Casa Carmesim</div><div class="status-sub" id="enemy-status-sub" role="status" aria-live="polite">Adversário experimental</div></div>
             <div class="enemy-cycle" role="status" aria-label="Ciclo do deck adversário"><span class="enemy-cycle-icon" id="enemy-cycle">1</span><span class="enemy-cycle-label">CICLO</span></div>
             <div class="top-actions"><button class="top-btn" id="themes" type="button" aria-label="Escolher tema">◒</button><button class="top-btn" id="help" type="button" aria-label="Como jogar">?</button><button class="top-btn" id="restart" type="button" aria-label="Voltar ao menu" title="Voltar ao menu">⌂</button></div>
           </div>
@@ -135,12 +134,11 @@ export class GameApp {
             </div>
           </div>
         </section>
-        <div class="phase-banner" id="phase-banner" hidden role="status" aria-live="polite"><span class="phase-banner-label" id="phase-banner-label">PREPARAÇÃO</span><strong id="phase-countdown">15</strong><small id="phase-banner-copy">A arena será liberada em instantes</small></div>
         <div id="toast" class="toast" role="status" aria-live="polite"></div>
-        <div class="overlay" id="help-overlay" aria-hidden="true"><div class="help-panel"><div class="help-tag">Experimento separado · versão jogável inicial</div><h2>Como experimentar</h2><p><b>Comprar:</b> toque no deck enquanto houver espaço na mão (máximo de ${balance.handLimit} cartas).</p><p><b>Posicionar:</b> arraste uma tropa a um espaço vazio. A linha próxima do centro protege a linha posterior na mesma coluna.</p><p><b>Mover ou recolher:</b> arraste uma tropa sua para um espaço vazio ou para a mão.</p><p><b>Feitiços:</b> Chama Errante causa ${balance.spellDamage} de dano; Pulso Rúnico restaura ${balance.spellHealing} de vida. Selecione um feitiço e toque no alvo compatível.</p><p><b>Sigilos:</b> coloque um sigilo em um dos ${balance.fieldTopology.specialSpaces[0]?.count ?? 0} espaços e toque nele para revelar sua carta. Eles são visuais nesta versão e ainda não têm gatilhos.</p><p><b>Combate:</b> tropas atacam automaticamente a cada ${balance.attackIntervalMs / 1000} segundos. Os custos são somente demonstrativos; não há mana.</p><p><b>Limite experimental:</b> ${balance.startingLife} de vida, ${balance.deckSize} cartas por deck e IA básica. Os valores não são regras finais.</p><button class="close-help" id="close-help" type="button">Entendi</button></div></div>
+        <div class="overlay" id="help-overlay" aria-hidden="true"><div class="help-panel"><div class="help-tag">Experimento separado · versão jogável inicial</div><h2>Como experimentar</h2><p><b>Comprar:</b> toque no deck enquanto houver espaço na mão (máximo de ${balance.handLimit} cartas).</p><p><b>Posicionar:</b> arraste uma tropa a um espaço vazio. A linha próxima do centro protege a linha posterior na mesma coluna.</p><p><b>Mover ou recolher:</b> arraste uma tropa sua para um espaço vazio ou para a mão. Arraste uma tropa do campo até um alvo inimigo exposto para marcá-lo; a seta aparece e a unidade fica no lugar.</p><p><b>Feitiços:</b> Chama Errante causa ${balance.spellDamage} de dano; Pulso Rúnico restaura ${balance.spellHealing} de vida. Selecione um feitiço e toque no alvo compatível.</p><p><b>Sigilos:</b> coloque um sigilo em um dos ${balance.fieldTopology.specialSpaces[0]?.count ?? 0} espaços e toque nele para revelar sua carta. Eles são visuais nesta versão e ainda não têm gatilhos.</p><p><b>Combate:</b> cada tropa tem uma recarga de ${balance.attackIntervalMs / 1000} segundos, exibida na própria carta. Os custos são somente demonstrativos; não há mana.</p><p><b>Limite experimental:</b> ${balance.startingLife} de vida, ${balance.deckSize} cartas por deck e IA básica. Os valores não são regras finais.</p><button class="close-help" id="close-help" type="button">Entendi</button></div></div>
         <div class="overlay" id="palette-overlay" aria-hidden="true"><div class="help-panel"><div class="help-tag">Identidade visual V3</div><h2>Atmosfera da arena</h2><div class="theme-option-grid"><button type="button" class="theme-btn active" data-theme-set="mineral">Verde mineral</button><button type="button" class="theme-btn" data-theme-set="abissal">Azul abissal</button><button type="button" class="theme-btn" data-theme-set="rubro">Rubro arcano</button></div><button class="close-help" id="close-palette" type="button">Voltar à arena</button></div></div>
         <div class="overlay" id="result-overlay" aria-hidden="true"><div class="help-panel"><div class="help-tag">Fim da partida</div><h2 id="result-title">Vitória</h2><p id="result-copy"></p><button class="close-help" id="play-again" type="button">Voltar ao início</button></div></div>
-      </main><div class="overlay card-preview-overlay" id="card-preview-overlay" aria-hidden="true"><div class="card-preview-wrap" id="card-preview-wrap"></div></div><div class="transition-curtain" id="transition-curtain" aria-hidden="true"></div></div>`;
+      </main><svg class="attack-aim-overlay" id="attack-aim-overlay" aria-hidden="true"><defs><marker id="attack-arrowhead" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0 0L10 5L0 10Z"></path></marker></defs><line id="attack-aim-line" x1="0" y1="0" x2="0" y2="0"></line></svg><div class="overlay card-preview-overlay" id="card-preview-overlay" aria-hidden="true"><div class="card-preview-wrap" id="card-preview-wrap"></div></div><div class="transition-curtain" id="transition-curtain" aria-hidden="true"></div></div>`;
     this.renderDeckLibrary();
     this.renderHome();
   }
@@ -192,9 +190,9 @@ export class GameApp {
   }
 
   private returnToHome(): void {
-    if (this.drag?.started) this.restoreDraggedCard(this.drag, true);
+    if (this.drag?.started && this.drag.source === 'hand') this.restoreDraggedCard(this.drag, true);
+    if (this.drag?.started && this.drag.source === 'board') this.hideAttackAim(this.drag);
     this.drag = null;
-    window.clearTimeout(this.pressTimer);
     window.clearTimeout(this.toastTimer);
     const toast = this.root.querySelector<HTMLElement>('#toast');
     if (toast) { toast.textContent = ''; toast.classList.remove('visible'); }
@@ -277,19 +275,16 @@ export class GameApp {
     }).join('');
   }
 
-  private renderPhaseBanner(): void {
-    const banner = this.root.querySelector<HTMLElement>('#phase-banner');
-    if (!banner) return;
-    const inPrep = this.matchHasStarted && (this.state.phase === 'preparation' || this.state.phase === 'starting');
-    banner.hidden = !inPrep;
-    if (!inPrep) return;
-    const isStarting = this.state.phase === 'starting';
-    const remaining = isStarting
-      ? Math.max(0, (this.state.startAnnouncementEndsAtMs ?? this.state.clockMs) - this.state.clockMs)
-      : Math.max(0, (this.state.preparationEndsAtMs ?? this.state.clockMs) - this.state.clockMs);
-    this.setText('#phase-banner-label', isStarting ? 'O COMBATE COMEÇA' : 'PREPARAÇÃO');
-    this.setText('#phase-countdown', String(Math.ceil(remaining / 1000)));
-    this.setText('#phase-banner-copy', isStarting ? 'As tropas entram em ação agora' : 'Forme sua estratégia antes do combate');
+  private renderPhaseStatus(): void {
+    const subtitle = this.root.querySelector<HTMLElement>('#enemy-status-sub');
+    if (!subtitle) return;
+    if (this.state.phase === 'preparation') {
+      const remaining = Math.max(0, (this.state.preparationEndsAtMs ?? this.state.clockMs) - this.state.clockMs);
+      subtitle.textContent = `Preparação · ${Math.ceil(remaining / 1000)}s`;
+    } else if (this.state.phase === 'starting') {
+      const remaining = Math.max(0, (this.state.startAnnouncementEndsAtMs ?? this.state.clockMs) - this.state.clockMs);
+      subtitle.textContent = `Combate em ${Math.ceil(remaining / 1000)}s`;
+    } else subtitle.textContent = 'Adversário experimental';
   }
 
   private syncMatchFlowWithEngine(): void {
@@ -316,6 +311,7 @@ export class GameApp {
     if (button.id === 'start-battle') { this.startDemoSearch(); return; }
     if (button.id === 'cancel-search') { this.cancelDemoSearch(); return; }
     if (button.id === 'restart' || button.id === 'play-again') { this.returnToHome(); return; }
+    if (button.id === 'close-card-preview') { this.closeOverlay('card-preview-overlay'); return; }
     const inspectId = button.dataset.cardInspect;
     if (inspectId) { this.showPreview(inspectId, 'player'); return; }
     if (button.id === 'draw-deck') { this.transition(drawCard(this.state, 'player'), 'Não há espaço na mão ou o deck acabou.'); return; }
@@ -356,6 +352,8 @@ export class GameApp {
   private activateSlot(side: Side, slot: number): void {
     if (this.state.phase !== 'playing' && this.state.phase !== 'preparation') return;
     if (side === 'enemy') {
+      const selectedBoardSlot = this.selectedId ? this.findPlayerBoardSlot(this.selectedId) : -1;
+      if (selectedBoardSlot >= 0) { this.setAttackTarget(selectedBoardSlot, slot); return; }
       if (this.selectedId && this.isSelectedSpell('damage')) this.tryCast({ kind: 'unit', side, slot });
       return;
     }
@@ -432,20 +430,18 @@ export class GameApp {
     const side = (cardEl.dataset.side ?? 'player') as Side;
     if (!id) return;
     if (this.state.phase === 'preparation' && side === 'enemy') return;
+    const source = cardEl.classList.contains('hand-card') ? 'hand' : 'board';
+    const boardCard = source === 'board' ? this.state.players.player.slots.find((card) => card?.instanceId === id) : undefined;
+    if (source === 'board' && (cardEl.closest('.secret-slot') || !boardCard || getCardDefinition(boardCard.definitionId).kind !== 'troop')) return;
     const rect = cardEl.getBoundingClientRect();
     this.drag = {
       id, side, origin: cardEl, parent: cardEl.parentNode!, nextSibling: cardEl.nextSibling,
       originalStyle: cardEl.getAttribute('style'), originalClassName: cardEl.className,
-      pointerId: event.pointerId, x: event.clientX, y: event.clientY,
+      pointerId: event.pointerId, source, x: event.clientX, y: event.clientY,
       startX: event.clientX, startY: event.clientY,
       offsetX: event.clientX - rect.left, offsetY: event.clientY - rect.top,
-      started: false, previewOpened: false,
+      started: false,
     };
-    this.pressTimer = window.setTimeout(() => {
-      if (!this.drag || this.drag.pointerId !== event.pointerId || this.drag.started) return;
-      this.drag.previewOpened = true;
-      this.showPreview(id, side);
-    }, 450);
   };
 
   private onPointerMove = (event: PointerEvent): void => {
@@ -454,10 +450,14 @@ export class GameApp {
     drag.x = event.clientX; drag.y = event.clientY;
     const distance = Math.hypot(drag.x - drag.startX, drag.y - drag.startY);
     if (distance > 8) {
-      window.clearTimeout(this.pressTimer);
       if (drag.side !== 'player') return;
       if (!drag.started) {
         drag.started = true;
+        if (drag.source === 'board') {
+          drag.origin.classList.add('is-aiming');
+          this.updateAttackAim(drag, event.clientX, event.clientY);
+          return;
+        }
         drag.origin.classList.add('is-physical-dragging');
         drag.origin.style.position = 'fixed';
         drag.origin.style.left = `${drag.x - drag.offsetX}px`;
@@ -473,6 +473,10 @@ export class GameApp {
         drag.origin.style.opacity = '1';
         document.body.appendChild(drag.origin);
       }
+      if (drag.source === 'board') {
+        this.updateAttackAim(drag, event.clientX, event.clientY);
+        return;
+      }
       drag.origin.style.left = `${drag.x - drag.offsetX}px`;
       drag.origin.style.top = `${drag.y - drag.offsetY}px`;
     }
@@ -481,20 +485,20 @@ export class GameApp {
   private onPointerUp = (event: PointerEvent): void => {
     const drag = this.drag;
     if (!drag || drag.pointerId !== event.pointerId) return;
-    window.clearTimeout(this.pressTimer);
     if (drag.started) {
-      const target = document.elementFromPoint(event.clientX, event.clientY)?.closest<HTMLElement>('[data-slot-side], #hand-area, #enemy-life-target, #player-life-target') ?? null;
+      const selector = drag.source === 'board' ? '[data-slot-side], #hand-area' : '[data-slot-side], #hand-area, #enemy-life-target, #player-life-target';
+      const target = document.elementFromPoint(event.clientX, event.clientY)?.closest<HTMLElement>(selector) ?? null;
       const before = this.state;
       this.suppressClickUntil = performance.now() + 100;
-      this.restoreDraggedCard(drag, false);
+      if (drag.source === 'hand') this.restoreDraggedCard(drag, false);
+      else this.hideAttackAim(drag);
       this.drag = null;
       this.completePlayerDrop(drag.id, target);
-      if (this.state === before) {
+      if (drag.source === 'hand' && this.state === before) {
         this.restoreDraggedCard(drag, true);
         this.render();
       }
     } else {
-      if (drag.previewOpened) this.suppressClickUntil = performance.now() + 100;
       this.drag = null;
     }
   };
@@ -522,16 +526,52 @@ export class GameApp {
     if (from < 0 || !target) return;
     if (target.id === 'hand-area') this.transition(returnTroop(this.state, 'player', from), 'A mão está cheia ou a carta não pode ser recolhida.');
     else if (target.dataset.slotSide === 'player') this.transition(moveTroop(this.state, 'player', from, Number(target.dataset.slot)), 'O destino precisa estar vazio.');
+    else if (target.dataset.slotSide === 'enemy') this.setAttackTarget(from, Number(target.dataset.slot));
+  }
+
+  private setAttackTarget(attackerSlot: number, targetSlot: number): void {
+    if (this.state.phase !== 'playing') { this.toast('A designação de alvos fica disponível quando o combate começar.'); return; }
+    const target = this.state.players.enemy.slots[targetSlot];
+    if (!target || getCardDefinition(target.definitionId).kind !== 'troop') { this.toast('Solte sobre uma tropa inimiga.'); return; }
+    if (!isAttackTargetExposed(this.state, 'enemy', targetSlot)) { this.toast('A linha dianteira protege essa tropa. Escolha um alvo exposto.'); return; }
+    const result = assignAttackTarget(this.state, 'player', attackerSlot, targetSlot);
+    if (!result.events.length) { this.toast('Não foi possível marcar esse alvo.'); return; }
+    this.selectedId = null;
+    this.transition(result);
   }
 
   private onPointerCancel = (): void => {
-    window.clearTimeout(this.pressTimer);
     const drag = this.drag;
     if (!drag) return;
-    if (drag.started) this.restoreDraggedCard(drag, true);
+    if (drag.started && drag.source === 'hand') this.restoreDraggedCard(drag, true);
+    if (drag.started && drag.source === 'board') this.hideAttackAim(drag);
     this.drag = null;
-    this.render();
+    if (drag.source === 'hand') this.render();
   };
+
+  private updateAttackAim(drag: ActiveDrag, x: number, y: number): void {
+    const svg = this.root.querySelector<SVGSVGElement>('#attack-aim-overlay');
+    const line = this.root.querySelector<SVGLineElement>('#attack-aim-line');
+    if (!svg || !line) return;
+    const rect = drag.origin.getBoundingClientRect();
+    line.setAttribute('x1', String(rect.left + rect.width / 2));
+    line.setAttribute('y1', String(rect.top + rect.height / 2));
+    line.setAttribute('x2', String(x));
+    line.setAttribute('y2', String(y));
+    svg.classList.add('is-visible');
+    this.root.querySelectorAll('.slot.is-target-candidate').forEach((slot) => slot.classList.remove('is-target-candidate'));
+    const candidate = document.elementFromPoint(x, y)?.closest<HTMLElement>('.slot.enemy-slot');
+    const candidateSlot = Number(candidate?.dataset.slot);
+    if (candidate && Number.isInteger(candidateSlot) && isAttackTargetExposed(this.state, 'enemy', candidateSlot)) {
+      candidate.classList.add('is-target-candidate');
+    }
+  }
+
+  private hideAttackAim(drag: ActiveDrag): void {
+    drag.origin.classList.remove('is-aiming');
+    this.root.querySelector('#attack-aim-overlay')?.classList.remove('is-visible');
+    this.root.querySelectorAll('.slot.is-target-candidate').forEach((slot) => slot.classList.remove('is-target-candidate'));
+  }
 
   private restoreDraggedCard(drag: ActiveDrag, reinsert: boolean): void {
     const { origin } = drag;
@@ -547,7 +587,7 @@ export class GameApp {
     if (!result.events.length && failureMessage) { this.toast(failureMessage); return; }
     this.captureDestructions(result.events);
     this.state = result.state;
-    if (result.events.some((event) => event.type === 'place' || event.type === 'spell' || event.type === 'return' || event.type === 'move')) this.selectedId = null;
+    if (result.events.some((event) => event.type === 'place' || event.type === 'spell' || event.type === 'return' || event.type === 'move' || event.type === 'target')) this.selectedId = null;
     this.render();
     this.playEvents(result.events);
   }
@@ -569,7 +609,8 @@ export class GameApp {
         if (result.events.length) { this.captureDestructions(result.events); this.render(); this.playEvents(result.events); }
       }
       this.renderMatchStatus();
-      this.renderPhaseBanner();
+      this.renderPhaseStatus();
+      this.updateAttackCooldowns();
     }
     requestAnimationFrame(this.tick);
   };
@@ -578,6 +619,10 @@ export class GameApp {
     let missionsChanged = false;
     for (const event of events) {
       if (event.type === 'attack') this.animateAttack(event);
+      if (event.type === 'target') {
+        const target = this.state.players.enemy.slots.find((card) => card?.instanceId === event.targetId);
+        if (target) this.toast(`Alvo marcado: ${getCardDefinition(target.definitionId).name}.`);
+      }
       if (event.type === 'spell') this.animateSpell(event);
       if (event.type === 'place') this.animateEntry(event.instanceId);
       if (event.type === 'place' && event.side === 'player') { this.cardsPlaced += 1; missionsChanged = true; }
@@ -723,8 +768,9 @@ export class GameApp {
           : `${enemy.hand.length} cartas ocultas · sem acesso à mão adversária`;
     this.syncMatchFlowWithEngine();
     this.renderHome();
-    this.renderPhaseBanner();
+    this.renderPhaseStatus();
     this.syncSelection();
+    this.updateAttackCooldowns();
   }
 
   private renderHand(cards: CardInstance[]): void {
@@ -772,17 +818,19 @@ export class GameApp {
     slots.forEach((card, slot) => {
       const [row, col] = [Math.floor(slot / topology.columns), slot % topology.columns];
       const displayedCard = card && !this.isBeingDragged(card) ? card : null;
+      const isAttackTarget = side === 'enemy' && Boolean(displayedCard && this.state.players.player.slots.some((unit) => unit?.attackTargetId === displayedCard.instanceId) && isAttackTargetExposed(this.state, 'enemy', slot));
+      const targetClass = isAttackTarget ? ' is-attack-target' : '';
       const filled = displayedCard ? this.unitMarkup(displayedCard, side) : `<span class="empty-rune" aria-hidden="true">✧<small>${row === front ? 'FRENTE' : 'RETAGUARDA'}</small></span>`;
       const label = `${side === 'player' ? 'Seu' : 'Adversário'}: ${row === front ? 'linha da frente' : 'retaguarda'}, coluna ${col + 1}${displayedCard ? `, ${getCardDefinition(displayedCard.definitionId).name}` : ', vazio'}`;
       let button = grid.children[slot] as HTMLButtonElement | undefined;
       if (!button || Number(button.dataset.slot) !== slot) {
         const template = document.createElement('template');
-        template.innerHTML = `<button class="slot ${side === 'enemy' ? 'enemy-slot' : 'player-slot'}" type="button" data-slot-side="${side}" data-side="${side}" data-slot="${slot}" data-row="${row}" data-column="${col}" aria-label="${this.escapeAttribute(label)}">${filled}</button>`;
+        template.innerHTML = `<button class="slot ${side === 'enemy' ? 'enemy-slot' : 'player-slot'}${targetClass}" type="button" data-slot-side="${side}" data-side="${side}" data-slot="${slot}" data-row="${row}" data-column="${col}" aria-label="${this.escapeAttribute(label)}">${filled}</button>`;
         const created = template.content.firstElementChild as HTMLButtonElement;
         if (button) grid.replaceChild(created, button); else grid.appendChild(created);
         button = created;
       } else {
-        button.className = `slot ${side === 'enemy' ? 'enemy-slot' : 'player-slot'}${this.selectedId === displayedCard?.instanceId ? ' is-selected' : ''}`;
+        button.className = `slot ${side === 'enemy' ? 'enemy-slot' : 'player-slot'}${this.selectedId === displayedCard?.instanceId ? ' is-selected' : ''}${targetClass}`;
         button.setAttribute('aria-label', this.escapeAttribute(label));
         const currentCard = button.querySelector<HTMLElement>('.battle-card[data-card-id]');
         const currentId = currentCard?.dataset.cardId ?? null;
@@ -878,7 +926,27 @@ export class GameApp {
   private unitMarkup(card: CardInstance, side: Side, secret = false): string {
     const definition = getCardDefinition(card.definitionId);
     const details = this.cardDetails(card);
-    return `<div class="battle-card${side === 'enemy' ? ' enemy-unit' : ''}${secret ? ' sigil-card' : ''}" data-card-id="${card.instanceId}" data-side="${side}" data-foundation="${definition.foundation}" title="${this.escapeAttribute(details)}">${renderCardFace(definition, card, side, 'field')}</div>`;
+    const cooldown = definition.kind === 'troop' && !secret ? `<span class="attack-cooldown" data-cooldown-id="${card.instanceId}" aria-hidden="true"><i></i><small></small></span>` : '';
+    return `<div class="battle-card${side === 'enemy' ? ' enemy-unit' : ''}${secret ? ' sigil-card' : ''}" data-card-id="${card.instanceId}" data-side="${side}" data-foundation="${definition.foundation}" title="${this.escapeAttribute(details)}">${renderCardFace(definition, card, side, 'field')}${cooldown}</div>`;
+  }
+
+  private updateAttackCooldowns(): void {
+    this.root.querySelectorAll<HTMLElement>('.attack-cooldown[data-cooldown-id]').forEach((indicator) => {
+      const cardId = indicator.dataset.cooldownId;
+      const card = cardId ? [...this.state.players.player.slots, ...this.state.players.enemy.slots].find((unit) => unit?.instanceId === cardId) : undefined;
+      const fill = indicator.querySelector<HTMLElement>('i');
+      const label = indicator.querySelector<HTMLElement>('small');
+      if (!card || !fill || !label) return;
+      if (this.state.phase !== 'playing') {
+        label.textContent = this.state.phase === 'preparation' ? 'PREP' : this.state.phase === 'starting' ? '...' : '';
+        fill.style.transform = 'scaleX(0)';
+        return;
+      }
+      const remaining = Math.max(0, card.nextAttackAtMs - this.state.clockMs);
+      const progress = remaining === 0 ? 1 : 1 - Math.min(1, remaining / this.state.attackIntervalMs);
+      fill.style.transform = `scaleX(${progress})`;
+      label.textContent = remaining === 0 ? 'PRONTO' : `ATAQUE ${Math.ceil(remaining / 1000)}s`;
+    });
   }
 
   private showPreview(instanceId: string, side: Side): void {
@@ -888,8 +956,13 @@ export class GameApp {
     const overlay = this.root.querySelector<HTMLElement>('#card-preview-overlay');
     const wrap = this.root.querySelector<HTMLElement>('#card-preview-wrap');
     if (!overlay || !wrap) return;
-    const details = this.cardDetails(card);
-    wrap.innerHTML = `<div class="preview-shell ${definition.kind}" data-foundation="${definition.foundation}" title="${this.escapeAttribute(details)}">${renderCardFace(definition, card, side, 'preview')}</div>`;
+    const typeName = definition.kind === 'troop' ? 'Tropa' : definition.kind === 'spell' ? 'Feitiço' : 'Sigilo';
+    const facts = definition.kind === 'troop'
+      ? `<span><b>Ataque</b> ${definition.attack}</span><span><b>Vida</b> ${card.health}/${definition.maxHealth}</span>`
+      : definition.kind === 'spell'
+        ? `<span><b>Custo demonstrativo</b> ${definition.cost}</span><span><b>${definition.effect === 'damage' ? 'Dano' : 'Cura'}</b> ${definition.effect === 'damage' ? balance.spellDamage : balance.spellHealing}</span>`
+        : `<span><b>Custo demonstrativo</b> ${definition.cost}</span><span><b>Tipo</b> Sigilo sem gatilho nesta versão</span>`;
+    wrap.innerHTML = `<div class="card-preview-content"><div class="preview-shell ${definition.kind}" data-foundation="${definition.foundation}" aria-label="${this.escapeAttribute(this.cardDetails(card))}">${renderCardFace(definition, card, side, 'preview')}</div><section class="card-preview-details" aria-label="Detalhes da carta"><div class="card-preview-heading"><strong>${this.escapeAttribute(definition.name)}</strong><span>${typeName}</span></div><div class="card-preview-facts">${facts}</div><p>${this.escapeAttribute(definition.description)}</p><button class="card-preview-close" id="close-card-preview" type="button">Fechar ficha</button></section></div>`;
     overlay.classList.add('open'); overlay.setAttribute('aria-hidden', 'false');
   }
 

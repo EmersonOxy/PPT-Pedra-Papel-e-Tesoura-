@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { cardDefinitions } from '../src/game/cards.ts';
 import type { CardInstance } from '../src/game/types.ts';
-import { cardPresentationCatalog, renderCardBack, renderCardFace, renderDeckCardBack } from '../src/ui/card-presentation.ts';
+import { cardPresentationCatalog, renderCardBack, renderCardFace, renderDeckCardBack, sigilByCardKind } from '../src/ui/card-presentation.ts';
 
 function instance(definitionId: string, health = 4): CardInstance {
   return { instanceId: `test-${definitionId}`, definitionId, owner: 'player', health, nextAttackAtMs: 0, revealed: true };
@@ -11,7 +11,7 @@ function instance(definitionId: string, health = 4): CardInstance {
 test('every catalog card has an independent visual configuration using supplied backgrounds and symbols', () => {
   assert.deepEqual(Object.keys(cardPresentationCatalog).sort(), cardDefinitions.map((card) => card.id).sort());
   assert.deepEqual(new Set(Object.values(cardPresentationCatalog).map((entry) => entry.background)), new Set(['red', 'green', 'blue', 'purple', 'yellow']));
-  assert.deepEqual(new Set(Object.values(cardPresentationCatalog).map((entry) => entry.sigil)), new Set(['crystal-green', 'crystal-purple', 'crystal-orange']));
+  assert.deepEqual(sigilByCardKind, { troop: 'crystal-green', spell: 'crystal-orange', hidden: 'crystal-purple' });
 });
 
 test('hidden cards use the supplied full card-back asset', () => {
@@ -42,4 +42,6 @@ test('spells present their existing cost and configured effect, while sigils do 
   const sigil = cardDefinitions.find((card) => card.id === 'eclipse-seal')!;
   assert.match(renderCardFace(spell, instance(spell.id, 0), 'player', 'preview'), /Custo demonstrativo 2; Dano do feitiço 2/);
   assert.match(renderCardFace(sigil, instance(sigil.id, 0), 'player', 'preview'), /Sem segundo atributo definido não definido/);
+  assert.match(renderCardFace(spell, instance(spell.id, 0), 'player', 'preview'), /data-sigil="crystal-orange"/);
+  assert.match(renderCardFace(sigil, instance(sigil.id, 0), 'player', 'preview'), /data-sigil="crystal-purple"/);
 });

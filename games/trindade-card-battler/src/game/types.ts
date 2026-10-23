@@ -23,6 +23,8 @@ export interface CardInstance {
   health: number;
   nextAttackAtMs: number;
   revealed: boolean;
+  /** Optional player-selected target. Invalid or unavailable targets fall back to the normal lane rule. */
+  attackTargetId?: string;
 }
 
 export interface PlayerState {
@@ -59,6 +61,7 @@ export type GameEvent =
   | { type: 'move'; side: Side; instanceId: string; from: number; to: number }
   | { type: 'return'; side: Side; instanceId: string; slot: number }
   | { type: 'attack'; side: Side; attackerId: string; targetId?: string; targetSide: Side; targetSlot?: number; direct: boolean }
+  | { type: 'target'; side: Side; attackerId: string; targetId: string; targetSlot: number }
   | { type: 'damage'; side: Side; instanceId: string; amount: number; destroyed: boolean }
   | { type: 'heal'; side: Side; instanceId: string; amount: number }
   | { type: 'life-damage'; side: Side; amount: number; value: number }

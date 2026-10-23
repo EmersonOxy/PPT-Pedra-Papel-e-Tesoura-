@@ -10,7 +10,7 @@
     "frontRow": { "player": 0, "enemy": 1 },
     "specialSpaces": [{ "kind": "sigil", "count": 2 }]
   },
-  "attackIntervalMs": 3000,
+  "attackIntervalMs": 5000,
   "aiInitialDelayMs": 4000,
   "aiActionIntervalMs": 4000,
   "spellDamage": 2,

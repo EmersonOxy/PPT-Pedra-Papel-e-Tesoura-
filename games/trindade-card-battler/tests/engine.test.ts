@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { cardDefinitions, getCardDefinition } from '../src/game/cards.ts';
-import { beginPreparation, castSpell, createGame, drawCard, endWithWinner, moveTroop, placeCard, placeSigil, releaseCombat, returnTroop, revealSigil } from '../src/game/engine.ts';
+import { assignAttackTarget, beginPreparation, castSpell, createGame, drawCard, endWithWinner, moveTroop, placeCard, placeSigil, releaseCombat, returnTroop, revealSigil } from '../src/game/engine.ts';
 import * as gameEngineApi from '../src/game/engine.ts';
 import { takeAiAction } from '../src/game/ai.ts';
 import { advanceTime } from '../src/game/simulation.ts';
@@ -79,7 +79,7 @@ test('troops place into empty slots; spells cannot be placed as troops and occup
   state.players.player.hand = [troop, spell];
   const placed = placeCard(state, 'player', troop.instanceId, 2);
   assert.equal(placed.state.players.player.slots[2]?.instanceId, troop.instanceId);
-  assert.equal(placed.state.players.player.slots[2]?.nextAttackAtMs, 3000);
+  assert.equal(placed.state.players.player.slots[2]?.nextAttackAtMs, balance.attackIntervalMs);
   assert.equal(placeCard(placed.state, 'player', spell.instanceId, 1).events.length, 0);
   assert.equal(placeCard(placed.state, 'player', spell.instanceId, 2).events.length, 0);
 });
@@ -90,7 +90,7 @@ test('troops move and can return to hand only while there is room', () => {
   const placed = placeCard(state, 'player', 'unit-a', 1).state;
   const moved = moveTroop(placed, 'player', 1, 4);
   assert.equal(moved.state.players.player.slots[4]?.instanceId, 'unit-a');
-  assert.equal(moved.state.players.player.slots[4]?.nextAttackAtMs, 3000);
+  assert.equal(moved.state.players.player.slots[4]?.nextAttackAtMs, balance.attackIntervalMs);
   assert.equal(moved.state.players.player.slots[1], null);
   const returned = returnTroop(moved.state, 'player', 4);
   assert.equal(returned.state.players.player.hand[0]?.instanceId, 'unit-a');
@@ -133,7 +133,7 @@ test('scheduled attacks target a same-column troop before rear troops, otherwise
   assert.equal(hit.state.players.enemy.slots[0]?.health, 6);
   assert.equal(hit.events.some((event) => event.type === 'damage' && event.destroyed), true);
   hit.state.players.enemy.slots[0] = null;
-  hit.state.clockMs = 4000;
+  hit.state.clockMs = 1000 + balance.attackIntervalMs - 1;
   const direct = advanceTime(hit.state, 1);
   assert.equal(direct.state.players.enemy.life, 18);
   assert.equal(direct.events[0]?.type, 'attack');
@@ -146,27 +146,52 @@ test('each troop keeps an independent attack timer', () => {
   state.players.enemy.slots[4] = makeCard('enemy', 'astral-fox', 'other-column', 2, 2000);
   const first = advanceTime(state, 1000);
   assert.equal(first.events.filter((event) => event.type === 'attack').length, 1);
-  assert.equal(first.state.players.player.slots[0]?.nextAttackAtMs, 4000);
+  assert.equal(first.state.players.player.slots[0]?.nextAttackAtMs, 1000 + balance.attackIntervalMs);
   assert.equal(first.state.players.enemy.slots[3]?.health, 4);
   const second = advanceTime(first.state, 1000);
   assert.equal(second.events.filter((event) => event.type === 'attack').length, 1);
   assert.equal(second.events.find((event) => event.type === 'attack')?.side, 'enemy');
   assert.equal(second.state.players.player.life, 17);
-  const third = advanceTime(second.state, 2000);
+  const third = advanceTime(second.state, balance.attackIntervalMs - 1000);
   assert.equal(third.state.players.enemy.slots[3]?.health, 2);
-  const fourth = advanceTime(third.state, 3000);
+  const fourth = advanceTime(third.state, balance.attackIntervalMs);
   assert.equal(fourth.state.players.enemy.slots[3], null);
 });
 
 test('the attack resolver rejects attacks before a troop timer is due', () => {
   const state = fixture();
-  state.players.player.slots[0] = makeCard('player', 'solemn-guardian', 'not-ready', 4, 3000);
-  const beforeDue = advanceTime(state, 2999);
+  state.players.player.slots[0] = makeCard('player', 'solemn-guardian', 'not-ready', 4, balance.attackIntervalMs);
+  const beforeDue = advanceTime(state, balance.attackIntervalMs - 1);
   assert.deepEqual(beforeDue.events.filter((event) => event.type === 'attack'), []);
   assert.equal('resolveAttack' in gameEngineApi, false, 'engine API must not expose an immediate attack action');
   assert.equal('resolveDueAttacks' in gameEngineApi, false, 'due-attack processing must remain private to the simulation');
   const ready = advanceTime(beforeDue.state, 1);
   assert.equal(ready.events.filter((event) => event.type === 'attack').length, 1);
+});
+
+test('manual attack targeting keeps the troop in place, honors front-row protection, and resolves after cooldown', () => {
+  const state = fixture();
+  state.players.player.slots[0] = makeCard('player', 'solemn-guardian', 'manual-attacker', 4, balance.attackIntervalMs);
+  state.players.enemy.slots[5] = makeCard('enemy', 'moss-colossus', 'selected-target', 6, 99_000);
+  state.players.enemy.slots[2] = makeCard('enemy', 'solemn-guardian', 'protected-rear', 4, 99_000);
+
+  const protectedRear = assignAttackTarget(state, 'player', 0, 2);
+  assert.equal(protectedRear.events.length, 0);
+  assert.equal(protectedRear.state, state);
+
+  const selected = assignAttackTarget(state, 'player', 0, 5);
+  assert.equal(selected.events[0]?.type, 'target');
+  assert.equal(selected.state.players.player.slots[0]?.instanceId, 'manual-attacker');
+  assert.equal(selected.state.players.player.slots[0]?.nextAttackAtMs, balance.attackIntervalMs);
+  assert.equal(selected.state.players.enemy.slots[5]?.health, 6);
+
+  const beforeCooldown = advanceTime(selected.state, balance.attackIntervalMs - 1);
+  assert.equal(beforeCooldown.events.some((event) => event.type === 'attack'), false);
+  const attack = advanceTime(beforeCooldown.state, 1);
+  const event = attack.events.find((item) => item.type === 'attack');
+  assert.equal(event?.type, 'attack');
+  if (event?.type === 'attack') assert.equal(event.targetId, 'selected-target');
+  assert.equal(attack.state.players.enemy.slots[5]?.health, 4);
 });
 
 test('all attacks at one timestamp use the same field snapshot and can destroy each other', () => {
@@ -220,11 +245,11 @@ test('returning and redeploying a troop starts a fresh attack timer', () => {
   state.players.player.hand = [unit];
   state.clockMs = 500;
   const placed = placeCard(state, 'player', unit.instanceId, 0);
-  assert.equal(placed.state.players.player.slots[0]?.nextAttackAtMs, 3500);
+  assert.equal(placed.state.players.player.slots[0]?.nextAttackAtMs, state.clockMs + balance.attackIntervalMs);
   const returned = returnTroop(placed.state, 'player', 0);
   assert.equal(returned.state.players.player.hand[0]?.nextAttackAtMs, 0);
   const redeployed = placeCard(returned.state, 'player', unit.instanceId, 1);
-  assert.equal(redeployed.state.players.player.slots[1]?.nextAttackAtMs, 3500);
+  assert.equal(redeployed.state.players.player.slots[1]?.nextAttackAtMs, state.clockMs + balance.attackIntervalMs);
 });
 
 test('Chama Errante damages a valid enemy unit or enemy life and rejects friendly targets', () => {

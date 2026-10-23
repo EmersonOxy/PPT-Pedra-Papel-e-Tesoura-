@@ -1,5 +1,5 @@
 import { balance } from '../game/config.ts';
-import type { CardDefinition, CardInstance, Side } from '../game/types.ts';
+import type { CardDefinition, CardInstance, CardKind, Side } from '../game/types.ts';
 import { renderPlaceholderIllustration } from './card-art.ts';
 
 export type CardBackgroundId = 'red' | 'green' | 'blue' | 'purple' | 'yellow';
@@ -8,24 +8,29 @@ export type CardFaceContext = 'hand' | 'field' | 'preview';
 
 export interface CardPresentation {
   background: CardBackgroundId;
-  sigil: CardSigilId;
   illustration: { kind: 'placeholder'; motif: string };
 }
 
 // These are provisional visual choices only. They do not encode card type, power, or combat rules.
 export const cardPresentationCatalog: Record<string, CardPresentation> = {
-  'solemn-guardian': { background: 'green', sigil: 'crystal-green', illustration: { kind: 'placeholder', motif: 'guardian' } },
-  'astral-fox': { background: 'purple', sigil: 'crystal-purple', illustration: { kind: 'placeholder', motif: 'fox' } },
-  'moss-colossus': { background: 'blue', sigil: 'crystal-orange', illustration: { kind: 'placeholder', motif: 'golem' } },
-  'amber-phoenix': { background: 'red', sigil: 'crystal-purple', illustration: { kind: 'placeholder', motif: 'phoenix' } },
-  'veil-oracle': { background: 'yellow', sigil: 'crystal-green', illustration: { kind: 'placeholder', motif: 'oracle' } },
-  'vesper-blade': { background: 'purple', sigil: 'crystal-orange', illustration: { kind: 'placeholder', motif: 'blade' } },
-  'prism-sentinel': { background: 'green', sigil: 'crystal-purple', illustration: { kind: 'placeholder', motif: 'crystal' } },
-  'ember-knight': { background: 'red', sigil: 'crystal-green', illustration: { kind: 'placeholder', motif: 'knight' } },
-  'eclipse-seal': { background: 'purple', sigil: 'crystal-orange', illustration: { kind: 'placeholder', motif: 'eclipse' } },
-  'sleeping-thorns': { background: 'green', sigil: 'crystal-purple', illustration: { kind: 'placeholder', motif: 'thorns' } },
-  'runic-pulse': { background: 'blue', sigil: 'crystal-green', illustration: { kind: 'placeholder', motif: 'pulse' } },
-  'wandering-flame': { background: 'red', sigil: 'crystal-orange', illustration: { kind: 'placeholder', motif: 'wildfire' } },
+  'solemn-guardian': { background: 'green', illustration: { kind: 'placeholder', motif: 'guardian' } },
+  'astral-fox': { background: 'purple', illustration: { kind: 'placeholder', motif: 'fox' } },
+  'moss-colossus': { background: 'blue', illustration: { kind: 'placeholder', motif: 'golem' } },
+  'amber-phoenix': { background: 'red', illustration: { kind: 'placeholder', motif: 'phoenix' } },
+  'veil-oracle': { background: 'yellow', illustration: { kind: 'placeholder', motif: 'oracle' } },
+  'vesper-blade': { background: 'purple', illustration: { kind: 'placeholder', motif: 'blade' } },
+  'prism-sentinel': { background: 'green', illustration: { kind: 'placeholder', motif: 'crystal' } },
+  'ember-knight': { background: 'red', illustration: { kind: 'placeholder', motif: 'knight' } },
+  'eclipse-seal': { background: 'purple', illustration: { kind: 'placeholder', motif: 'eclipse' } },
+  'sleeping-thorns': { background: 'green', illustration: { kind: 'placeholder', motif: 'thorns' } },
+  'runic-pulse': { background: 'blue', illustration: { kind: 'placeholder', motif: 'pulse' } },
+  'wandering-flame': { background: 'red', illustration: { kind: 'placeholder', motif: 'wildfire' } },
+};
+
+export const sigilByCardKind: Record<CardKind, CardSigilId> = {
+  troop: 'crystal-green',
+  spell: 'crystal-orange',
+  hidden: 'crystal-purple',
 };
 
 const backgroundAssets: Record<CardBackgroundId, string> = {
@@ -71,16 +76,17 @@ function statValues(definition: CardDefinition, card: CardInstance): { left: num
 export function renderCardFace(definition: CardDefinition, card: CardInstance, side: Side, context: CardFaceContext): string {
   const presentation = cardPresentationCatalog[definition.id];
   if (!presentation) throw new Error(`Apresentação visual ausente para ${definition.id}`);
+  const sigil = sigilByCardKind[definition.kind];
   const values = statValues(definition, card);
   const accessible = `Ilustração provisória. ${definition.name}. ${values.labels[0]} ${values.left ?? 'não definido'}; ${values.labels[1]} ${values.right ?? 'não definido'}. ${definition.description}`;
-  const stateKey = `${definition.id}:${card.health}:${card.revealed ? 1 : 0}:${presentation.background}:${presentation.sigil}`;
+  const stateKey = `${definition.id}:${card.health}:${card.revealed ? 1 : 0}:${presentation.background}:${sigil}`;
   const placeholder = presentation.illustration.kind === 'placeholder'
     ? `<span class="card-face__placeholder-tag">Ilustração provisória</span>${renderPlaceholderIllustration(presentation.illustration.motif)}`
     : '';
-  return `<div class="card-face card-face--${context} card-kind--${definition.kind}" data-background="${presentation.background}" data-sigil="${presentation.sigil}" data-visual-state="${stateKey}" data-side="${side}" role="img" aria-label="${escapeHtml(accessible)}">
+  return `<div class="card-face card-face--${context} card-kind--${definition.kind}" data-background="${presentation.background}" data-sigil="${sigil}" data-visual-state="${stateKey}" data-side="${side}" role="img" aria-label="${escapeHtml(accessible)}">
     <img class="card-face__background" src="${backgroundAssets[presentation.background]}" alt="" aria-hidden="true" draggable="false">
     <div class="card-face__illustration" aria-hidden="true">${placeholder}</div>
-    <img class="card-face__sigil" src="${sigilAssets[presentation.sigil]}" alt="" aria-hidden="true" draggable="false">
+    <img class="card-face__sigil" src="${sigilAssets[sigil]}" alt="" aria-hidden="true" draggable="false">
     <span class="card-face__name" title="${escapeHtml(definition.name)}">${escapeHtml(definition.name)}</span>
     <span class="card-face__stat card-face__stat--blue" aria-label="${values.labels[0]} ${values.left ?? 'não definido'}">${values.left ?? ''}</span>
     <span class="card-face__stat card-face__stat--red" aria-label="${values.labels[1]} ${values.right ?? 'não definido'}">${values.right ?? ''}</span>

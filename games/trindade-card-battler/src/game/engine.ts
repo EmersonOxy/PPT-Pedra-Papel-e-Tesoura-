@@ -1,4 +1,5 @@
 import { balance, boardSlotCount, sigilSlotCount } from './config.ts';
+import { isAttackTargetExposed } from './targeting.ts';
 import { isPreparationActionAllowed, sessionConfig } from './session-flow.ts';
 import { cardDefinitions, getCardDefinition } from './cards.ts';
 import type { CardInstance, GameEvent, GameState, PlayerState, Side, SpellTarget, Transition } from './types.ts';
@@ -127,7 +128,7 @@ export function placeCard(state: GameState, side: Side, instanceId: string, slot
   const kind = getCardDefinition(card.definitionId).kind;
   if (kind === 'spell') return { state, events: [] };
   player.hand.splice(handIndex, 1);
-  player.slots[slot] = { ...card, nextAttackAtMs: kind === 'troop' ? state.clockMs + state.attackIntervalMs : 0 };
+  player.slots[slot] = { ...card, nextAttackAtMs: kind === 'troop' ? state.clockMs + state.attackIntervalMs : 0, attackTargetId: undefined };
   return { state: wakeOpponent(replacePlayer(state, side, player), side), events: [{ type: 'place', side, instanceId, slot }] };
 }
 
@@ -141,14 +142,35 @@ export function moveTroop(state: GameState, side: Side, from: number, to: number
   return { state: wakeOpponent(replacePlayer(state, side, player), side), events: [{ type: 'move', side, instanceId: card.instanceId, from, to }] };
 }
 
+/** Assigns an exposed enemy troop as a manual target without moving the attacking unit. */
+export function assignAttackTarget(state: GameState, side: Side, attackerSlot: number, targetSlot: number): Transition {
+  if (state.phase !== 'playing' || !Number.isInteger(attackerSlot) || attackerSlot < 0 || attackerSlot >= boardSlotCount) return { state, events: [] };
+  const targetSide = side === 'player' ? 'enemy' : 'player';
+  if (!isAttackTargetExposed(state, targetSide, targetSlot)) return { state, events: [] };
+  const attacker = state.players[side].slots[attackerSlot];
+  const target = state.players[targetSide].slots[targetSlot];
+  if (!attacker || getCardDefinition(attacker.definitionId).kind !== 'troop' || !target) return { state, events: [] };
+  if (attacker.attackTargetId === target.instanceId) return { state, events: [] };
+  const player = clonePlayer(state.players[side]);
+  player.slots[attackerSlot] = { ...attacker, attackTargetId: target.instanceId };
+  return {
+    state: replacePlayer(state, side, player),
+    events: [{ type: 'target', side, attackerId: attacker.instanceId, targetId: target.instanceId, targetSlot }],
+  };
+}
+
 export function returnTroop(state: GameState, side: Side, slot: number): Transition {
   if ((state.phase !== 'playing' && state.phase !== 'preparation') || !Number.isInteger(slot) || slot < 0 || slot >= boardSlotCount) return { state, events: [] };
   const player = clonePlayer(state.players[side]);
   const card = player.slots[slot];
   if (!card || getCardDefinition(card.definitionId).kind !== 'troop' || !actionAllowed(state, card.definitionId, 'return') || player.hand.length >= balance.handLimit) return { state, events: [] };
   player.slots[slot] = null;
-  player.hand.push({ ...card, nextAttackAtMs: 0 });
-  return { state: wakeOpponent(replacePlayer(state, side, player), side), events: [{ type: 'return', side, instanceId: card.instanceId, slot }] };
+  player.hand.push({ ...card, nextAttackAtMs: 0, attackTargetId: undefined });
+  const opponentSide = side === 'player' ? 'enemy' : 'player';
+  const opponent = clonePlayer(state.players[opponentSide]);
+  opponent.slots = opponent.slots.map((unit) => unit?.attackTargetId === card.instanceId ? { ...unit, attackTargetId: undefined } : unit);
+  const next = replacePlayer(replacePlayer(state, side, player), opponentSide, opponent);
+  return { state: wakeOpponent(next, side), events: [{ type: 'return', side, instanceId: card.instanceId, slot }] };
 }
 
 function setFinished(state: GameState, winner: Side, events: GameEvent[]): void {

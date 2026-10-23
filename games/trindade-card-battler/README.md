@@ -54,7 +54,7 @@ Eventos de combate distinguem `damage`/`heal` para tropas e `life-damage`/`life-
 
 ## Regras experimentais ativas
 
-20 de vida para cada lado; deck de 24 cartas com duas cópias de cada uma das 12 cartas do V3; mão inicial de seis e limite máximo de seis; ataque automático a cada 3 segundos por tropa; alvo na mesma coluna; linha próxima ao centro protege a retaguarda naquela coluna; sem tropa na coluna, o ataque vai direto à vida. Chama Errante causa 2 de dano; Pulso Rúnico cura 2 até o máximo de vida. Não há mana. A IA fica parada até a primeira ação válida do jogador e responde 4 segundos depois; então compra e tenta posicionar uma carta a cada 4 segundos. Ela não lê a mão do jogador.
+20 de vida para cada lado; deck de 24 cartas com duas cópias de cada uma das 12 cartas do V3; mão inicial de seis e limite máximo de seis; ataque automático com intervalo de 5 segundos por tropa, visível no indicador de recarga; alvo automático na mesma coluna ou alvo exposto escolhido pelo jogador; a linha próxima ao centro protege a retaguarda naquela coluna; sem tropa na coluna, o ataque vai direto à vida. Chama Errante causa 2 de dano; Pulso Rúnico cura 2 até o máximo de vida. Não há mana. A IA fica parada até a primeira ação válida do jogador e responde 4 segundos depois; então compra e tenta posicionar uma carta a cada 4 segundos. Ela não lê a mão do jogador.
 
 Custos, sigilos e os números do combate continuam demonstrativos. Sigilos podem ser colocados e revelados, mas não têm gatilhos. Não há reciclagem automática do deck. Nenhum desses valores representa aprovação de balanceamento ou regras finais.
 

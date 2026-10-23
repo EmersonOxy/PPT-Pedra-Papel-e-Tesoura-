@@ -55,3 +55,38 @@ body { overscroll-behavior: none; }
 @media (prefers-reduced-motion: reduce) {
   .combat-projectile, .battle-card.is-attacking, .battle-card.is-hit, .battle-card.is-healing, .impact-number, .destruction-ghost, .place-pop { animation-duration: .01ms !important; }
 }
+
+/* Prevent iOS long-press text/image selection across the game and its navigation. */
+.app-frame, .app-frame * { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
+.app-frame img { -webkit-user-drag: none; user-drag: none; }
+
+/* Keep the preparation clock in the existing HUD so it never blocks a field slot. */
+#enemy-status-sub { min-height: 1em; font-variant-numeric: tabular-nums; }
+
+/* Existing field troops stay anchored during target selection; the arrow follows the pointer. */
+.attack-aim-overlay { position: fixed; z-index: 105; inset: 0; display: none; width: 100vw; height: 100dvh; overflow: visible; pointer-events: none; }
+.attack-aim-overlay.is-visible { display: block; }
+.attack-aim-overlay line { stroke: #f7d879; stroke-width: 4px; stroke-linecap: round; marker-end: url(#attack-arrowhead); filter: drop-shadow(0 1px 4px #071523); }
+#attack-arrowhead path { fill: #f7d879; }
+.battle-card.is-aiming { filter: drop-shadow(0 0 7px #f7d879); }
+.slot.is-target-candidate { border-color: #fb8c75 !important; box-shadow: inset 0 0 0 2px #fb8c75, 0 0 20px #fa554caa !important; }
+.slot.is-attack-target { border-color: #f7d879 !important; box-shadow: inset 0 0 0 2px #f7d879, 0 0 15px #f7d87988 !important; }
+
+/* A compact, readable cooldown is visible without changing combat state or card stats. */
+.attack-cooldown { position: absolute; z-index: 8; left: 31%; right: 31%; bottom: 10%; display: flex; flex-direction: column; align-items: center; gap: 2px; pointer-events: none; }
+.attack-cooldown i { display: block; width: 100%; height: 2px; border-radius: 2px; background: linear-gradient(90deg,#8ee0c3,#f7d879); box-shadow: 0 0 4px #f7d87999; transform: scaleX(0); transform-origin: left; }
+.attack-cooldown small { display: block; max-width: 100%; padding: 1px 3px; overflow: hidden; border-radius: 3px; color: #fff4cf; background: #061421d9; font: 800 clamp(4px,1.35cqw,6px)/1 system-ui,sans-serif; white-space: nowrap; letter-spacing: .01em; }
+
+/* Clicking a deck item opens both the card face and its readable structured data. */
+.card-preview-overlay.open { overflow-y: auto; align-items: center; }
+.card-preview-overlay.open .card-preview-wrap { display: flex; width: 100%; height: auto; min-height: 100%; align-items: center; justify-content: center; padding: 16px; }
+.card-preview-content { display: flex; width: 100%; max-height: 100%; flex-direction: column; align-items: center; justify-content: center; gap: 10px; margin: auto; }
+.card-preview-content .card-face--preview { width: min(62vw,230px); max-height: min(54dvh,340px); }
+.card-preview-details { width: min(90vw,330px); box-sizing: border-box; padding: 11px 13px; border: 1px solid #e8d28b66; border-radius: 11px; color: #f0e4bd; background: #071725f2; box-shadow: 0 8px 24px #0009; line-height: 1.35; }
+.card-preview-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.card-preview-heading strong { min-width: 0; overflow: hidden; font: 700 15px/1.15 Georgia,serif; text-overflow: ellipsis; white-space: nowrap; }
+.card-preview-heading span { flex: none; color: #a8d9c8; font: 800 8px system-ui,sans-serif; letter-spacing: .1em; text-transform: uppercase; }
+.card-preview-facts { display: flex; flex-wrap: wrap; gap: 6px 12px; margin-top: 8px; color: #d8d4c4; font: 500 10px system-ui,sans-serif; }
+.card-preview-facts b { color: #f4d889; }
+.card-preview-details p { margin: 8px 0 0; color: #c4ccc4; font: 500 11px/1.4 system-ui,sans-serif; }
+.card-preview-close { display: block; margin: 10px 0 0 auto; padding: 6px 10px; border: 1px solid #d6c47d66; border-radius: 7px; color: #f0e4bd; background: #142a39; font: 700 10px system-ui,sans-serif; cursor: pointer; }

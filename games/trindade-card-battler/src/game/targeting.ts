@@ -1,3 +1,4 @@
+import { getCardDefinition } from './cards.ts';
 import type { GameState, Side } from './types.ts';
 import { topology } from './config.ts';
 
@@ -16,8 +17,27 @@ export function frontRow(side: Side): number {
   return topology.frontRow[side];
 }
 
+/** A player may choose any exposed enemy troop; the front row still protects its own column. */
+export function isAttackTargetExposed(state: GameState, targetSide: Side, targetSlot: number): boolean {
+  if (!Number.isInteger(targetSlot) || targetSlot < 0 || targetSlot >= state.players[targetSide].slots.length) return false;
+  const target = state.players[targetSide].slots[targetSlot];
+  if (!target || getCardDefinition(target.definitionId).kind !== 'troop') return false;
+  const row = Math.floor(targetSlot / topology.columns);
+  const column = targetSlot % topology.columns;
+  if (row === frontRow(targetSide)) return true;
+  const protectingSlot = frontRow(targetSide) * topology.columns + column;
+  return !state.players[targetSide].slots[protectingSlot];
+}
+
 export function chooseAttackTarget(state: GameState, attackerSide: Side, attackerSlot: number): AttackTarget {
   const targetSide = oppositeSide(attackerSide);
+  const attacker = state.players[attackerSide].slots[attackerSlot];
+  if (attacker?.attackTargetId) {
+    const selectedSlot = state.players[targetSide].slots.findIndex((card) => card?.instanceId === attacker.attackTargetId);
+    if (selectedSlot >= 0 && isAttackTargetExposed(state, targetSide, selectedSlot)) {
+      return { side: targetSide, slot: selectedSlot, direct: false };
+    }
+  }
   const column = attackerSlot % topology.columns;
   const targets = state.players[targetSide].slots;
   const first = frontRow(targetSide) * topology.columns + column;
