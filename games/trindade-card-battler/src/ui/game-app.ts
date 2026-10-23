@@ -136,7 +136,7 @@ export class GameApp {
           </button>
         </section>
         <div class="deck-column"><div class="player-cycle" role="status" aria-label="Ciclo do seu deck"><span class="enemy-cycle-icon" id="player-cycle">1</span></div><button class="deck-button" type="button" id="draw-deck" title="Comprar uma carta" aria-label="Comprar carta">${renderDeckCardBack()}<span class="deck-progress" id="deck-badge" role="progressbar" aria-label="Progresso do deck" aria-valuemin="0" aria-valuemax="${balance.deckSize}" aria-valuenow="${balance.handLimit}"></span></button></div>
-        <div class="enemy-deck-display" role="img" aria-label="Deck do adversário">${renderDeckCardBack()}<span class="deck-cycle-badge" id="enemy-deck-cycle" aria-label="Ciclo do deck adversário">1</span></div>
+        <div class="enemy-deck-display" role="img" aria-label="Deck do adversário">${renderDeckCardBack()}<div class="player-cycle" role="status" aria-label="Ciclo do deck adversário"><span class="enemy-cycle-icon" id="enemy-deck-cycle">1</span></div></div>
         </div></div>
         <section class="bottom-zone" aria-label="Sua mão e deck">
           <div class="my-status"><div class="status-stack"><div class="status-title">TRINDADE</div><div class="status-sub" id="player-status">Regras experimentais · partida local</div></div><div class="metrics"><strong id="deck-count">18</strong><small>no deck</small></div></div>

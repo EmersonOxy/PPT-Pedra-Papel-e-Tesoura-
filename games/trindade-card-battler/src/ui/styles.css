@@ -349,3 +349,6 @@ body { overscroll-behavior: none; }
 /* A blocked purchase changes the label, not the supplied card-back illustration. */
 .arena-board .deck-column { left: calc(22% + 2px); }
 .arena-board .deck-button:disabled { filter: none; opacity: 1; }
+/* Keep both supplied backs square; the gold support is already drawn in the arena. */
+.arena-board .deck-button { border-radius: 0; overflow: visible; }
+.arena-board .deck-button .deck-card-back, .enemy-deck-display .deck-card-back { border-radius: 0; object-fit: contain; }
