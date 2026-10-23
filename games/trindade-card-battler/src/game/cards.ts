@@ -11,8 +11,8 @@ export const cardDefinitions: CardDefinition[] = [
   { id: 'ember-knight', name: 'Cavaleiro da Brasa', kind: 'troop', foundation: 'impacto', cost: 3, attack: 3, maxHealth: 4, attackAnimationProfile: 'impact', description: 'Um combatente incandescente.' },
   { id: 'eclipse-seal', name: 'Selo do Eclipse', kind: 'hidden', foundation: 'tecnica', cost: 2, attack: 0, maxHealth: 0, description: 'Sigilo demonstrativo. O gatilho final ainda não foi definido.' },
   { id: 'sleeping-thorns', name: 'Espinhos Dormentes', kind: 'hidden', foundation: 'guarda', cost: 2, attack: 0, maxHealth: 0, description: 'Sigilo demonstrativo. O gatilho final ainda não foi definido.' },
-  { id: 'runic-pulse', name: 'Pulso Rúnico', kind: 'spell', foundation: 'guarda', cost: 2, attack: 0, maxHealth: 0, effect: 'heal', description: 'Recupera 2 pontos de vida de um alvo aliado.' },
-  { id: 'wandering-flame', name: 'Chama Errante', kind: 'spell', foundation: 'impacto', cost: 2, attack: 0, maxHealth: 0, effect: 'damage', description: 'Causa 2 pontos de dano a um alvo inimigo.' },
+  { id: 'runic-pulse', name: 'Pulso Rúnico', kind: 'spell', foundation: 'guarda', cost: 2, attack: 0, maxHealth: 0, spellAmount: 2, effect: 'heal', description: 'Recupera 2 pontos de vida de um alvo aliado.' },
+  { id: 'wandering-flame', name: 'Chama Errante', kind: 'spell', foundation: 'impacto', cost: 2, attack: 0, maxHealth: 0, spellAmount: 2, effect: 'damage', description: 'Causa 2 pontos de dano a um alvo inimigo.' },
 ];
 
 export const definitionsById = new Map(cardDefinitions.map((definition) => [definition.id, definition]));

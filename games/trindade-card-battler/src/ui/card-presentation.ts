@@ -67,7 +67,7 @@ export function renderDeckCardBack(): string {
 function statValues(definition: CardDefinition, card: CardInstance): { left: number | null; right: number | null; labels: [string, string] } {
   if (definition.kind === 'troop') return { left: definition.attack, right: card.health, labels: ['Ataque', 'Vida atual'] };
   if (definition.kind === 'spell') {
-    const effectValue = definition.effect === 'damage' ? balance.spellDamage : balance.spellHealing;
+    const effectValue = definition.spellAmount ?? (definition.effect === 'damage' ? balance.spellDamage : balance.spellHealing);
     return { left: definition.cost, right: effectValue, labels: ['Custo demonstrativo', definition.effect === 'damage' ? 'Dano do feitiço' : 'Cura do feitiço'] };
   }
   return { left: definition.cost, right: null, labels: ['Custo demonstrativo', 'Efeito'] };

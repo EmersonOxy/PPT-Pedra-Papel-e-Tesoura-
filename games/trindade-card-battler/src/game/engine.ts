@@ -207,6 +207,7 @@ export function castSpell(state: GameState, side: Side, instanceId: string, targ
   if (!card) return { state, events: [] };
   const definition = getCardDefinition(card.definitionId);
   if (state.phase !== 'playing' || !actionAllowed(state, card.definitionId, 'cast') || definition.kind !== 'spell' || !definition.effect) return { state, events: [] };
+  const amount = definition.spellAmount ?? (definition.effect === 'damage' ? balance.spellDamage : balance.spellHealing);
   if (target.kind === 'unit' && (!Number.isInteger(target.slot) || target.slot < 0 || target.slot >= boardSlotCount || !state.players[target.side].slots[target.slot])) return { state, events: [] };
   const intendedSide = definition.effect === 'damage' ? (side === 'player' ? 'enemy' : 'player') : side;
   if (target.side !== intendedSide) return { state, events: [] };
@@ -219,21 +220,21 @@ export function castSpell(state: GameState, side: Side, instanceId: string, targ
   let next = replacePlayer(state, side, caster);
   const events: GameEvent[] = [{ type: 'spell', side, instanceId, targetId: target.kind === 'unit' ? state.players[target.side].slots[target.slot]?.instanceId : undefined, targetSide: target.side, targetSlot: target.kind === 'unit' ? target.slot : undefined, direct: target.kind === 'life' }];
   if (definition.effect === 'damage') {
-    if (target.kind === 'life') damageLife(next, target.side, balance.spellDamage, events);
-    else damageUnit(next, target.side, target.slot, balance.spellDamage, events);
+    if (target.kind === 'life') damageLife(next, target.side, amount, events);
+    else damageUnit(next, target.side, target.slot, amount, events);
   } else if (target.kind === 'life') {
     const healed = clonePlayer(next.players[target.side]);
-    healed.life = Math.min(balance.startingLife, healed.life + balance.spellHealing);
+    healed.life = Math.min(balance.startingLife, healed.life + amount);
     next.players = { ...next.players, [target.side]: healed };
     events.push({ type: 'life-heal', side: target.side, amount: healed.life - state.players[target.side].life, value: healed.life });
   } else {
     const healed = clonePlayer(next.players[target.side]);
     const unit = healed.slots[target.slot];
     if (unit) {
-      const amount = Math.min(balance.spellHealing, getCardDefinition(unit.definitionId).maxHealth - unit.health);
-      healed.slots[target.slot] = { ...unit, health: unit.health + amount };
+      const healing = Math.min(amount, getCardDefinition(unit.definitionId).maxHealth - unit.health);
+      healed.slots[target.slot] = { ...unit, health: unit.health + healing };
       next.players = { ...next.players, [target.side]: healed };
-      events.push({ type: 'heal', side: target.side, instanceId: unit.instanceId, amount });
+      events.push({ type: 'heal', side: target.side, instanceId: unit.instanceId, amount: healing });
     }
   }
   return { state: wakeOpponent(next, side), events };

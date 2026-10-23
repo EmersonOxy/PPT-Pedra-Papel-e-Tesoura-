@@ -104,10 +104,10 @@ body { overscroll-behavior: none; }
 /* Existing field troops stay anchored during target selection; the arrow follows the pointer. */
 .attack-aim-overlay { position: fixed; z-index: 105; inset: 0; display: none; width: 100vw; height: 100dvh; overflow: visible; pointer-events: none; }
 .attack-aim-overlay.is-visible { display: block; }
-.attack-aim-overlay line { stroke: currentColor; stroke-width: 9px; stroke-linecap: round; marker-end: url(#attack-arrowhead); filter: drop-shadow(0 1px 4px #071523) drop-shadow(0 0 3px currentColor); }
+.attack-aim-overlay #attack-aim-line { fill: none; stroke: currentColor; stroke-width: 8px; stroke-linecap: round; marker-end: url(#attack-arrowhead); filter: drop-shadow(0 1px 4px #071523) drop-shadow(0 0 3px currentColor); }
 .attack-aim-overlay.is-player-aim { color: #38e887; }
 .attack-aim-overlay.is-enemy-aim { color: #ff425c; }
-#attack-arrowhead path { fill: currentColor; }
+#attack-arrowhead path { fill: currentColor; stroke: #071523; stroke-width: 1.2px; stroke-linejoin: round; }
 .battle-card.is-aiming { filter: drop-shadow(0 0 8px #38e887); }
 .slot.is-target-candidate { border-color: #fb8c75 !important; box-shadow: inset 0 0 0 2px #fb8c75, 0 0 20px #fa554caa !important; }
 .slot.is-target-blocked { border-color: #ff465c !important; box-shadow: inset 0 0 0 2px #ff465c, 0 0 18px #ff465c99 !important; filter: saturate(.7); }
@@ -203,10 +203,11 @@ body { overscroll-behavior: none; }
 
 /* Keep target feedback compact in screen-pixel coordinates at every viewport. */
 .attack-aim-overlay { overflow: hidden; }
-.attack-aim-overlay line { stroke-width: 6px; filter: drop-shadow(0 1px 3px #071523) drop-shadow(0 0 2px currentColor); }
+.attack-aim-overlay #attack-aim-line { stroke-width: 7px; filter: drop-shadow(0 1px 3px #071523) drop-shadow(0 0 2px currentColor); }
 
 /* Pull the player's life rail away from the clipped edge of the tilted field. */
-.field-band.player .side-life { left: 20px; }
+.field-band.player { padding-right: 22px !important; padding-left: 4px !important; }
+.field-band.player .side-life { right: 3px !important; left: auto !important; }
 
 /* Card inspection keeps the card and quick facts together, then explains below. */
 .card-preview-overlay.open,
@@ -254,6 +255,24 @@ body { overscroll-behavior: none; }
 }
 @media (max-width: 450px) {
   .game-shell { --slot-w: 68px; --slot-h: 95px; }
-  .field-band.player .side-life { left: 34px; }
+  .field-band.player { padding-right: 21px !important; padding-left: 3px !important; }
+  .field-band.player .side-life { right: 3px !important; left: auto !important; width: 15px; }
   .field-band.player .life-track { width: 5px; }
 }
+
+.mission-claim { margin-top: 8px; padding: 6px 9px; border: 1px solid #f1d78388; border-radius: 7px; color: #f8e8b9; background: #13283a; font: 800 9px system-ui,sans-serif; cursor: pointer; }
+.mission-claim:active { transform: translateY(1px); }
+.mission-reward-choice { display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: center; gap: 6px; margin-top: 7px; }
+.mission-reward-choice label { grid-column: 1 / -1; color: #a8c6bb; font: 700 8px system-ui,sans-serif; }
+.mission-reward-choice select { min-width: 0; padding: 6px; border: 1px solid #9dc1b144; border-radius: 6px; color: #e6e3cf; background: #081a29; font: 600 9px system-ui,sans-serif; }
+.mission-reward-choice .mission-claim { margin: 0; }
+.card-upgrade { margin-top: 9px !important; border-color: #83d7b288 !important; color: #dbffe9 !important; background: #123a31 !important; }
+.card-upgrade:disabled { opacity: .52; cursor: not-allowed; }
+.quick-card-preview { display: grid; width: min(92vw,660px); grid-template-columns: minmax(130px, .72fr) minmax(180px,1fr); align-items: center; gap: clamp(10px,3vw,22px); padding: 14px; border: 1px solid #e8d28b77; border-radius: 14px; background: #071725f4; box-shadow: 0 18px 50px #000c; }
+.quick-card-preview .preview-shell { width: 100%; max-height: min(67dvh,520px); }
+.quick-card-preview .card-preview-details { width: 100%; }
+.quick-card-preview .card-preview-details p { line-height: 1.45; }
+.quick-card-preview .card-preview-how { color: #d9e4d6; }
+.hand-card, .battle-card { touch-action: none; }
+@media (max-width: 520px) { .quick-card-preview { width: min(94vw,440px); grid-template-columns: minmax(0, .8fr) minmax(0,1fr); gap: 9px; padding: 10px; } .quick-card-preview .card-preview-details { padding: 9px; } .quick-card-preview .card-preview-heading strong { font-size: 12px; } .quick-card-preview .card-preview-facts { gap: 6px; font-size: 9px; } .quick-card-preview .card-preview-details p { font-size: 10px; } }
+@media (max-width: 350px) { .quick-card-preview { grid-template-columns: minmax(0,1fr); width: min(80vw,300px); } .quick-card-preview .preview-shell { width: min(55vw,180px); justify-self: center; max-height: 43dvh; } }

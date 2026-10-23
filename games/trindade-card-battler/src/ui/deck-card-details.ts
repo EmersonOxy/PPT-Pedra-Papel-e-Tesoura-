@@ -41,7 +41,7 @@ export function deckStatsFor(definition: CardDefinition): DeckStatPreview[] {
     { label: 'Vida', current: definition.maxHealth, nextLevel: definition.maxHealth + 1 },
   ];
   if (definition.kind === 'spell') {
-    const amount = definition.effect === 'damage' ? balance.spellDamage : balance.spellHealing;
+    const amount = definition.spellAmount ?? (definition.effect === 'damage' ? balance.spellDamage : balance.spellHealing);
     return [{ label: definition.effect === 'damage' ? 'Dano' : 'Cura', current: amount, nextLevel: amount + 1 }];
   }
   return [];

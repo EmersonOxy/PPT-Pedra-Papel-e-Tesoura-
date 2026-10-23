@@ -13,6 +13,8 @@ export interface CardDefinition {
   cost: number;
   attack: number;
   maxHealth: number;
+  /** Current per-card spell effect amount, used by the existing damage/heal effect. */
+  spellAmount?: number;
   description: string;
   effect?: SpellEffect;
   /** Presentation-only profile. It never participates in combat resolution. */
