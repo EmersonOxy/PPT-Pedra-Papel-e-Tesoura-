@@ -377,3 +377,6 @@ body { overscroll-behavior: none; }
 .card-preview-overlay.open .card-preview-wrap:has(.quick-card-preview) { min-height: 0; height: auto; width: min(94vw,680px); display: flex; justify-content: center; padding: 16px !important; }
 .card-preview-overlay.open .card-preview-wrap:has(.quick-card-preview) { box-sizing: border-box; }
 .card-preview-overlay.open:has(.quick-card-preview) { overflow-x: hidden; }
+/* One shared plane keeps the supplied artwork, cards and pointer targets aligned. */
+:root { --arena-board-tilt: 18deg; --arena-board-perspective: 1100px; --arena-board-scale: .92; }
+.arena-board { transform: perspective(var(--arena-board-perspective)) rotateX(var(--arena-board-tilt)) scale(var(--arena-board-scale)); transform-origin: 50% 50%; }

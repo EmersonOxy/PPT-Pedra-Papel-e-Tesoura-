@@ -523,16 +523,15 @@ export class GameApp {
     const target = event.target;
     if (!(target instanceof Element)) return;
     const directCard = target.closest<HTMLElement>('.hand-card[data-card-id], .battle-card[data-card-id]');
-    const playerSlot = target.closest<HTMLElement>('.slot[data-slot-side="player"]');
+    const playerSlot = target.closest<HTMLElement>('.slot[data-slot-side]');
     const cardEl = directCard ?? playerSlot?.querySelector<HTMLElement>('.battle-card[data-card-id]') ?? null;
     if (!cardEl) return;
     const id = cardEl.dataset.cardId;
     const side = (cardEl.dataset.side ?? 'player') as Side;
     if (!id) return;
-    if (this.state.phase === 'preparation' && side === 'enemy') return;
     const source = cardEl.classList.contains('hand-card') ? 'hand' : 'board';
-    const boardCard = source === 'board' ? this.state.players.player.slots.find((card) => card?.instanceId === id) : undefined;
-    if (source === 'board' && (cardEl.closest('.secret-slot') || !boardCard || getCardDefinition(boardCard.definitionId).kind !== 'troop')) return;
+    const boardCard = source === 'board' ? this.state.players[side].slots.find((card) => card?.instanceId === id) : undefined;
+    if (source === 'board' && side === 'player' && (cardEl.closest('.secret-slot') || !boardCard || getCardDefinition(boardCard.definitionId).kind !== 'troop')) return;
     const rect = cardEl.getBoundingClientRect();
     this.drag = {
       id, side, origin: cardEl, parent: cardEl.parentNode!, nextSibling: cardEl.nextSibling,
