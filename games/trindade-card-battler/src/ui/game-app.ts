@@ -732,12 +732,24 @@ export class GameApp {
       if (!from.width || !from.height || !to.width || !to.height) continue;
       const dx = from.x + from.width / 2 - to.x - to.width / 2;
       const dy = from.y + from.height / 2 - to.y - to.height / 2;
-      const base = getComputedStyle(target).transform === 'none' ? '' : getComputedStyle(target).transform;
-      target.animate([
-        { transform: `translate(${dx}px,${dy}px) scale(${from.width / to.width},${from.height / to.height}) rotateY(-12deg) ${base}`, opacity: .7 },
-        { transform: `translate(0,-8px) scale(1.04) rotateY(5deg) ${base}`, opacity: 1, offset: .78 },
-        { transform: base || 'none', opacity: 1 },
-      ], { duration: 480, easing: 'cubic-bezier(.2,.75,.25,1)' });
+      const face = target.querySelector<HTMLElement>('.card-face');
+      if (!face) continue;
+      const ghost = document.createElement('div');
+      ghost.className = 'card-transfer-ghost';
+      ghost.setAttribute('aria-hidden', 'true');
+      Object.assign(ghost.style, { left: `${to.x}px`, top: `${to.y}px`, width: `${to.width}px`, height: `${to.height}px` });
+      ghost.append(face.cloneNode(true));
+      document.body.append(ghost);
+      const previousVisibility = target.style.visibility;
+      target.style.visibility = 'hidden';
+      const flight = ghost.animate([
+        { transform: `translate(${dx}px,${dy}px) scale(${from.width / to.width},${from.height / to.height}) rotateY(-12deg)`, opacity: .85 },
+        { transform: 'translate(0,-8px) scale(1.04) rotateY(5deg)', opacity: 1, offset: .78 },
+        { transform: 'none', opacity: 1 },
+      ], { duration: 560, easing: 'cubic-bezier(.2,.75,.25,1)' });
+      const finish = () => { ghost.remove(); target.style.visibility = previousVisibility; };
+      flight.onfinish = finish;
+      flight.oncancel = finish;
     }
   }
 

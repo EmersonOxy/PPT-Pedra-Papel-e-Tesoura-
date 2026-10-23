@@ -363,3 +363,17 @@ body { overscroll-behavior: none; }
 .hand-card.is-selected .card-face { animation: selected-card-hover 2200ms ease-in-out infinite; }
 @keyframes selected-card-hover { 0%,100% { transform: translateY(-5px) rotateX(9deg) rotateY(-5deg); } 50% { transform: translateY(-10px) rotateX(5deg) rotateY(-2deg); } }
 @media (prefers-reduced-motion: reduce) { .hand-card.is-selected .card-face { animation: none; } }
+/* Flight clones live outside all board/hand clipping and stacking contexts. */
+.card-transfer-ghost { position: fixed; z-index: 1000; pointer-events: none; transform-origin: center; perspective: 900px; filter: drop-shadow(0 9px 9px #0008); }
+.card-transfer-ghost > .card-face { width: 100%; height: 100%; max-width: none; max-height: none; margin: 0; }
+.bottom-zone, .hand-dock, .dock-main, .hand-area { overflow: visible; }
+/* Bound the preview face itself, not only its floating wrapper. */
+.quick-card-preview { padding: 22px 16px; gap: 18px; }
+.quick-card-preview .preview-shell { position: relative; flex: none; aspect-ratio: 63 / 88; }
+.quick-card-preview .preview-shell > .card-face--preview { position: absolute; inset: 0; width: 100%; height: 100%; max-width: none; max-height: none; margin: 0; aspect-ratio: auto; }
+.quick-card-preview .card-preview-details { position: relative; z-index: 1; }
+@media (max-width: 520px) { .quick-card-preview .preview-shell { width: min(48vw,190px); } }
+.card-preview-overlay.open:has(.quick-card-preview) { align-items: center !important; justify-content: center; }
+.card-preview-overlay.open .card-preview-wrap:has(.quick-card-preview) { min-height: 0; height: auto; width: min(94vw,680px); display: flex; justify-content: center; padding: 16px !important; }
+.card-preview-overlay.open .card-preview-wrap:has(.quick-card-preview) { box-sizing: border-box; }
+.card-preview-overlay.open:has(.quick-card-preview) { overflow-x: hidden; }
