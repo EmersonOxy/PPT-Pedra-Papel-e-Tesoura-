@@ -389,13 +389,13 @@ body { overscroll-behavior: none; }
 .quick-card-preview, .quick-card-preview .card-preview-details { background: transparent; border: 0; box-shadow: none; }
 .quick-card-preview .card-preview-details { color: #f7f0da; text-shadow: 0 1px 4px #000; }
 .quick-card-preview .card-preview-close { background: transparent; }
-/* Moving highlights and bubbles stay clipped inside the actual liquid fill. */
+/* Slow, broad density currents move beneath the glass, without particle bubbles. */
 .arena-board .life-track i { overflow: hidden; box-shadow: inset 4px 0 7px #ffffff50,inset -5px 0 8px #0005; transition: height 420ms ease-out; }
-.arena-board .life-track i::before { content: ''; position: absolute; inset: -30% -80%; opacity: .45; background: radial-gradient(ellipse at 30% 35%,#fff9 0 3%,transparent 6%),radial-gradient(ellipse at 70% 65%,#fff8 0 2%,transparent 5%),repeating-linear-gradient(110deg,transparent 0 22%,#ffffff38 27%,transparent 35%); background-size: 55px 100px,43px 130px,100% 100%; animation: liquid-current 6500ms ease-in-out infinite alternate; }
-.arena-board .life-track i::after { content: ''; position: absolute; top: -3px; left: -35%; width: 170%; height: 12px; border-radius: 50%; background: #ffffff70; box-shadow: 0 3px 8px #ffffff66; animation: liquid-surface 2300ms ease-in-out infinite alternate; }
-.arena-board .enemy-life .life-track i::after { top: auto; bottom: -3px; }
-@keyframes liquid-current { from { transform: translate(-4%,-7%) rotate(-4deg); } to { transform: translate(6%,10%) rotate(5deg); } }
-@keyframes liquid-surface { from { transform: translateX(-3%) rotate(-4deg); } to { transform: translateX(3%) rotate(4deg); } }
+.arena-board .life-track i::before { content: ''; position: absolute; inset: -35% -65%; opacity: .48; background: radial-gradient(ellipse at 30% 28%,#ffffff70 0,transparent 39%),radial-gradient(ellipse at 74% 62%,#082c3b99 0,transparent 46%),radial-gradient(ellipse at 22% 88%,#ffffff50 0,transparent 40%); filter: blur(5px); animation: liquid-current 11000ms ease-in-out infinite alternate; }
+.arena-board .life-track i::after { content: ''; position: absolute; inset: -25% -45%; border-radius: 45%; background: radial-gradient(ellipse at 68% 32%,transparent 28%,#ffffff28 43%,transparent 60%),radial-gradient(ellipse at 25% 76%,#071b3544 0,transparent 47%); box-shadow: none; animation: liquid-surface 15000ms ease-in-out infinite alternate-reverse; }
+.arena-board .enemy-life .life-track i::before { animation-delay: -4s; }
+@keyframes liquid-current { from { transform: translate(-8%,-10%) rotate(-12deg) scale(1); } to { transform: translate(8%,12%) rotate(14deg) scale(1.12); } }
+@keyframes liquid-surface { from { transform: translate(6%,-9%) rotate(12deg); } to { transform: translate(-8%,10%) rotate(-14deg); } }
 /* Card-specific reactions are driven by real attack/damage/destruction events. */
 .combat-projectile[data-trail] { background: radial-gradient(circle,#fff7d8 0 12%,var(--effect-color) 35%,transparent 73%); filter: drop-shadow(0 0 5px var(--effect-color)); }
 .combat-projectile[data-trail="slash"] { width: 25px; height: 5px; border-radius: 90% 0; }
@@ -419,6 +419,6 @@ body { overscroll-behavior: none; }
 @keyframes death-embers { 35% { filter: brightness(1.5) drop-shadow(0 0 9px var(--effect-color)); } to { opacity: 0; transform: translateY(-10px) scale(.8); filter: blur(4px); } }
 @media (prefers-reduced-motion: reduce) { .arena-board .life-track i { transition: none; } .arena-board .life-track i::before, .arena-board .life-track i::after { animation: none; } }
 /* Keep the stronger tilt centered so perspective does not create a large empty top margin. */
-:root { --arena-board-perspective: 1600px; --arena-board-scale: .92; }
+:root { --arena-board-perspective: 3200px; --arena-board-scale: .985; }
 .arena-stage { align-items: center; }
-.arena-board { transform-origin: 50% 50%; transform: translateY(24px) perspective(var(--arena-board-perspective)) rotateX(var(--arena-board-tilt)) scale(var(--arena-board-scale)); }
+.arena-board { transform-origin: 50% 50%; transform: translateY(12px) perspective(var(--arena-board-perspective)) rotateX(var(--arena-board-tilt)) scale(var(--arena-board-scale)); }
