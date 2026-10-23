@@ -8,19 +8,19 @@ export type CardFaceContext = 'hand' | 'field' | 'preview';
 
 export interface CardPresentation {
   background: CardBackgroundId;
-  illustration: { kind: 'placeholder'; motif: string };
+  illustration: { kind: 'placeholder'; motif: string } | { kind: 'image'; src: string };
 }
 
 // These are provisional visual choices only. They do not encode card type, power, or combat rules.
 export const cardPresentationCatalog: Record<string, CardPresentation> = {
   'solemn-guardian': { background: 'green', illustration: { kind: 'placeholder', motif: 'guardian' } },
-  'astral-fox': { background: 'purple', illustration: { kind: 'placeholder', motif: 'fox' } },
+  'astral-fox': { background: 'purple', illustration: { kind: 'image', src: new URL('../assets/card-art/Goblin Ladrão.png', import.meta.url).href } },
   'moss-colossus': { background: 'blue', illustration: { kind: 'placeholder', motif: 'golem' } },
   'amber-phoenix': { background: 'red', illustration: { kind: 'placeholder', motif: 'phoenix' } },
   'veil-oracle': { background: 'yellow', illustration: { kind: 'placeholder', motif: 'oracle' } },
   'vesper-blade': { background: 'purple', illustration: { kind: 'placeholder', motif: 'blade' } },
   'prism-sentinel': { background: 'green', illustration: { kind: 'placeholder', motif: 'crystal' } },
-  'ember-knight': { background: 'red', illustration: { kind: 'placeholder', motif: 'knight' } },
+  'ember-knight': { background: 'red', illustration: { kind: 'image', src: new URL('../assets/card-art/Campones.png', import.meta.url).href } },
   'eclipse-seal': { background: 'purple', illustration: { kind: 'placeholder', motif: 'eclipse' } },
   'sleeping-thorns': { background: 'green', illustration: { kind: 'placeholder', motif: 'thorns' } },
   'runic-pulse': { background: 'blue', illustration: { kind: 'placeholder', motif: 'pulse' } },
@@ -82,10 +82,10 @@ export function renderCardFace(definition: CardDefinition, card: CardInstance, s
   const stateKey = `${definition.id}:${card.health}:${card.revealed ? 1 : 0}:${presentation.background}:${sigil}`;
   const placeholder = presentation.illustration.kind === 'placeholder'
     ? `<span class="card-face__placeholder-tag">Ilustração provisória</span>${renderPlaceholderIllustration(presentation.illustration.motif)}`
-    : '';
+    : `<img class="card-face__art-image" src="${escapeHtml(presentation.illustration.src)}" alt="" draggable="false">`;
   return `<div class="card-face card-face--${context} card-kind--${definition.kind}" data-background="${presentation.background}" data-sigil="${sigil}" data-visual-state="${stateKey}" data-side="${side}" role="img" aria-label="${escapeHtml(accessible)}">
     <img class="card-face__background" src="${backgroundAssets[presentation.background]}" alt="" aria-hidden="true" draggable="false">
-    <div class="card-face__illustration" aria-hidden="true">${placeholder}</div>
+    <div class="card-face__illustration${presentation.illustration.kind === 'image' ? ' card-face__illustration--image' : ''}" aria-hidden="true">${placeholder}</div>
     <img class="card-face__sigil" src="${sigilAssets[sigil]}" alt="" aria-hidden="true" draggable="false">
     <span class="card-face__name" title="${escapeHtml(definition.name)}">${escapeHtml(definition.name)}</span>
     <span class="card-face__stat card-face__stat--blue" aria-label="${values.labels[0]} ${values.left ?? 'não definido'}">${values.left ?? ''}</span>

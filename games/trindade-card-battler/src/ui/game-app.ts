@@ -136,7 +136,7 @@ export class GameApp {
           </button>
         </section>
         <div class="deck-column"><div class="player-cycle" role="status" aria-label="Ciclo do seu deck"><span class="enemy-cycle-icon" id="player-cycle">1</span></div><button class="deck-button" type="button" id="draw-deck" title="Comprar uma carta" aria-label="Comprar carta">${renderDeckCardBack()}<span class="deck-progress" id="deck-badge" role="progressbar" aria-label="Progresso do deck" aria-valuemin="0" aria-valuemax="${balance.deckSize}" aria-valuenow="${balance.handLimit}"></span></button></div>
-        <div class="enemy-deck-display" role="img" aria-label="Deck do adversário">${renderDeckCardBack()}</div>
+        <div class="enemy-deck-display" role="img" aria-label="Deck do adversário">${renderDeckCardBack()}<span class="deck-cycle-badge" id="enemy-deck-cycle" aria-label="Ciclo do deck adversário">1</span></div>
         </div></div>
         <section class="bottom-zone" aria-label="Sua mão e deck">
           <div class="my-status"><div class="status-stack"><div class="status-title">TRINDADE</div><div class="status-sub" id="player-status">Regras experimentais · partida local</div></div><div class="metrics"><strong id="deck-count">18</strong><small>no deck</small></div></div>
@@ -911,6 +911,7 @@ export class GameApp {
     this.setText('#enemy-life-value', String(enemy.life));
     this.setText('#player-cycle', String(player.cycle));
     this.setText('#enemy-cycle', String(enemy.cycle));
+    this.setText('#enemy-deck-cycle', String(enemy.cycle));
     const playerLife = this.root.querySelector<HTMLElement>('#player-life-fill');
     const enemyLife = this.root.querySelector<HTMLElement>('#enemy-life-fill');
     if (playerLife) playerLife.style.height = `${Math.max(0, player.life / balance.startingLife * 100)}%`;

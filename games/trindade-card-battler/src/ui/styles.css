@@ -334,3 +334,15 @@ body { overscroll-behavior: none; }
 .enemy-deck-display { left: calc(59% + 2px); }
 .arena-board .deck-column::after { content: attr(data-draw-status); position: absolute; top: 100%; left: 50%; transform: translateX(-50%); width: max-content; max-width: 160%; padding: 3px 5px; border-radius: 4px; background: #07121bea; color: #fff0bd; font: 700 8px/1.25 system-ui,sans-serif; text-align: center; pointer-events: none; }
 .arena-board .deck-button:disabled { filter: brightness(.65); }
+/* Match the physical card-back proportions on both central decks. */
+.arena-board .deck-column { left: 21.5%; top: 41.5%; width: 17%; height: 17%; }
+.arena-board .deck-button { inset: 0; width: 100%; height: 100%; }
+.arena-board .deck-button .deck-card-back { object-fit: contain; }
+.arena-board .deck-progress { display: none; }
+.deck-cycle-badge { position: absolute; right: -8%; top: -12%; display: grid; place-items: center; width: 22px; height: 22px; border: 1px solid #fbe185; border-radius: 50%; background: #07121b; color: #fbe185; font: 800 12px system-ui,sans-serif; }
+.arena-board .side-life.is-hit, .arena-board .side-life.is-healing { box-shadow: none; filter: none; }
+.arena-board .side-life.is-hit .life-track { filter: brightness(1.7); }
+.arena-board .side-life.is-hit .life-track::after { content: ''; position: absolute; inset: 0; background: #ff284d66; pointer-events: none; }
+.arena-board .side-life.is-healing .life-track { filter: brightness(1.5); }
+.card-face__illustration--image { inset: 0; width: 100%; height: 100%; }
+.card-face__art-image { width: 100%; height: 100%; object-fit: contain; display: block; }
