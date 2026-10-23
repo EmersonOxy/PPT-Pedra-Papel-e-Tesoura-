@@ -41,7 +41,7 @@ test('spells present their existing cost and configured effect, while sigils do 
   const spell = cardDefinitions.find((card) => card.id === 'wandering-flame')!;
   const sigil = cardDefinitions.find((card) => card.id === 'eclipse-seal')!;
   assert.match(renderCardFace(spell, instance(spell.id, 0), 'player', 'preview'), /Custo demonstrativo 2; Dano do feitiço 2/);
-  assert.match(renderCardFace(sigil, instance(sigil.id, 0), 'player', 'preview'), /Sem segundo atributo definido não definido/);
+  assert.match(renderCardFace(sigil, instance(sigil.id, 0), 'player', 'preview'), /Efeito ainda não definido nesta versão/);
   assert.match(renderCardFace(spell, instance(spell.id, 0), 'player', 'preview'), /data-sigil="crystal-orange"/);
   assert.match(renderCardFace(sigil, instance(sigil.id, 0), 'player', 'preview'), /data-sigil="crystal-purple"/);
 });

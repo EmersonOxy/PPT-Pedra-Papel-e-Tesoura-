@@ -139,3 +139,64 @@ body { overscroll-behavior: none; }
 .card-preview-details .card-preview-how { color: #d9e4d6; }
 .card-preview-how b { color: #f4d889; }
 .card-preview-close { display: block; margin: 10px 0 0 auto; padding: 6px 10px; border: 1px solid #d6c47d66; border-radius: 7px; color: #f0e4bd; background: #142a39; font: 700 10px system-ui,sans-serif; cursor: pointer; }
+
+/* Deck inspection follows the requested card / status / synergy composition. */
+.card-preview-overlay.open .card-preview-wrap { min-height: 100dvh; padding: 18px; }
+.card-preview-content { display: grid; grid-template-columns: minmax(155px,1fr) minmax(220px,260px) minmax(155px,1fr); align-items: center; gap: clamp(10px,2vw,20px); width: min(100%,1000px); }
+.deck-inspect-panel { min-width: 0; padding: 12px; border: 1px solid #a8d9c844; border-radius: 12px; color: #e8e7d9; background: linear-gradient(155deg,#102b3beF,#081827f5); box-shadow: 0 10px 28px #0008,inset 0 1px #ffffff0b; }
+.deck-inspect-kicker { color: #9bd9c5; font: 800 8px/1.2 system-ui,sans-serif; letter-spacing: .14em; }
+.deck-inspect-panel h2 { margin: 6px 0 12px; color: #f1e5bd; font: 700 19px/1 Georgia,serif; }
+.deck-level-row { display: flex; align-items: baseline; justify-content: space-between; gap: 5px; }
+.deck-level-row strong { color: #f3dd96; font: 800 10px system-ui,sans-serif; letter-spacing: .04em; }
+.deck-level-row span { color: #c7d2ca; font: 700 9px system-ui,sans-serif; white-space: nowrap; }
+.deck-level-track { height: 5px; margin-top: 6px; overflow: hidden; border-radius: 8px; background: #d9e2da26; }
+.deck-level-track i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg,#7fd9b0,#f4d889); }
+.deck-preview-note { display: block; margin-top: 8px; color: #9eafaa; font: 500 8px/1.35 system-ui,sans-serif; }
+.deck-inspect-panel h3 { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px; margin: 16px 0 8px; color: #e6dfc7; font: 700 11px system-ui,sans-serif; }
+.deck-inspect-panel h3 span { color: #a8b8b3; font: 500 8px system-ui,sans-serif; }
+.deck-inspect-panel h3 span i { color: #76d7a5; font-style: normal; }
+.deck-stat-chart { display: grid; gap: 10px; }
+.deck-stat-row > div:first-child { display: flex; align-items: center; justify-content: space-between; gap: 4px; margin-bottom: 4px; color: #c8d2cc; font: 600 9px system-ui,sans-serif; }
+.deck-stat-row strong { color: #fff7de; font-size: 10px; }
+.deck-stat-row div:first-child i { color: #7fdda7; font-style: normal; }
+.deck-stat-track { position: relative; height: 7px; overflow: hidden; border-radius: 6px; background: #d9e2da20; }
+.deck-stat-track i { position: absolute; inset-block: 0; left: 0; border-radius: inherit; }
+.deck-stat-next { background: linear-gradient(90deg,#43c789,#a3e6a3); }
+.deck-stat-current { background: linear-gradient(90deg,#fff4cb,#e9d89d); box-shadow: 0 0 4px #fff8d566; }
+.deck-stat-empty { margin: 0; color: #bac7c1; font: 500 10px/1.5 system-ui,sans-serif; }
+.deck-inspect-main { display: flex; min-width: 0; flex-direction: column; align-items: center; gap: 10px; }
+.deck-inspect-main .preview-shell { width: min(100%,250px); height: min(48dvh,360px); aspect-ratio: 63/88; }
+.deck-inspect-main .card-face--preview { width: 100%; height: 100%; max-height: 100%; margin: 0; object-fit: fill; }
+.deck-inspect-main .card-preview-details { width: 100%; max-height: 30dvh; overflow-y: auto; }
+.deck-inspect-main .card-preview-heading { display: block; }
+.deck-inspect-main .card-preview-heading strong { display: block; white-space: normal; }
+.deck-inspect-main .card-preview-heading span { display: block; margin-top: 4px; }
+.deck-progression-caption { display: block; margin-top: 8px; color: #a8d9c8; font: 600 9px/1.4 system-ui,sans-serif; }
+.deck-inspect-synergy h2 { margin-bottom: 9px; }
+.deck-synergy-list { display: grid; gap: 8px; }
+.deck-synergy-item { display: grid; grid-template-columns: 36px minmax(0,1fr); align-items: center; gap: 8px; padding: 6px; border: 1px solid #b5ccb822; border-radius: 8px; background: #dbe7dc08; }
+.deck-synergy-card { width: 36px; aspect-ratio: 63/88; overflow: hidden; border-radius: 3px; }
+.deck-synergy-card .card-face--preview { width: 100%; height: 100%; max-height: none; margin: 0; box-shadow: none; }
+.deck-synergy-item > div:last-child { min-width: 0; }
+.deck-synergy-item > div > b { display: block; overflow: hidden; color: #f1e5bd; font: 700 9px/1.2 Georgia,serif; text-overflow: ellipsis; }
+.deck-synergy-item p { margin: 3px 0 0; color: #afbfba; font: 500 8px/1.35 system-ui,sans-serif; }
+@media (max-width: 700px) {
+  .card-preview-overlay.open .card-preview-wrap { align-items: flex-start; padding: 12px; }
+  .card-preview-content { grid-template-columns: repeat(2,minmax(0,1fr)); align-items: start; gap: 9px; margin-block: auto; }
+  .deck-inspect-main { grid-column: 1 / -1; grid-row: 1; display: flex; align-items: center; gap: 9px; }
+  .deck-inspect-progression, .deck-inspect-synergy { grid-row: 2; }
+  .deck-inspect-main .preview-shell { width: min(56vw,195px); height: min(39dvh,280px); max-height: none; }
+  .deck-inspect-main .card-preview-details { max-height: none; padding: 9px; }
+  .deck-inspect-main .card-preview-heading strong { font-size: 13px; }
+  .card-preview-details p { font-size: 10px; }
+  .deck-inspect-panel { padding: 9px; }
+  .deck-inspect-panel h2 { margin-bottom: 9px; font-size: 16px; }
+  .deck-synergy-item { grid-template-columns: 28px minmax(0,1fr); gap: 6px; padding: 5px; }
+  .deck-synergy-card { width: 28px; }
+}
+@media (max-width: 360px) {
+  .card-preview-overlay.open .card-preview-wrap { padding: 8px; }
+  .deck-inspect-main .preview-shell { width: min(57vw,178px); height: min(38dvh,255px); }
+  .deck-inspect-panel { padding: 7px; }
+  .deck-inspect-panel h2 { font-size: 14px; }
+}

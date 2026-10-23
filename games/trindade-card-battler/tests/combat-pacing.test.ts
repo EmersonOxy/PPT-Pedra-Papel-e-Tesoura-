@@ -82,9 +82,10 @@ test('presentation stylesheet includes all attack profiles, impact feedback, fie
   assert.ok(css.includes('.attack-cooldown-shade.is-cooling'));
   assert.ok(css.includes('conic-gradient(from 0deg'));
   assert.ok(css.includes('--field-tilt-angle'));
-  assert.match(css, /--field-tilt-angle:\s*12deg/);
-  assert.match(css, /--field-tilt-opponent-angle:\s*12deg/);
-  assert.match(css, /\.battle-grid,\s*\.sigil-side\s*\{\s*transform:\s*perspective\(450px\)/);
+  assert.match(css, /--field-tilt-angle:\s*14deg/);
+  assert.match(css, /--field-tilt-opponent-angle:\s*22deg/);
+  assert.match(css, /\.field-band\.enemy\s*\{\s*transform:\s*perspective\(var\(--field-perspective\)\) rotateX\(var\(--field-tilt-opponent-angle\)\)/);
+  assert.match(css, /\.field-band\.player\s*\{\s*transform:\s*perspective\(var\(--field-perspective\)\) rotateX\(var\(--field-tilt-angle\)\)/);
   assert.match(homeCss, /\.field-band\.enemy::after[^}]*transform:\s*none/);
   assert.doesNotMatch(homeCss, /\.game-shell\.is-preparing \.field-band\.enemy \.battle-grid[^}]*blur\(/);
   assert.ok(css.includes('prefers-reduced-motion: reduce'));

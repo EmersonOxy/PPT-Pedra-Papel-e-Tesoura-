@@ -8,6 +8,7 @@ import { advanceMatchFlow, beginDemoMatchSearch, cancelDemoMatchSearch, createMa
 import type { MatchFlowState } from '../game/session-flow.ts';
 import { renderCardBack, renderCardFace, renderDeckCardBack } from './card-presentation.ts';
 import { attackProfileClass, attackProjectileClass, cooldownSweepDegrees, handFanSpacing, shouldHighlightDeck } from './combat-presentation.ts';
+import { deckProgressionPreview, deckStatsFor, synergiesFor } from './deck-card-details.ts';
 import type { AttackAnimationProfile } from '../game/types.ts';
 
 type ActiveDrag = {
@@ -1057,17 +1058,27 @@ export class GameApp {
     const wrap = this.root.querySelector<HTMLElement>('#card-preview-wrap');
     if (!overlay || !wrap) return;
     const typeName = definition.kind === 'troop' ? 'Tropa' : definition.kind === 'spell' ? 'Feitiço' : 'Sigilo';
-    const facts = definition.kind === 'troop'
-      ? `<span><b>Ataque</b> ${definition.attack}</span><span><b>Vida</b> ${card.health}/${definition.maxHealth}</span>`
-      : definition.kind === 'spell'
-        ? `<span><b>Custo demonstrativo</b> ${definition.cost}</span><span><b>${definition.effect === 'damage' ? 'Dano' : 'Cura'}</b> ${definition.effect === 'damage' ? balance.spellDamage : balance.spellHealing}</span>`
-        : `<span><b>Custo demonstrativo</b> ${definition.cost}</span><span><b>Tipo</b> Sigilo sem gatilho nesta versão</span>`;
+    const stats = deckStatsFor(definition);
+    const chart = stats.length
+      ? `<div class="deck-stat-chart" aria-label="Status atuais e prévia demonstrativa do próximo nível">${stats.map((stat) => {
+          const max = Math.max(1, stat.nextLevel);
+          const currentWidth = Math.max(8, stat.current / max * 100);
+          return `<div class="deck-stat-row"><div><b>${stat.label}</b><span><strong>${stat.current}</strong><i> → </i><strong>${stat.nextLevel}</strong></span></div><div class="deck-stat-track" aria-hidden="true"><i class="deck-stat-next" style="width:100%"></i><i class="deck-stat-current" style="width:${currentWidth}%"></i></div></div>`;
+        }).join('')}</div>`
+      : `<p class="deck-stat-empty">${definition.kind === 'hidden' ? 'Status e efeito ainda não definidos para este sigilo.' : `Custo: ${definition.cost}.`}</p>`;
+    const suggestions = synergiesFor(definition.id);
+    const synergyMarkup = suggestions.length
+      ? suggestions.map(({ definition: suggestion, reason }) => `<article class="deck-synergy-item"><div class="deck-synergy-card" data-foundation="${suggestion.foundation}">${renderCardFace(suggestion, { ...card, instanceId: `suggestion-${suggestion.id}`, definitionId: suggestion.id, health: suggestion.maxHealth }, side, 'preview')}</div><div><b>${this.escapeAttribute(suggestion.name)}</b><p>${this.escapeAttribute(reason)}</p></div></article>`).join('')
+      : '<p class="deck-stat-empty">Ainda não há sugestões para esta carta.</p>';
+    const progression = definition.kind === 'hidden'
+      ? 'A progressão e os atributos deste sigilo ainda não foram definidos.'
+      : `Nível ${deckProgressionPreview.level} → ${deckProgressionPreview.level + 1}; ${deckProgressionPreview.points}/${deckProgressionPreview.pointsToNextLevel} pontos demonstrativos.`;
     const howItWorks = definition.kind === 'troop'
       ? 'Ataca automaticamente quando sua recarga termina. Você pode escolher uma tropa inimiga exposta para priorizar; uma tropa na frente protege a retaguarda da mesma coluna.'
       : definition.kind === 'spell'
         ? definition.effect === 'damage' ? 'Selecione a carta e escolha uma tropa inimiga ou a vida adversária para aplicar o dano indicado.' : 'Selecione a carta e escolha uma tropa aliada ferida ou sua vida para aplicar a cura indicada.'
         : 'Pode ser colocada em um espaço de sigilo e revelada durante a partida. O efeito de ativação ainda não foi definido nesta versão.';
-    wrap.innerHTML = `<div class="card-preview-content"><div class="preview-shell ${definition.kind}" data-foundation="${definition.foundation}" aria-label="${this.escapeAttribute(this.cardDetails(card))}">${renderCardFace(definition, card, side, 'preview')}</div><section class="card-preview-details" aria-label="Detalhes da carta"><div class="card-preview-heading"><strong>${this.escapeAttribute(definition.name)}</strong><span>${typeName}</span></div><div class="card-preview-facts">${facts}</div><p>${this.escapeAttribute(definition.description)}</p><p class="card-preview-how"><b>Como funciona:</b> ${this.escapeAttribute(howItWorks)}</p><button class="card-preview-close" id="close-card-preview" type="button">Fechar ficha</button></section></div>`;
+    wrap.innerHTML = `<div class="card-preview-content"><section class="deck-inspect-panel deck-inspect-progression" aria-label="Status e evolução demonstrativa"><div class="deck-inspect-kicker">STATUS DA CARTA</div><h2>Progressão</h2><div class="deck-level-row"><strong>NÍVEL ${deckProgressionPreview.level}</strong><span>${definition.kind === 'hidden' ? 'EM DEFINIÇÃO' : `${deckProgressionPreview.points}/${deckProgressionPreview.pointsToNextLevel} pts`}</span></div><div class="deck-level-track" aria-hidden="true"><i style="width:${deckProgressionPreview.points / deckProgressionPreview.pointsToNextLevel * 100}%"></i></div><small class="deck-preview-note">Demonstração visual; evolução ainda não conectada ao jogo.</small><h3>Atributos <span>atual <i>·</i> próximo nível</span></h3>${chart}</section><div class="deck-inspect-main"><div class="preview-shell ${definition.kind}" data-foundation="${definition.foundation}" aria-label="${this.escapeAttribute(this.cardDetails(card))}">${renderCardFace(definition, card, side, 'preview')}</div><section class="card-preview-details" aria-label="Ficha de ${this.escapeAttribute(definition.name)}"><div class="card-preview-heading"><strong>${this.escapeAttribute(definition.name)}</strong><span>${typeName} · CUSTO ${definition.cost}</span></div><p>${this.escapeAttribute(definition.description)}</p><p class="card-preview-how"><b>Como funciona:</b> ${this.escapeAttribute(howItWorks)}</p><small class="deck-progression-caption">${this.escapeAttribute(progression)}</small><button class="card-preview-close" id="close-card-preview" type="button">Fechar ficha</button></section></div><section class="deck-inspect-panel deck-inspect-synergy" aria-label="Sugestões de sinergia"><div class="deck-inspect-kicker">COMPOSIÇÃO DO DECK</div><h2>Sinergias</h2><div class="deck-synergy-list">${synergyMarkup}</div><small class="deck-preview-note">Sugestões demonstrativas, sem bônus ou efeitos no combate.</small></section></div>`;
     overlay.classList.add('open'); overlay.setAttribute('aria-hidden', 'false');
   }
 
