@@ -380,3 +380,45 @@ body { overscroll-behavior: none; }
 /* One shared plane keeps the supplied artwork, cards and pointer targets aligned. */
 :root { --arena-board-tilt: 18deg; --arena-board-perspective: 1100px; --arena-board-scale: .92; }
 .arena-board { transform: perspective(var(--arena-board-perspective)) rotateX(var(--arena-board-tilt)) scale(var(--arena-board-scale)); transform-origin: 50% 50%; }
+/* Give the arena more height while preserving the independent hand-card dimensions. */
+.game-shell { grid-template-rows: 6.5% minmax(0,1fr) clamp(145px,18dvh,180px) !important; }
+:root { --arena-board-tilt: 26deg; --arena-board-scale: .98; }
+.arena-stage { align-items: end; }
+.arena-board { transform-origin: 50% 100%; }
+.bottom-zone, .hand-dock { background: transparent; border-top: 0; }
+.quick-card-preview, .quick-card-preview .card-preview-details { background: transparent; border: 0; box-shadow: none; }
+.quick-card-preview .card-preview-details { color: #f7f0da; text-shadow: 0 1px 4px #000; }
+.quick-card-preview .card-preview-close { background: transparent; }
+/* Moving highlights and bubbles stay clipped inside the actual liquid fill. */
+.arena-board .life-track i { overflow: hidden; box-shadow: inset 4px 0 7px #ffffff50,inset -5px 0 8px #0005; transition: height 420ms ease-out; }
+.arena-board .life-track i::before { content: ''; position: absolute; inset: -30% -80%; opacity: .45; background: radial-gradient(ellipse at 30% 35%,#fff9 0 3%,transparent 6%),radial-gradient(ellipse at 70% 65%,#fff8 0 2%,transparent 5%),repeating-linear-gradient(110deg,transparent 0 22%,#ffffff38 27%,transparent 35%); background-size: 55px 100px,43px 130px,100% 100%; animation: liquid-current 6500ms ease-in-out infinite alternate; }
+.arena-board .life-track i::after { content: ''; position: absolute; top: -3px; left: -35%; width: 170%; height: 12px; border-radius: 50%; background: #ffffff70; box-shadow: 0 3px 8px #ffffff66; animation: liquid-surface 2300ms ease-in-out infinite alternate; }
+.arena-board .enemy-life .life-track i::after { top: auto; bottom: -3px; }
+@keyframes liquid-current { from { transform: translate(-4%,-7%) rotate(-4deg); } to { transform: translate(6%,10%) rotate(5deg); } }
+@keyframes liquid-surface { from { transform: translateX(-3%) rotate(-4deg); } to { transform: translateX(3%) rotate(4deg); } }
+/* Card-specific reactions are driven by real attack/damage/destruction events. */
+.combat-projectile[data-trail] { background: radial-gradient(circle,#fff7d8 0 12%,var(--effect-color) 35%,transparent 73%); filter: drop-shadow(0 0 5px var(--effect-color)); }
+.combat-projectile[data-trail="slash"] { width: 25px; height: 5px; border-radius: 90% 0; }
+.combat-projectile[data-trail="impact"] { width: 18px; height: 18px; border: 2px solid var(--effect-color); }
+.combat-projectile[data-trail="leaves"] { width: 16px; height: 9px; border-radius: 80% 0 80% 0; }
+.combat-projectile[data-trail="mist"] { width: 22px; height: 22px; opacity: .7; }
+.combat-projectile[data-trail="spark"] { clip-path: polygon(50% 0,62% 35%,100% 50%,62% 65%,50% 100%,38% 65%,0 50%,38% 35%); }
+.battle-card.is-hit[data-hit="brace"] { animation: defense-brace 650ms ease-out both; }
+.battle-card.is-hit[data-hit="recoil"] { animation: defense-recoil 650ms ease-out both; }
+.battle-card.is-hit[data-hit="veil"] { animation: defense-veil 650ms ease-out both; }
+@keyframes defense-brace { 0%,100% { transform: scale(1); filter: none; } 25% { transform: translateY(3px) scale(.96); filter: drop-shadow(0 0 5px var(--effect-color)); } }
+@keyframes defense-recoil { 0%,100% { transform: translateX(0) rotate(0); } 25% { transform: translateX(-4px) rotate(-3deg); } 55% { transform: translateX(2px) rotate(1deg); } }
+@keyframes defense-veil { 0%,100% { filter: none; transform: scale(1); } 35% { filter: brightness(1.15) drop-shadow(0 0 7px var(--effect-color)); transform: scale(.98); } }
+.battle-card.destruction-ghost[data-death="mist"] { animation: death-mist 650ms ease-in forwards; }
+.battle-card.destruction-ghost[data-death="fall"] { animation: death-fall 600ms ease-in forwards; }
+.battle-card.destruction-ghost[data-death="crumble"] { animation: death-crumble 600ms ease-in forwards; }
+.battle-card.destruction-ghost[data-death="embers"] { animation: death-embers 650ms ease-in forwards; }
+@keyframes death-mist { to { opacity: 0; transform: translateY(-18px) scale(1.06); filter: blur(5px) drop-shadow(0 0 8px var(--effect-color)); } }
+@keyframes death-fall { to { opacity: 0; transform: translateY(22px) rotate(12deg) scale(.8); } }
+@keyframes death-crumble { 30% { transform: translateX(-3px); } 60% { transform: translateX(3px) scale(.95); } to { opacity: 0; transform: translateY(12px) scale(.65); filter: blur(3px); } }
+@keyframes death-embers { 35% { filter: brightness(1.5) drop-shadow(0 0 9px var(--effect-color)); } to { opacity: 0; transform: translateY(-10px) scale(.8); filter: blur(4px); } }
+@media (prefers-reduced-motion: reduce) { .arena-board .life-track i { transition: none; } .arena-board .life-track i::before, .arena-board .life-track i::after { animation: none; } }
+/* Keep the stronger tilt centered so perspective does not create a large empty top margin. */
+:root { --arena-board-perspective: 1600px; --arena-board-scale: .92; }
+.arena-stage { align-items: center; }
+.arena-board { transform-origin: 50% 50%; transform: translateY(24px) perspective(var(--arena-board-perspective)) rotateX(var(--arena-board-tilt)) scale(var(--arena-board-scale)); }

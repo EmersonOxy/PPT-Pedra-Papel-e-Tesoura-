@@ -1,3 +1,4 @@
+import { cardEffects } from './card-effects.ts';
 import { cardDefinitions, getCardDefinition } from '../game/cards.ts';
 import { assignAttackTarget, beginPreparation, castSpell, drawCard, moveTroop, placeCard, placeSigil, returnTroop, revealSigil } from '../game/engine.ts';
 import { advanceTime } from '../game/simulation.ts';
@@ -843,6 +844,8 @@ export class GameApp {
     attacker.addEventListener('animationend', finishAttack);
     const projectile = document.createElement('i');
     projectile.className = attackProjectileClass(event.side, profile);
+    projectile.dataset.trail = attacker.dataset.trail ?? 'orb';
+    projectile.style.setProperty('--effect-color', attacker.style.getPropertyValue('--effect-color'));
     projectile.style.left = `${from.left + from.width / 2}px`;
     projectile.style.top = `${from.top + from.height / 2}px`;
     projectile.style.setProperty('--dx', `${dx}px`);
@@ -921,6 +924,9 @@ export class GameApp {
     const to = target.getBoundingClientRect();
     const projectile = document.createElement('i');
     projectile.className = `combat-projectile ${event.targetSide === 'enemy' ? 'combat-projectile--enemy' : ''}`;
+    const spellVisual = cardEffects[event.targetSide === event.side ? 'runic-pulse' : 'wandering-flame'];
+    projectile.dataset.trail = event.targetSide === event.side ? 'orb' : 'spark';
+    projectile.style.setProperty('--effect-color', spellVisual.color);
     projectile.style.left = `${from.left + from.width / 2}px`; projectile.style.top = `${from.top + from.height / 2}px`;
     projectile.style.setProperty('--dx', `${to.left + to.width / 2 - from.left - from.width / 2}px`);
     projectile.style.setProperty('--dy', `${to.top + to.height / 2 - from.top - from.height / 2}px`);
@@ -1151,9 +1157,10 @@ export class GameApp {
     const definition = getCardDefinition(card.definitionId);
     const details = this.cardDetails(card);
     const cooldown = definition.kind === 'troop' && !secret ? `<span class="attack-cooldown" data-cooldown-id="${card.instanceId}" aria-hidden="true"><i></i><small></small></span>` : '';
+    const visual = cardEffects[definition.id];
     const targetStatus = this.attackTargetStatus(card, side);
     const targetStatusMarkup = targetStatus ? `<span class="attack-target-status" data-attack-target-status role="status">${this.escapeAttribute(targetStatus)}</span>` : '';
-    return `<div class="battle-card${side === 'enemy' ? ' enemy-unit' : ''}${secret ? ' sigil-card' : ''}" data-card-id="${card.instanceId}" data-side="${side}" data-foundation="${definition.foundation}" title="${this.escapeAttribute(details)}"><span class="damage-aura" aria-hidden="true"></span>${renderCardFace(definition, card, side, 'field')}${definition.kind === 'troop' && !secret ? '<span class="attack-cooldown-shade" data-cooldown-shade aria-hidden="true"></span>' : ''}${cooldown}${targetStatusMarkup}</div>`;
+    return `<div class="battle-card${side === 'enemy' ? ' enemy-unit' : ''}${secret ? ' sigil-card' : ''}" data-card-id="${card.instanceId}" data-side="${side}" data-foundation="${definition.foundation}" data-trail="${visual.trail}" data-hit="${visual.hit}" data-death="${visual.death}" style="--effect-color:${visual.color}" title="${this.escapeAttribute(details)}"><span class="damage-aura" aria-hidden="true"></span>${renderCardFace(definition, card, side, 'field')}${definition.kind === 'troop' && !secret ? '<span class="attack-cooldown-shade" data-cooldown-shade aria-hidden="true"></span>' : ''}${cooldown}${targetStatusMarkup}</div>`;
   }
 
   private attackTargetStatus(card: CardInstance, side: Side): string {
