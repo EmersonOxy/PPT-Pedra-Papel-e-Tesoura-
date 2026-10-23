@@ -4,7 +4,7 @@
 html, body, #app { width: 100%; height: 100%; margin: 0; }
 body { overscroll-behavior: none; }
 .app-frame { height: 100dvh; width: 100%; display: flex; align-items: center; justify-content: center; isolation: isolate; }
-.game-shell { grid-template-rows: 6.5fr 31fr 2fr 31fr 29.5fr; }
+.game-shell { grid-template-rows: 6.5fr 35.5fr 35.5fr 22.5fr; }
 .side-life { appearance: none; border: 0; padding: 0; background: transparent; color: inherit; }
 .side-life.is-targetable { pointer-events: auto; cursor: pointer; }
 .side-life:focus-visible, .top-btn:focus-visible, .deck-button:focus-visible, .slot:focus-visible, .hand-card:focus-visible, .theme-btn:focus-visible, .close-help:focus-visible { outline: 2px solid #fbe185; outline-offset: 2px; }
@@ -31,9 +31,7 @@ body { overscroll-behavior: none; }
 .impact-number { position: absolute; z-index: 230; left: 50%; top: 14%; color: #fff4d3; font: 900 17px system-ui; text-shadow: 0 2px 6px #000, 0 0 9px #ff2f46; pointer-events: none; animation: float-impact 820ms ease-out forwards; }
 .impact-number.is-healing { color: #c8ffc7; text-shadow: 0 2px 6px #000, 0 0 9px #40f079; }
 .result-overlay { z-index: 130; }
-.field-divider { position: relative; z-index: 4; display: grid; place-items: center; overflow: visible; background: linear-gradient(90deg,#010300,var(--bg-2),#010300); border-block: 1px solid #FAD75D50; }
-.field-divider .midline-symbol { height: 16px; width: 16px; display: grid; place-items: center; }
-.field-divider .midline-symbol svg { width: 100%; height: 100%; filter: drop-shadow(0 0 5px #FAD75D88); }
+.field-divider { display: none !important; }
 .top-status, .my-status { min-width: 0; }
 .my-status { display: flex; align-items: center; justify-content: space-between; }
 .my-status .metrics { display: flex; flex-direction: column; gap: 0; }
@@ -80,9 +78,10 @@ body { overscroll-behavior: none; }
 @keyframes damage-aura-pulse { 0% { opacity: 0; transform: scale(.92); } 22% { opacity: .95; transform: scale(1.02); } 62% { opacity: .72; transform: scale(1.04); } 100% { opacity: 0; transform: scale(1.12); } }
 
 /* Perspectiva configurável. Use 0deg para desativar sem alterar a topologia. */
-:root { --field-tilt-angle: 12deg; --field-tilt-opponent-angle: 12deg; }
-.battle-grid, .sigil-side { transform: perspective(450px) rotateX(var(--field-tilt-opponent-angle)); transform-origin: center; }
-.field-band.player .battle-grid, .field-band.player .sigil-side { transform: perspective(450px) rotateX(var(--field-tilt-angle)); }
+:root { --field-tilt-angle: 14deg; --field-tilt-opponent-angle: 22deg; --field-perspective: 540px; }
+.field-band.enemy { transform: perspective(var(--field-perspective)) rotateX(var(--field-tilt-opponent-angle)); transform-origin: 50% 100%; }
+.field-band.player { transform: perspective(var(--field-perspective)) rotateX(var(--field-tilt-angle)); transform-origin: 50% 0%; }
+.battle-grid, .sigil-side, .field-band.player .battle-grid, .field-band.player .sigil-side { transform: none; }
 
 /* A mão é empilhada da direita para a esquerda: os cristais ficam expostos. */
 .hand-card.is-selected { z-index: 40 !important; }
@@ -105,11 +104,16 @@ body { overscroll-behavior: none; }
 /* Existing field troops stay anchored during target selection; the arrow follows the pointer. */
 .attack-aim-overlay { position: fixed; z-index: 105; inset: 0; display: none; width: 100vw; height: 100dvh; overflow: visible; pointer-events: none; }
 .attack-aim-overlay.is-visible { display: block; }
-.attack-aim-overlay line { stroke: #f7d879; stroke-width: 4px; stroke-linecap: round; marker-end: url(#attack-arrowhead); filter: drop-shadow(0 1px 4px #071523); }
-#attack-arrowhead path { fill: #f7d879; }
-.battle-card.is-aiming { filter: drop-shadow(0 0 7px #f7d879); }
+.attack-aim-overlay line { stroke: currentColor; stroke-width: 9px; stroke-linecap: round; marker-end: url(#attack-arrowhead); filter: drop-shadow(0 1px 4px #071523) drop-shadow(0 0 3px currentColor); }
+.attack-aim-overlay.is-player-aim { color: #38e887; }
+.attack-aim-overlay.is-enemy-aim { color: #ff425c; }
+#attack-arrowhead path { fill: currentColor; }
+.battle-card.is-aiming { filter: drop-shadow(0 0 8px #38e887); }
 .slot.is-target-candidate { border-color: #fb8c75 !important; box-shadow: inset 0 0 0 2px #fb8c75, 0 0 20px #fa554caa !important; }
+.slot.is-target-blocked { border-color: #ff465c !important; box-shadow: inset 0 0 0 2px #ff465c, 0 0 18px #ff465c99 !important; filter: saturate(.7); }
 .slot.is-attack-target { border-color: #f7d879 !important; box-shadow: inset 0 0 0 2px #f7d879, 0 0 15px #f7d87988 !important; }
+.attack-target-status { position: absolute; z-index: 14; right: 15%; bottom: 21%; left: 15%; display: block; overflow: hidden; padding: 1px 2px; border: 1px solid #75e9ae99; border-radius: 3px; color: #eafff1; background: #052014ed; box-shadow: 0 1px 4px #000b; font: 900 clamp(4px,1.15cqw,7px)/1.2 system-ui,sans-serif; text-align: center; text-overflow: ellipsis; white-space: nowrap; pointer-events: none; }
+.attack-target-status.is-target-fallback { border-color: #ffad647a; color: #fff0d4; background: #391d11eb; }
 
 /* A compact, readable cooldown is visible without changing combat state or card stats. */
 .attack-cooldown { position: absolute; z-index: 8; left: 31%; right: 31%; bottom: 10%; display: flex; flex-direction: column; align-items: center; gap: 2px; pointer-events: none; }
@@ -132,4 +136,6 @@ body { overscroll-behavior: none; }
 .card-preview-facts { display: flex; flex-wrap: wrap; gap: 6px 12px; margin-top: 8px; color: #d8d4c4; font: 500 10px system-ui,sans-serif; }
 .card-preview-facts b { color: #f4d889; }
 .card-preview-details p { margin: 8px 0 0; color: #c4ccc4; font: 500 11px/1.4 system-ui,sans-serif; }
+.card-preview-details .card-preview-how { color: #d9e4d6; }
+.card-preview-how b { color: #f4d889; }
 .card-preview-close { display: block; margin: 10px 0 0 auto; padding: 6px 10px; border: 1px solid #d6c47d66; border-radius: 7px; color: #f0e4bd; background: #142a39; font: 700 10px system-ui,sans-serif; cursor: pointer; }

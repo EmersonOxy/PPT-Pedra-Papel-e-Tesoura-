@@ -16,7 +16,7 @@
 body{margin:0;min-height:100dvh;overflow:hidden;background:radial-gradient(ellipse at center,#314C53,#02031A 72%);color:var(--text)}
 button{font:inherit;cursor:pointer;color:inherit}button:focus-visible,[tabindex]:focus-visible{outline:2px solid var(--sun);outline-offset:2px}
 .app-frame{height:100dvh;width:100%;display:flex;align-items:center;justify-content:center;isolation:isolate}
-.game-shell{width:min(100%,450px);height:min(100dvh,955px);min-height:0;display:grid;grid-template-rows:6.5fr 31fr 2fr 31fr 29.5fr;position:relative;isolation:isolate;overflow:hidden;background:var(--bg-1);border-inline:1px solid #BBDEC633;box-shadow:0 15px 70px #0009}
+.game-shell{width:min(100%,450px);height:min(100dvh,955px);min-height:0;display:grid;grid-template-rows:6.5fr 35.5fr 35.5fr 22.5fr;position:relative;isolation:isolate;overflow:hidden;background:var(--bg-1);border-inline:1px solid #BBDEC633;box-shadow:0 15px 70px #0009}
 .game-shell::after{content:"";inset:0;position:absolute;z-index:25;pointer-events:none;box-shadow:inset 0 0 75px #0103005c}
 .game-shell[data-theme="abissal"]{--bg-1:#000524;--bg-2:#010937;--arena-1:#020F59;--arena-2:#101F78;--metal:#88BFFF;--ornament:#FBE185;--text:#F7F8FC}
 .game-shell[data-theme="rubro"]{--bg-1:#02031A;--bg-2:#340016;--arena-1:#340016;--arena-2:#9F102C;--metal:#EBDFCC;--ornament:#FAD75D;--text:#FEF5D6}
@@ -119,7 +119,7 @@ button{font:inherit;cursor:pointer;color:inherit}button:focus-visible,[tabindex]
    O tamanho dos quatro trilhos é limitado pela altura e largura.
    Sem colunas invisíveis que criem intervalos entre as cartas.
    ============================================================== */
-.game-shell{grid-template-rows:6.5fr 31fr 2fr 31fr 29.5fr}
+.game-shell{grid-template-rows:6.5fr 35.5fr 35.5fr 22.5fr}
 .field-band,.field-band.player{
  display:flex;align-items:center;justify-content:center;gap:4px;
  padding:4px 5px;min-width:0;
@@ -198,6 +198,7 @@ button{font:inherit;cursor:pointer;color:inherit}button:focus-visible,[tabindex]
 .midline-title{display:none!important}
 .midline-symbol{width:13px;height:13px}
 @media(max-width:370px){
+ .game-shell{--slot-w:68px;--slot-h:95px}
  .field-band,.field-band.player{gap:3px;padding:3px 3px}
  .battle-grid,.secret-slots{gap:3px}
  .sigil-side{height:calc(2 * var(--slot-h,106px) + 3px)}
@@ -224,7 +225,7 @@ button{font:inherit;cursor:pointer;color:inherit}button:focus-visible,[tabindex]
 .field-band.player{padding-left:22px}
 .field-band.enemy .side-life{right:3px}
 .field-band.player .side-life{left:3px}
-.field-divider{background:linear-gradient(180deg,color-mix(in srgb,var(--arena-1),transparent 26%),color-mix(in srgb,var(--arena-2),var(--arena-1) 52%),color-mix(in srgb,var(--arena-2),transparent 26%));border:none;box-shadow:none}
+.field-divider{display:none!important}
 .field-divider .midline-symbol{display:none}
 .card-preview-overlay{z-index:110}
 .card-preview-overlay .preview-shell{border-color:var(--card-accent,var(--cream))}
@@ -233,7 +234,7 @@ button{font:inherit;cursor:pointer;color:inherit}button:focus-visible,[tabindex]
 @media(max-width:370px){.field-band.enemy{padding-right:20px}.field-band.player{padding-left:20px}}
 
 /* REVISÃO ATUAL: ciclos sobre deck, mão de 6, separação lateral dos sigilos */
-.game-shell{grid-template-rows:6.5fr 35fr 1fr 35fr 22.5fr}
+.game-shell{grid-template-rows:6.5fr 35.5fr 35.5fr 22.5fr}
 .bottom-zone{display:grid!important;grid-template-rows:minmax(0,1fr)!important}
 .my-status{display:none!important}
 .dock-main{grid-template-columns:clamp(72px,19.5%,88px) minmax(0,1fr);padding:4px 6px 5px 4px;gap:7px}
@@ -266,8 +267,8 @@ button{font:inherit;cursor:pointer;color:inherit}button:focus-visible,[tabindex]
 
 
 /* Compact mobile dock: allocate the recovered height to the arena, not dead space. */
-@media(max-height:720px){.game-shell{grid-template-rows:6.5fr 35fr 1fr 35fr 22.5fr}}
-@media(min-height:900px){.game-shell{grid-template-rows:6.5fr 35.75fr 1fr 35.75fr 21fr}}
+@media(max-height:720px){.game-shell{grid-template-rows:6.5fr 35.5fr 35.5fr 22.5fr}}
+@media(min-height:900px){.game-shell{grid-template-rows:6.5fr 36.75fr 36.75fr 20fr}}
 
 /* TEMPORARY CARD ART REVIEW: show the supplied complete card face at every face-up size. */
 .card-placeholder-image{display:block;width:100%;height:100%;object-fit:contain;object-position:center;pointer-events:none;user-select:none;-webkit-user-drag:none}

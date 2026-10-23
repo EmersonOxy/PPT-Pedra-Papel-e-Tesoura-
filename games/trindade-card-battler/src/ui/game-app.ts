@@ -119,7 +119,6 @@ export class GameApp {
             <span class="life-label">VIDA</span><span class="life-value" id="enemy-life-value">${balance.startingLife}</span><span class="life-track"><i id="enemy-life-fill"></i></span>
           </button>
         </section>
-        <div class="field-divider" data-zone="arena" aria-hidden="true"><div class="midline-symbol" id="mid-symbol">${sigil}</div></div>
         <section class="field-band player" data-zone="player-field" aria-label="Seu campo">
           <aside class="sigil-side player"><span class="sigil-label">SIGILOS</span><div class="secret-slots" id="player-secrets" aria-label="${balance.fieldTopology.specialSpaces[0]?.count ?? 0} sigilos do jogador"></div></aside>
           <div class="battle-grid player-grid" id="player-grid" aria-label="${boardSlotCount} espaços do jogador"></div>
@@ -140,10 +139,10 @@ export class GameApp {
           </div>
         </section>
         <div id="toast" class="toast" role="status" aria-live="polite"></div>
-        <div class="overlay" id="help-overlay" aria-hidden="true"><div class="help-panel"><div class="help-tag">Experimento separado · versão jogável inicial</div><h2>Como experimentar</h2><p><b>Comprar:</b> toque no deck enquanto houver espaço na mão (máximo de ${balance.handLimit} cartas).</p><p><b>Posicionar:</b> arraste uma tropa a um espaço vazio. A linha próxima do centro protege a linha posterior na mesma coluna.</p><p><b>Mover ou recolher:</b> arraste uma tropa sua para um espaço vazio ou para a mão. Arraste uma tropa do campo até um alvo inimigo exposto para marcá-lo; a seta aparece e a unidade fica no lugar.</p><p><b>Feitiços:</b> Chama Errante causa ${balance.spellDamage} de dano; Pulso Rúnico restaura ${balance.spellHealing} de vida. Selecione um feitiço e toque no alvo compatível.</p><p><b>Sigilos:</b> coloque um sigilo em um dos ${balance.fieldTopology.specialSpaces[0]?.count ?? 0} espaços e toque nele para revelar sua carta. Eles são visuais nesta versão e ainda não têm gatilhos.</p><p><b>Combate:</b> cada tropa tem sua recarga individual exibida na carta (de ${minAttackInterval.toFixed(2)} a ${maxAttackInterval.toFixed(2)} segundos). O valor varia por carta e é experimental. Os custos são somente demonstrativos; não há mana.</p><p><b>Limite experimental:</b> ${balance.startingLife} de vida, ${balance.deckSize} cartas por deck e IA básica. Os valores não são regras finais.</p><button class="close-help" id="close-help" type="button">Entendi</button></div></div>
+        <div class="overlay" id="help-overlay" aria-hidden="true"><div class="help-panel"><div class="help-tag">Experimento separado · versão jogável inicial</div><h2>Como experimentar</h2><p><b>Comprar:</b> toque no deck enquanto houver espaço na mão (máximo de ${balance.handLimit} cartas).</p><p><b>Posicionar:</b> arraste uma tropa a um espaço vazio. A linha próxima do centro protege a linha posterior na mesma coluna.</p><p><b>Mover ou recolher:</b> arraste uma tropa sua para um espaço vazio ou para a mão. Para definir seu alvo, arraste ou selecione a tropa e toque em qualquer tropa inimiga exposta; a coluna da atacante não limita o alvo. A carta atacante mostra quem está priorizando. Se o alvo sair do campo ou ficar protegido, ela informa que retomou o alvo automático.</p><p><b>Feitiços:</b> Chama Errante causa ${balance.spellDamage} de dano; Pulso Rúnico restaura ${balance.spellHealing} de vida. Selecione um feitiço e toque no alvo compatível.</p><p><b>Sigilos:</b> coloque um sigilo em um dos ${balance.fieldTopology.specialSpaces[0]?.count ?? 0} espaços e toque nele para revelar sua carta. Eles são visuais nesta versão e ainda não têm gatilhos.</p><p><b>Combate:</b> cada tropa tem sua recarga individual exibida na carta (de ${minAttackInterval.toFixed(2)} a ${maxAttackInterval.toFixed(2)} segundos). O valor varia por carta e é experimental. Os custos são somente demonstrativos; não há mana.</p><p><b>Limite experimental:</b> ${balance.startingLife} de vida, ${balance.deckSize} cartas por deck e IA básica. Os valores não são regras finais.</p><button class="close-help" id="close-help" type="button">Entendi</button></div></div>
         <div class="overlay" id="palette-overlay" aria-hidden="true"><div class="help-panel"><div class="help-tag">Identidade visual V3</div><h2>Atmosfera da arena</h2><div class="theme-option-grid"><button type="button" class="theme-btn active" data-theme-set="mineral">Verde mineral</button><button type="button" class="theme-btn" data-theme-set="abissal">Azul abissal</button><button type="button" class="theme-btn" data-theme-set="rubro">Rubro arcano</button></div><button class="close-help" id="close-palette" type="button">Voltar à arena</button></div></div>
         <div class="overlay" id="result-overlay" aria-hidden="true"><div class="help-panel"><div class="help-tag">Fim da partida</div><h2 id="result-title">Vitória</h2><p id="result-copy"></p><button class="close-help" id="play-again" type="button">Voltar ao início</button></div></div>
-      </main><svg class="attack-aim-overlay" id="attack-aim-overlay" aria-hidden="true"><defs><marker id="attack-arrowhead" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0 0L10 5L0 10Z"></path></marker></defs><line id="attack-aim-line" x1="0" y1="0" x2="0" y2="0"></line></svg><div class="overlay card-preview-overlay" id="card-preview-overlay" aria-hidden="true"><div class="card-preview-wrap" id="card-preview-wrap"></div></div><div class="transition-curtain" id="transition-curtain" aria-hidden="true"></div></div>`;
+      </main><svg class="attack-aim-overlay" id="attack-aim-overlay" aria-hidden="true"><defs><marker id="attack-arrowhead" markerWidth="16" markerHeight="16" refX="13" refY="8" orient="auto"><path d="M0 0L16 8L0 16Z"></path></marker></defs><line id="attack-aim-line" x1="0" y1="0" x2="0" y2="0"></line></svg><div class="overlay card-preview-overlay" id="card-preview-overlay" aria-hidden="true"><div class="card-preview-wrap" id="card-preview-wrap"></div></div><div class="transition-curtain" id="transition-curtain" aria-hidden="true"></div></div>`;
     this.renderDeckLibrary();
     this.renderHome();
   }
@@ -262,7 +261,7 @@ export class GameApp {
     if (!grid) return;
     grid.innerHTML = this.deckPreviewCards.map((card, index) => {
       const definition = getCardDefinition(card.definitionId);
-      return `<button class="deck-card-tile" type="button" data-card-inspect="${this.escapeAttribute(card.instanceId)}" aria-label="Inspecionar ${this.escapeAttribute(definition.name)}, cópia ${index % balance.copiesPerDefinition + 1}">${renderCardFace(definition, card, 'player', 'preview')}<span class="deck-card-number">${String(index + 1).padStart(2, '0')}</span></button>`;
+      return `<button class="deck-card-tile" type="button" data-card-inspect="${this.escapeAttribute(card.instanceId)}" aria-label="Ver detalhes de ${this.escapeAttribute(definition.name)}, cópia ${index % balance.copiesPerDefinition + 1}">${renderCardFace(definition, card, 'player', 'preview')}<span class="deck-card-number">${String(index + 1).padStart(2, '0')}</span><span class="deck-card-inspect-hint" aria-hidden="true">ⓘ Detalhes</span></button>`;
     }).join('');
   }
 
@@ -537,10 +536,10 @@ export class GameApp {
   private setAttackTarget(attackerSlot: number, targetSlot: number): void {
     if (this.state.phase !== 'playing') { this.toast('A designação de alvos fica disponível quando o combate começar.'); return; }
     const target = this.state.players.enemy.slots[targetSlot];
-    if (!target || getCardDefinition(target.definitionId).kind !== 'troop') { this.toast('Solte sobre uma tropa inimiga.'); return; }
-    if (!isAttackTargetExposed(this.state, 'enemy', targetSlot)) { this.toast('A linha dianteira protege essa tropa. Escolha um alvo exposto.'); return; }
+    if (!target || getCardDefinition(target.definitionId).kind !== 'troop') { this.toast('Escolha uma tropa inimiga.'); return; }
+    if (!isAttackTargetExposed(this.state, 'enemy', targetSlot)) { this.toast('Alvo protegido: uma tropa na frente bloqueia a retaguarda da mesma coluna.'); return; }
     const result = assignAttackTarget(this.state, 'player', attackerSlot, targetSlot);
-    if (!result.events.length) { this.toast('Não foi possível marcar esse alvo.'); return; }
+    if (!result.events.length) { this.toast('Essa tropa já está priorizando esse alvo.'); return; }
     this.selectedId = null;
     this.transition(result);
   }
@@ -563,19 +562,21 @@ export class GameApp {
     line.setAttribute('y1', String(rect.top + rect.height / 2));
     line.setAttribute('x2', String(x));
     line.setAttribute('y2', String(y));
+    svg.classList.toggle('is-player-aim', drag.side === 'player');
+    svg.classList.toggle('is-enemy-aim', drag.side === 'enemy');
     svg.classList.add('is-visible');
-    this.root.querySelectorAll('.slot.is-target-candidate').forEach((slot) => slot.classList.remove('is-target-candidate'));
+    this.root.querySelectorAll('.slot.is-target-candidate, .slot.is-target-blocked').forEach((slot) => slot.classList.remove('is-target-candidate', 'is-target-blocked'));
     const candidate = document.elementFromPoint(x, y)?.closest<HTMLElement>('.slot.enemy-slot');
     const candidateSlot = Number(candidate?.dataset.slot);
-    if (candidate && Number.isInteger(candidateSlot) && isAttackTargetExposed(this.state, 'enemy', candidateSlot)) {
-      candidate.classList.add('is-target-candidate');
+    if (candidate && Number.isInteger(candidateSlot) && this.state.players.enemy.slots[candidateSlot]) {
+      candidate.classList.add(isAttackTargetExposed(this.state, 'enemy', candidateSlot) ? 'is-target-candidate' : 'is-target-blocked');
     }
   }
 
   private hideAttackAim(drag: ActiveDrag): void {
     drag.origin.classList.remove('is-aiming');
-    this.root.querySelector('#attack-aim-overlay')?.classList.remove('is-visible');
-    this.root.querySelectorAll('.slot.is-target-candidate').forEach((slot) => slot.classList.remove('is-target-candidate'));
+    this.root.querySelector('#attack-aim-overlay')?.classList.remove('is-visible', 'is-player-aim', 'is-enemy-aim');
+    this.root.querySelectorAll('.slot.is-target-candidate, .slot.is-target-blocked').forEach((slot) => slot.classList.remove('is-target-candidate', 'is-target-blocked'));
   }
 
   private restoreDraggedCard(drag: ActiveDrag, reinsert: boolean): void {
@@ -637,16 +638,11 @@ export class GameApp {
     let missionsChanged = false;
     for (const event of events) {
       if (event.type === 'attack') this.animateAttack(event, attackProfiles.get(event.attackerId));
-      if (event.type === 'target') {
-        const target = this.state.players.enemy.slots.find((card) => card?.instanceId === event.targetId);
-        if (target) this.toast(`Alvo marcado: ${getCardDefinition(target.definitionId).name}.`);
-      }
       if (event.type === 'spell') this.animateSpell(event);
       if (event.type === 'place') this.animateEntry(event.instanceId);
       if (event.type === 'place' && event.side === 'player') { this.cardsPlaced += 1; missionsChanged = true; }
       if (event.type === 'damage') this.animateImpact(event.instanceId, event.amount);
       if (event.type === 'heal') this.animateHeal(event.instanceId, event.amount);
-      if (event.type === 'life-damage') this.toast(event.side === 'player' ? `Você recebeu ${event.amount} de dano direto.` : `O adversário recebeu ${event.amount} de dano direto.`);
       if (event.type === 'life-damage') this.animateLife(event.side, false);
       if (event.type === 'life-heal') this.animateLife(event.side, true);
       if (event.type === 'game-over') {
@@ -911,6 +907,10 @@ export class GameApp {
           if (currentFace?.dataset.visualState !== desiredFace.dataset.visualState) currentCard.replaceChildren(desiredFace);
         }
       }
+      if (displayedCard) {
+        const unit = button.querySelector<HTMLElement>('.battle-card[data-card-id]');
+        if (unit) this.syncAttackTargetStatus(unit, displayedCard, side);
+      }
       button.dataset.slotSide = side;
       button.dataset.side = side;
       button.dataset.row = String(row);
@@ -990,7 +990,37 @@ export class GameApp {
     const definition = getCardDefinition(card.definitionId);
     const details = this.cardDetails(card);
     const cooldown = definition.kind === 'troop' && !secret ? `<span class="attack-cooldown" data-cooldown-id="${card.instanceId}" aria-hidden="true"><i></i><small></small></span>` : '';
-    return `<div class="battle-card${side === 'enemy' ? ' enemy-unit' : ''}${secret ? ' sigil-card' : ''}" data-card-id="${card.instanceId}" data-side="${side}" data-foundation="${definition.foundation}" title="${this.escapeAttribute(details)}"><span class="damage-aura" aria-hidden="true"></span>${renderCardFace(definition, card, side, 'field')}${definition.kind === 'troop' && !secret ? '<span class="attack-cooldown-shade" data-cooldown-shade aria-hidden="true"></span>' : ''}${cooldown}</div>`;
+    const targetStatus = this.attackTargetStatus(card, side);
+    const targetStatusMarkup = targetStatus ? `<span class="attack-target-status" data-attack-target-status role="status">${this.escapeAttribute(targetStatus)}</span>` : '';
+    return `<div class="battle-card${side === 'enemy' ? ' enemy-unit' : ''}${secret ? ' sigil-card' : ''}" data-card-id="${card.instanceId}" data-side="${side}" data-foundation="${definition.foundation}" title="${this.escapeAttribute(details)}"><span class="damage-aura" aria-hidden="true"></span>${renderCardFace(definition, card, side, 'field')}${definition.kind === 'troop' && !secret ? '<span class="attack-cooldown-shade" data-cooldown-shade aria-hidden="true"></span>' : ''}${cooldown}${targetStatusMarkup}</div>`;
+  }
+
+  private attackTargetStatus(card: CardInstance, side: Side): string {
+    if (side !== 'player' || !card.attackTargetId) return '';
+    const targets = this.state.players.enemy.slots;
+    const slot = targets.findIndex((target) => target?.instanceId === card.attackTargetId);
+    if (slot < 0) return 'ALVO SAIU · AUTOMÁTICO';
+    const target = targets[slot];
+    if (!target || !isAttackTargetExposed(this.state, 'enemy', slot)) return 'ALVO PROTEGIDO · AUTOMÁTICO';
+    return `ALVO: ${getCardDefinition(target.definitionId).name}`;
+  }
+
+  private syncAttackTargetStatus(element: HTMLElement, card: CardInstance, side: Side): void {
+    const status = this.attackTargetStatus(card, side);
+    let badge = element.querySelector<HTMLElement>('[data-attack-target-status]');
+    if (!status) { badge?.remove(); return; }
+    if (!badge) {
+      badge = document.createElement('span');
+      badge.className = 'attack-target-status';
+      badge.dataset.attackTargetStatus = '';
+      badge.setAttribute('role', 'status');
+      element.append(badge);
+    }
+    badge.textContent = status;
+    badge.classList.toggle('is-target-fallback', status.includes('AUTOMÁTICO'));
+    badge.setAttribute('aria-label', status.includes('AUTOMÁTICO')
+      ? `${status}. A unidade retomou o alvo automático porque o alvo escolhido não está disponível.`
+      : `Esta tropa prioriza ${status.slice('ALVO: '.length)}.`);
   }
 
   private updateAttackCooldowns(): void {
@@ -1032,7 +1062,12 @@ export class GameApp {
       : definition.kind === 'spell'
         ? `<span><b>Custo demonstrativo</b> ${definition.cost}</span><span><b>${definition.effect === 'damage' ? 'Dano' : 'Cura'}</b> ${definition.effect === 'damage' ? balance.spellDamage : balance.spellHealing}</span>`
         : `<span><b>Custo demonstrativo</b> ${definition.cost}</span><span><b>Tipo</b> Sigilo sem gatilho nesta versão</span>`;
-    wrap.innerHTML = `<div class="card-preview-content"><div class="preview-shell ${definition.kind}" data-foundation="${definition.foundation}" aria-label="${this.escapeAttribute(this.cardDetails(card))}">${renderCardFace(definition, card, side, 'preview')}</div><section class="card-preview-details" aria-label="Detalhes da carta"><div class="card-preview-heading"><strong>${this.escapeAttribute(definition.name)}</strong><span>${typeName}</span></div><div class="card-preview-facts">${facts}</div><p>${this.escapeAttribute(definition.description)}</p><button class="card-preview-close" id="close-card-preview" type="button">Fechar ficha</button></section></div>`;
+    const howItWorks = definition.kind === 'troop'
+      ? 'Ataca automaticamente quando sua recarga termina. Você pode escolher uma tropa inimiga exposta para priorizar; uma tropa na frente protege a retaguarda da mesma coluna.'
+      : definition.kind === 'spell'
+        ? definition.effect === 'damage' ? 'Selecione a carta e escolha uma tropa inimiga ou a vida adversária para aplicar o dano indicado.' : 'Selecione a carta e escolha uma tropa aliada ferida ou sua vida para aplicar a cura indicada.'
+        : 'Pode ser colocada em um espaço de sigilo e revelada durante a partida. O efeito de ativação ainda não foi definido nesta versão.';
+    wrap.innerHTML = `<div class="card-preview-content"><div class="preview-shell ${definition.kind}" data-foundation="${definition.foundation}" aria-label="${this.escapeAttribute(this.cardDetails(card))}">${renderCardFace(definition, card, side, 'preview')}</div><section class="card-preview-details" aria-label="Detalhes da carta"><div class="card-preview-heading"><strong>${this.escapeAttribute(definition.name)}</strong><span>${typeName}</span></div><div class="card-preview-facts">${facts}</div><p>${this.escapeAttribute(definition.description)}</p><p class="card-preview-how"><b>Como funciona:</b> ${this.escapeAttribute(howItWorks)}</p><button class="card-preview-close" id="close-card-preview" type="button">Fechar ficha</button></section></div>`;
     overlay.classList.add('open'); overlay.setAttribute('aria-hidden', 'false');
   }
 
@@ -1041,6 +1076,8 @@ export class GameApp {
     const kind = definition.kind === 'troop' ? 'tropa' : definition.kind === 'hidden' ? 'sigilo' : 'feitiço';
     const values = [definition.name, kind, `custo ${definition.cost}`];
     if (definition.kind === 'troop') values.push(`${definition.attack} ataque`, `${card.health} vida`);
+    else if (definition.kind === 'spell') values.push(`${definition.effect === 'damage' ? balance.spellDamage : balance.spellHealing} ${definition.effect === 'damage' ? 'dano' : 'cura'}`);
+    else values.push('efeito ainda não definido nesta versão');
     values.push(definition.description);
     return values.join(' · ');
   }

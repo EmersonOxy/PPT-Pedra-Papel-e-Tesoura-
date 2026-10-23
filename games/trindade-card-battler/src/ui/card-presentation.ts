@@ -70,7 +70,7 @@ function statValues(definition: CardDefinition, card: CardInstance): { left: num
     const effectValue = definition.effect === 'damage' ? balance.spellDamage : balance.spellHealing;
     return { left: definition.cost, right: effectValue, labels: ['Custo demonstrativo', definition.effect === 'damage' ? 'Dano do feitiço' : 'Cura do feitiço'] };
   }
-  return { left: definition.cost, right: null, labels: ['Custo demonstrativo', 'Sem segundo atributo definido'] };
+  return { left: definition.cost, right: null, labels: ['Custo demonstrativo', 'Efeito'] };
 }
 
 export function renderCardFace(definition: CardDefinition, card: CardInstance, side: Side, context: CardFaceContext): string {
@@ -78,7 +78,7 @@ export function renderCardFace(definition: CardDefinition, card: CardInstance, s
   if (!presentation) throw new Error(`Apresentação visual ausente para ${definition.id}`);
   const sigil = sigilByCardKind[definition.kind];
   const values = statValues(definition, card);
-  const accessible = `Ilustração provisória. ${definition.name}. ${values.labels[0]} ${values.left ?? 'não definido'}; ${values.labels[1]} ${values.right ?? 'não definido'}. ${definition.description}`;
+  const accessible = `Ilustração provisória. ${definition.name}. ${values.labels[0]} ${values.left ?? 'não definido'}; ${values.labels[1]} ${values.right ?? 'ainda não definido nesta versão'}. ${definition.description}`;
   const stateKey = `${definition.id}:${card.health}:${card.revealed ? 1 : 0}:${presentation.background}:${sigil}`;
   const placeholder = presentation.illustration.kind === 'placeholder'
     ? `<span class="card-face__placeholder-tag">Ilustração provisória</span>${renderPlaceholderIllustration(presentation.illustration.motif)}`
@@ -89,7 +89,7 @@ export function renderCardFace(definition: CardDefinition, card: CardInstance, s
     <img class="card-face__sigil" src="${sigilAssets[sigil]}" alt="" aria-hidden="true" draggable="false">
     <span class="card-face__name" title="${escapeHtml(definition.name)}">${escapeHtml(definition.name)}</span>
     <span class="card-face__stat card-face__stat--blue" aria-label="${values.labels[0]} ${values.left ?? 'não definido'}">${values.left ?? ''}</span>
-    <span class="card-face__stat card-face__stat--red" aria-label="${values.labels[1]} ${values.right ?? 'não definido'}">${values.right ?? ''}</span>
+    <span class="card-face__stat card-face__stat--red" aria-label="${values.labels[1]} ${values.right ?? 'ainda não definido nesta versão'}">${values.right ?? ''}</span>
     <span class="card-face__description">${escapeHtml(definition.description)}</span>
     <img class="card-face__frame" src="${frameAsset}" alt="" aria-hidden="true" draggable="false">
     <span class="card-face__sr-only">${escapeHtml(accessible)}</span>
