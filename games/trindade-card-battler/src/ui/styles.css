@@ -112,7 +112,7 @@ body { overscroll-behavior: none; }
 .slot.is-target-candidate { border-color: #fb8c75 !important; box-shadow: inset 0 0 0 2px #fb8c75, 0 0 20px #fa554caa !important; }
 .slot.is-target-blocked { border-color: #ff465c !important; box-shadow: inset 0 0 0 2px #ff465c, 0 0 18px #ff465c99 !important; filter: saturate(.7); }
 .slot.is-attack-target { border-color: #f7d879 !important; box-shadow: inset 0 0 0 2px #f7d879, 0 0 15px #f7d87988 !important; }
-.attack-target-status { position: absolute; z-index: 14; right: 15%; bottom: 21%; left: 15%; display: block; overflow: hidden; padding: 1px 2px; border: 1px solid #75e9ae99; border-radius: 3px; color: #eafff1; background: #052014ed; box-shadow: 0 1px 4px #000b; font: 900 clamp(4px,1.15cqw,7px)/1.2 system-ui,sans-serif; text-align: center; text-overflow: ellipsis; white-space: nowrap; pointer-events: none; }
+.attack-target-status { position: absolute; z-index: 14; right: 10%; bottom: 4%; left: 10%; display: block; overflow: hidden; padding: 1px 2px; border: 1px solid #75e9ae99; border-radius: 3px; color: #eafff1; background: #052014ed; box-shadow: 0 1px 4px #000b; font: 900 clamp(4px,1.15cqw,7px)/1.2 system-ui,sans-serif; text-align: center; text-overflow: ellipsis; white-space: nowrap; pointer-events: none; }
 .attack-target-status.is-target-fallback { border-color: #ffad647a; color: #fff0d4; background: #391d11eb; }
 
 /* A compact, readable cooldown is visible without changing combat state or card stats. */
