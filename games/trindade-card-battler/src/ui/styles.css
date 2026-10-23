@@ -346,3 +346,6 @@ body { overscroll-behavior: none; }
 .arena-board .side-life.is-healing .life-track { filter: brightness(1.5); }
 .card-face__illustration--image { inset: 0; width: 100%; height: 100%; }
 .card-face__art-image { width: 100%; height: 100%; object-fit: contain; display: block; }
+/* A blocked purchase changes the label, not the supplied card-back illustration. */
+.arena-board .deck-column { left: calc(22% + 2px); }
+.arena-board .deck-button:disabled { filter: none; opacity: 1; }
