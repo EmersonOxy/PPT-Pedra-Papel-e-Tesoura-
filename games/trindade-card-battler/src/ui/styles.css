@@ -113,6 +113,25 @@ body { overscroll-behavior: none; }
 .slot.is-target-blocked { border-color: #ff465c !important; box-shadow: inset 0 0 0 2px #ff465c, 0 0 18px #ff465c99 !important; filter: saturate(.7); }
 .slot.is-attack-target { border-color: #f7d879 !important; box-shadow: inset 0 0 0 2px #f7d879, 0 0 15px #f7d87988 !important; }
 .attack-target-status { position: absolute; z-index: 14; right: 10%; bottom: 4%; left: 10%; display: block; overflow: hidden; padding: 1px 2px; border: 1px solid #75e9ae99; border-radius: 3px; color: #eafff1; background: #052014ed; box-shadow: 0 1px 4px #000b; font: 900 clamp(4px,1.15cqw,7px)/1.2 system-ui,sans-serif; text-align: center; text-overflow: ellipsis; white-space: nowrap; pointer-events: none; }
+
+/* New abilities use brief, readable field feedback layered over the existing card effects. */
+.battle-card.is-rooted { filter: drop-shadow(0 0 5px #79e58c); }
+.battle-card.is-rooted::after { content: ''; position: absolute; inset: 8%; border: 1px solid #91efa5; border-radius: 8%; opacity: .72; pointer-events: none; animation: roots-bind 1.1s ease-in-out infinite alternate; }
+.battle-card.is-link-source { filter: drop-shadow(0 0 5px #68dcff); }
+.battle-card.is-link-target { filter: drop-shadow(0 0 5px #6affc1); }
+.battle-card.is-furious { filter: drop-shadow(0 0 5px #ff733c); }
+.battle-card.resurrect-pop { animation: resurrect-rise 820ms cubic-bezier(.15,.8,.3,1) both; }
+.battle-card.summon-pop { animation: summon-entry 760ms cubic-bezier(.15,.8,.3,1) both; }
+.battle-card.volcano-ally-hit { filter: drop-shadow(0 0 8px #65dcff); }
+.battle-card.volcano-enemy-hit { filter: drop-shadow(0 0 8px #ff663f); }
+.arena-board.is-volcano-erupting::after { content: ''; position: absolute; z-index: 12; inset: 0; pointer-events: none; background: radial-gradient(ellipse at 51% 47%,#ffe27288 0, #ff5c2677 19%,transparent 67%); mix-blend-mode: screen; animation: volcano-wave-flash 880ms ease-out both; }
+.arena-board.is-sigil-revealing::before { content: attr(data-reveal-name); position: absolute; z-index: 13; left: 50%; top: 50%; transform: translate(-50%,-50%); max-width: 80%; padding: 5px 9px; border: 1px solid #f5d986; border-radius: 7px; color: #fff2c2; background: #07121be8; box-shadow: 0 0 20px #f5a73c88; font: 800 clamp(8px,2.3cqw,15px) system-ui,sans-serif; text-align: center; pointer-events: none; animation: sigil-reveal-flash 650ms ease-out both; }
+@keyframes roots-bind { from { transform: scale(.96); opacity: .4; } to { transform: scale(1.04); opacity: .9; } }
+@keyframes resurrect-rise { 0% { opacity: .35; transform: translateY(9px) scale(.86); filter: brightness(2) drop-shadow(0 0 12px #5affae); } 65% { opacity: 1; transform: translateY(-3px) scale(1.04); } 100% { transform: none; filter: none; } }
+@keyframes summon-entry { 0% { opacity: 0; transform: scale(.5) rotateY(70deg); filter: brightness(2) drop-shadow(0 0 14px #70ffad); } 70% { opacity: 1; transform: scale(1.08) rotateY(-5deg); } 100% { transform: none; filter: none; } }
+@keyframes volcano-wave-flash { 0% { opacity: .08; transform: scale(.8); } 28% { opacity: .9; transform: scale(1.03); } 100% { opacity: 0; transform: scale(1.12); } }
+@keyframes sigil-reveal-flash { 0% { opacity: 0; scale: .75; } 30% { opacity: 1; scale: 1.04; } 100% { opacity: 0; scale: 1.12; } }
+@media (prefers-reduced-motion: reduce) { .battle-card.is-rooted::after { animation: none; } .battle-card.resurrect-pop, .battle-card.summon-pop, .arena-board.is-volcano-erupting::after, .arena-board.is-sigil-revealing::after { animation-duration: .01ms !important; } }
 .attack-target-status.is-target-fallback { border-color: #ffad647a; color: #fff0d4; background: #391d11eb; }
 
 /* A compact, readable cooldown is visible without changing combat state or card stats. */

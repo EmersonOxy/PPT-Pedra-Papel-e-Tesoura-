@@ -86,10 +86,8 @@ export function validateExperimentalBalance(input: unknown, definitionCount: num
     }
   }
   if (!Number.isInteger(value.copiesPerDefinition) || (value.copiesPerDefinition as number) <= 0) throw new Error('copiesPerDefinition precisa ser inteiro positivo.');
-  const expectedDeckSize = definitionCount * (value.copiesPerDefinition as number);
-  if (value.deckSize !== expectedDeckSize) {
-    throw new Error(`deckSize é uma restrição declarada: ${value.deckSize}; catálogo × cópias exige ${expectedDeckSize}.`);
-  }
+  const expectedDeckSize = value.deckSize as number;
+  if (!Number.isInteger(expectedDeckSize) || expectedDeckSize < definitionCount) throw new Error('deckSize precisa acomodar o catálogo.');
   if (!Number.isInteger(value.handLimit) || (value.handLimit as number) <= 0) throw new Error('handLimit precisa ser inteiro positivo.');
   if ((value.handLimit as number) > expectedDeckSize) throw new Error('handLimit não pode exceder deckSize.');
   return value as unknown as ExperimentalBalance;
@@ -100,7 +98,7 @@ export const topology = balance.fieldTopology;
 export const boardSlotCount = topology.rows * topology.columns;
 export const sigilSlotCount = topology.specialSpaces.find((space) => space.kind === 'sigil')?.count ?? 0;
 export function attackIntervalFor(definitionId: string, baseIntervalMs = balance.attackIntervalMs): number {
-  return Math.round(baseIntervalMs * (balance.attackIntervalMultiplierByDefinitionId[definitionId] ?? 1));
+  return cardDefinitions.find((card) => card.id === definitionId)?.attackIntervalMs || Math.round(baseIntervalMs * (balance.attackIntervalMultiplierByDefinitionId[definitionId] ?? 1));
 }
 export function initialAttackDelayFor(definitionId: string): number {
   return balance.initialAttackDelayMsByDefinitionId[definitionId] ?? 0;

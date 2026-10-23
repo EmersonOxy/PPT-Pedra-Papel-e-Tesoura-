@@ -25,7 +25,7 @@ function fixture(seed = 42): GameState {
   return state;
 }
 
-test('deck has the configured number of cards, two copies of each demo and six opening cards per side', () => {
+test('deck has the configured number of cards, all registered definitions and six opening cards per side', () => {
   assert.equal(cardDefinitions.length, 11);
   const game = createGame(123);
   for (const side of ['player', 'enemy'] as const) {
@@ -105,7 +105,8 @@ test('sigils occupy separate spaces and can be revealed without combat triggers'
   const placed = placeSigil(state, 'player', 'seal-a', 1);
   assert.equal(placed.state.players.player.sigils[1]?.revealed, false);
   const revealed = revealSigil(placed.state, 'player', 1);
-  assert.equal(revealed.state.players.player.sigils[1]?.revealed, true);
+  assert.equal(revealed.state.players.player.sigils[1], null);
+  assert.equal(revealed.state.eruptions?.length, 1);
   assert.equal(revealed.events[0]?.type, 'reveal');
 });
 
@@ -125,7 +126,7 @@ test('front row protects the rear row in the same column for both mirrored sides
 test('scheduled attacks target a same-column troop before rear troops, otherwise damage life directly', () => {
   const state = fixture();
   state.players.player.slots[0] = makeCard('player', 'solemn-guardian', 'attacker', 4, 1000);
-  state.players.enemy.slots[3] = makeCard('enemy', 'astral-fox', 'front', 2, 20_000);
+  state.players.enemy.slots[3] = makeCard('enemy', 'astral-fox', 'front', 1, 20_000);
   state.players.enemy.slots[0] = makeCard('enemy', 'moss-colossus', 'rear', 6, 20_000);
   state.clockMs = 1000;
   const hit = advanceTime(state, 1);
@@ -135,25 +136,25 @@ test('scheduled attacks target a same-column troop before rear troops, otherwise
   hit.state.players.enemy.slots[0] = null;
   hit.state.clockMs = 1000 + attackIntervalFor('solemn-guardian') - 1;
   const direct = advanceTime(hit.state, 1);
-  assert.equal(direct.state.players.enemy.life, 18);
+  assert.equal(direct.state.players.enemy.life, 19);
   assert.equal(direct.events[0]?.type, 'attack');
 });
 
 test('each troop keeps an independent attack timer', () => {
   const state = fixture();
   state.players.player.slots[0] = makeCard('player', 'solemn-guardian', 'early', 4, 1000);
-  state.players.enemy.slots[3] = makeCard('enemy', 'moss-colossus', 'later', 6, 20_000);
+  state.players.enemy.slots[3] = makeCard('enemy', 'moss-colossus', 'later', 3, 99_000);
   state.players.enemy.slots[4] = makeCard('enemy', 'astral-fox', 'other-column', 2, 2000);
   const first = advanceTime(state, 1000);
   assert.equal(first.events.filter((event) => event.type === 'attack').length, 1);
   assert.equal(first.state.players.player.slots[0]?.nextAttackAtMs, 1000 + attackIntervalFor('solemn-guardian'));
-  assert.equal(first.state.players.enemy.slots[3]?.health, 4);
+  assert.equal(first.state.players.enemy.slots[3]?.health, 2);
   const second = advanceTime(first.state, 1000);
   assert.equal(second.events.filter((event) => event.type === 'attack').length, 1);
   assert.equal(second.events.find((event) => event.type === 'attack')?.side, 'enemy');
-  assert.equal(second.state.players.player.life, 18);
+  assert.equal(second.state.players.player.life, 19);
   const third = advanceTime(second.state, attackIntervalFor('solemn-guardian') - 1000);
-  assert.equal(third.state.players.enemy.slots[3]?.health, 2);
+  assert.equal(third.state.players.enemy.slots[3]?.health, 1);
   const fourth = advanceTime(third.state, attackIntervalFor('solemn-guardian'));
   assert.equal(fourth.state.players.enemy.slots[3], null);
 });
@@ -191,28 +192,28 @@ test('manual attack targeting keeps the troop in place, honors front-row protect
   const event = attack.events.find((item) => item.type === 'attack');
   assert.equal(event?.type, 'attack');
   if (event?.type === 'attack') assert.equal(event.targetId, 'selected-target');
-  assert.equal(attack.state.players.enemy.slots[5]?.health, 4);
+  assert.equal(attack.state.players.enemy.slots[5]?.health, 5);
 });
 
 test('all attacks at one timestamp use the same field snapshot and can destroy each other', () => {
   const state = fixture();
-  state.players.player.slots[0] = makeCard('player', 'astral-fox', 'player-fox', 2, 1000);
-  state.players.enemy.slots[3] = makeCard('enemy', 'astral-fox', 'enemy-fox', 2, 1000);
+  state.players.player.slots[0] = makeCard('player', 'astral-fox', 'player-fox', 1, 1000);
+  state.players.enemy.slots[3] = makeCard('enemy', 'astral-fox', 'enemy-fox', 1, 1000);
   const result = advanceTime(state, 1000);
   assert.equal(result.events.filter((event) => event.type === 'attack').length, 2);
   assert.equal(result.state.players.player.slots[0], null);
   assert.equal(result.state.players.enemy.slots[3], null);
   const damages = result.events.filter((event) => event.type === 'damage');
   assert.equal(damages.length, 2);
-  assert.ok(damages.every((event) => event.type === 'damage' && event.destroyed && event.amount === 2));
+  assert.ok(damages.every((event) => event.type === 'damage' && event.destroyed && event.amount === 1));
 });
 
 test('simultaneous lethal direct attacks produce a draw after both damage totals are applied', () => {
   const state = fixture();
-  state.players.player.life = 2;
-  state.players.enemy.life = 2;
+  state.players.player.life = 1;
+  state.players.enemy.life = 1;
   state.players.player.slots[0] = makeCard('player', 'amber-phoenix', 'player-finisher', 3, 1000);
-  state.players.enemy.slots[4] = makeCard('enemy', 'amber-phoenix', 'enemy-finisher', 3, 1000);
+  state.players.enemy.slots[5] = makeCard('enemy', 'amber-phoenix', 'enemy-finisher', 3, 1000);
   const result = advanceTime(state, 1000);
   assert.equal(result.state.phase, 'finished');
   assert.equal(result.state.winner, null);
@@ -252,42 +253,29 @@ test('returning and redeploying a troop starts a fresh attack timer', () => {
   assert.equal(redeployed.state.players.player.slots[1]?.nextAttackAtMs, state.clockMs + attackIntervalFor('solemn-guardian'));
 });
 
-test('Chama Errante damages a valid enemy unit or enemy life and rejects friendly targets', () => {
+test('Bola de Fogo damages enemy troops and rejects friendly and direct life targets', () => {
   const state = fixture();
   state.players.player.hand = [makeCard('player', 'wandering-flame', 'flame')];
   state.players.enemy.slots[0] = makeCard('enemy', 'moss-colossus', 'target', 5);
-  const rejected = castSpell(state, 'player', 'flame', { kind: 'unit', side: 'player', slot: 0 });
-  assert.equal(rejected.events.length, 0);
+  assert.equal(castSpell(state, 'player', 'flame', { kind: 'unit', side: 'player', slot: 0 }).events.length, 0);
   const cast = castSpell(state, 'player', 'flame', { kind: 'unit', side: 'enemy', slot: 0 });
-  assert.equal(cast.state.players.enemy.slots[0]?.health, 3);
+  assert.equal(cast.state.players.enemy.slots[0]?.health, 2);
   cast.state.players.player.hand = [makeCard('player', 'wandering-flame', 'flame-2')];
-  const direct = castSpell(cast.state, 'player', 'flame-2', { kind: 'life', side: 'enemy' });
-  assert.equal(direct.state.players.enemy.life, 18);
-  const directDamageEvent = direct.events.find((event) => event.type === 'life-damage');
-  assert.equal(directDamageEvent?.type, 'life-damage');
-  if (directDamageEvent?.type === 'life-damage') assert.ok(directDamageEvent.amount >= 0);
+  assert.equal(castSpell(cast.state, 'player', 'flame-2', { kind: 'life', side: 'enemy' }).events.length, 0);
+  assert.equal(cast.state.players.enemy.life, 20);
 });
 
-test('Pulso Rúnico heals allies and player life without exceeding maximum', () => {
+test('Cura Equivalente heals a wounded ally from its recorded last hit without exceeding max health', () => {
   const state = fixture();
   state.players.player.life = 17;
   state.players.player.hand = [makeCard('player', 'runic-pulse', 'pulse')];
-  const direct = castSpell(state, 'player', 'pulse', { kind: 'life', side: 'player' });
-  assert.equal(direct.state.players.player.life, 19);
-  const lifeHealEvent = direct.events.find((event) => event.type === 'life-heal');
-  assert.equal(lifeHealEvent?.type, 'life-heal');
-  if (lifeHealEvent?.type === 'life-heal') assert.ok(lifeHealEvent.amount >= 0);
-  direct.state.players.player.hand = [makeCard('player', 'runic-pulse', 'pulse-2')];
-  direct.state.players.player.slots[0] = makeCard('player', 'solemn-guardian', 'wounded', 2);
-  const unit = castSpell(direct.state, 'player', 'pulse-2', { kind: 'unit', side: 'player', slot: 0 });
-  assert.equal(unit.state.players.player.slots[0]?.health, 4);
-  const healEvent = unit.events.find((event) => event.type === 'heal');
-  assert.equal(healEvent?.type, 'heal');
-  if (healEvent?.type === 'heal') assert.ok(healEvent.amount >= 0);
-  assert.equal(unit.events.some((event) => event.type === 'damage' && event.amount < 0), false);
-  unit.state.players.player.hand = [makeCard('player', 'runic-pulse', 'pulse-3')];
-  unit.state.players.player.life = 20;
-  assert.equal(castSpell(unit.state, 'player', 'pulse-3', { kind: 'life', side: 'player' }).events.length, 0);
+  assert.equal(castSpell(state, 'player', 'pulse', { kind: 'life', side: 'player' }).events.length, 0);
+  state.players.player.slots[0] = { ...makeCard('player', 'solemn-guardian', 'wounded', 5), lastDamageReceived: 3 };
+  const healed = castSpell(state, 'player', 'pulse', { kind: 'unit', side: 'player', slot: 0 });
+  assert.equal(healed.state.players.player.slots[0]?.health, 6);
+  assert.equal(healed.state.players.player.life, 17);
+  assert.ok(healed.events.some(event => event.type === 'heal' && event.amount === 1));
+  assert.equal(healed.events.some(event => event.type === 'damage' && event.amount < 0), false);
 });
 
 test('all gameplay actions, including revealing a sigil, are rejected after the result', () => {
@@ -307,8 +295,8 @@ test('all gameplay actions, including revealing a sigil, are rejected after the 
 
 test('field topology and experimental balance are validated against the supported UI and catalog', () => {
   assert.deepEqual([topology.rows, topology.columns, boardSlotCount, sigilSlotCount], [2, 3, 6, 2]);
-  assert.equal(balance.deckSize, cardDefinitions.length * balance.copiesPerDefinition);
-  assert.throws(() => validateExperimentalBalance({ ...balance, deckSize: 23 }, cardDefinitions.length), /deckSize é uma restrição declarada/);
+  assert.equal(balance.deckSize, 24);
+  assert.throws(() => validateExperimentalBalance({ ...balance, deckSize: 10 }, cardDefinitions.length), /deckSize precisa acomodar/);
   assert.throws(() => validateExperimentalBalance({ ...balance, fieldTopology: { ...topology, columns: 4 } }, cardDefinitions.length), /Topologia incompatível/);
   assert.throws(() => validateExperimentalBalance({ ...balance, fieldTopology: { ...topology, frontRow: { player: 9, enemy: 1 } } }, cardDefinitions.length), /orientação frontRow/);
   assert.throws(() => validateExperimentalBalance({ ...balance, fieldTopology: { ...topology, frontRow: { player: 0, enemy: 0 } } }, cardDefinitions.length), /precisam ser opostas/);
@@ -402,7 +390,7 @@ test('preparation freezes attacks, gives the start announcement its own phase, a
   assert.ok(atTimer.events.some((event) => event.type === 'attack'));
 });
 
-test('opening attacks are staggered by the experimental delay configured per troop', () => {
+test('opening attacks use the requested individual card intervals', () => {
   const state = fixture();
   state.phase = 'starting';
   state.clockMs = 12_000;
@@ -418,7 +406,8 @@ test('opening attacks are staggered by the experimental delay configured per tro
   assert.equal(fastAt, state.clockMs + attackIntervalFor('solemn-guardian'));
   assert.equal(slowAt, state.clockMs + attackIntervalFor('moss-colossus') + initialAttackDelayFor('moss-colossus'));
   assert.equal(slowestAt, state.clockMs + attackIntervalFor('ember-knight') + initialAttackDelayFor('ember-knight'));
-  assert.ok(fastAt < slowAt && slowAt < slowestAt);
+  assert.equal(fastAt, slowestAt);
+  assert.ok(fastAt < slowAt);
 });
 
 test('the AI can prepare an allowed troop while its hand and spells remain hidden and inactive', () => {

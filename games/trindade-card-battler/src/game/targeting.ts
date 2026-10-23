@@ -38,6 +38,10 @@ export function chooseAttackTarget(state: GameState, attackerSide: Side, attacke
       return { side: targetSide, slot: selectedSlot, direct: false };
     }
   }
+  if (Math.floor(attackerSlot / topology.columns) !== frontRow(attackerSide)) {
+    if (attacker?.directAttackTarget && getCardDefinition(attacker.definitionId).ability === 'plunder') return { side: targetSide, direct: true };
+    return { side: targetSide, direct: false };
+  }
   const column = attackerSlot % topology.columns;
   const targets = state.players[targetSide].slots;
   const first = frontRow(targetSide) * topology.columns + column;

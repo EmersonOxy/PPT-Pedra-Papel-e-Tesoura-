@@ -1,6 +1,7 @@
 import { cardEffects } from './card-effects.ts';
 import { cardDefinitions, getCardDefinition } from '../game/cards.ts';
-import { assignAttackTarget, beginPreparation, castSpell, drawCard, moveTroop, placeCard, placeSigil, returnTroop, revealSigil } from '../game/engine.ts';
+import { activateSigil, assignAllyLink, assignDirectAttackTarget, assignAttackTarget, beginPreparation, castSpell, drawCard, moveTroop, placeCard, placeSigil, returnTroop, revealSigil } from '../game/engine.ts';
+import { effectiveAttackInterval } from '../game/combat-rules.ts';
 import { advanceTime } from '../game/simulation.ts';
 import { frontRow, isAttackTargetExposed } from '../game/targeting.ts';
 import { attackIntervalFor, balance, boardSlotCount, topology } from '../game/config.ts';
@@ -38,6 +39,9 @@ export class GameApp {
   private root: HTMLElement;
   private state: GameState;
   private selectedId: string | null = null;
+  private selectedSigilSlot: number | null = null;
+  private deckIds: string[] = [];
+  private readonly deckStorageKey = 'trindade.battle-deck.v1';
   private theme = 'mineral';
   private drag: ActiveDrag | null = null;
   private toastTimer: number | undefined;
@@ -60,17 +64,18 @@ export class GameApp {
   constructor(root: HTMLElement) {
     this.root = root;
     this.loadProgression();
+    this.loadDeck();
     const seed = new Uint32Array(1);
     crypto.getRandomValues(seed);
-    this.state = createGameImported(seed[0]);
-    this.deckPreviewCards = cardDefinitions.flatMap((definition) => Array.from({ length: balance.copiesPerDefinition }, (_, index) => ({
+    this.state = createGameImported(seed[0], this.deckIds);
+    this.deckPreviewCards = cardDefinitions.map((definition, index) => ({
       instanceId: `catalog-${definition.id}-${index + 1}`,
       definitionId: definition.id,
       owner: 'player' as const,
       health: definition.maxHealth,
       nextAttackAtMs: 0,
       revealed: false,
-    })));
+    }));
     this.mount();
     this.render();
     this.bindEvents();
@@ -95,9 +100,9 @@ export class GameApp {
             <button class="home-shortcut" data-home-tab="missions" type="button"><span class="shortcut-glyph">✧</span><span><strong>Missões e tickets</strong><small>Conclua objetivos para melhorar cartas</small></span><span class="shortcut-arrow">→</span></button>
           </section>
           <section class="home-page" data-home-page="deck" hidden>
-            <div class="page-heading"><span class="page-overline">PREPARAÇÃO</span><h1>Seu deck</h1><p>Catálogo atual conectado ao jogo.</p></div>
-            <div class="deck-summary"><div><strong>${balance.deckSize}</strong><span>cartas no deck experimental</span></div><div><strong>${cardDefinitions.length}</strong><span>modelos disponíveis</span></div></div>
-            <div class="experimental-note"><b>Deck experimental</b><span>Visualização e inspeção disponíveis. Edição e salvamento do deck ainda não estão implementados.</span></div>
+            <div class="page-heading"><span class="page-overline">PREPARAÇÃO</span><h1>Seu deck</h1><p>Escolha as cartas do seu deck. Todas estão disponíveis para teste.</p></div>
+            <div class="deck-summary"><div><strong id="deck-builder-count">${balance.deckSize}/${balance.deckSize}</strong><span>cartas no deck de batalha</span></div><div><strong>${cardDefinitions.length}</strong><span>modelos disponíveis</span></div></div>
+            <div class="experimental-note"><b>Deck experimental</b><span>Use + e − para montar ${balance.deckSize} cartas. Salvo neste dispositivo. Sem custo ou desbloqueio.</span></div>
             <div class="deck-grid" id="deck-grid" aria-label="As ${balance.deckSize} cartas do deck"></div>
           </section>
           <section class="home-page" data-home-page="missions" hidden>
@@ -150,7 +155,7 @@ export class GameApp {
           </div>
         </section>
         <div id="toast" class="toast" role="status" aria-live="polite"></div>
-        <div class="overlay" id="help-overlay" aria-hidden="true"><div class="help-panel"><div class="help-tag">Experimento separado · versão jogável inicial</div><h2>Como experimentar</h2><p><b>Comprar:</b> toque no deck enquanto houver espaço na mão (máximo de ${balance.handLimit} cartas).</p><p><b>Posicionar:</b> arraste uma tropa a um espaço vazio. A linha próxima do centro protege a linha posterior na mesma coluna.</p><p><b>Mover ou recolher:</b> arraste uma tropa sua para um espaço vazio ou para a mão. Para definir seu alvo, arraste ou selecione a tropa e toque em qualquer tropa inimiga exposta; a coluna da atacante não limita o alvo. A carta atacante mostra quem está priorizando. Se o alvo sair do campo ou ficar protegido, ela informa que retomou o alvo automático.</p><p><b>Feitiços:</b> Bola de Fogo causa ${balance.spellDamage} de dano; Cura Equivalente restaura ${balance.spellHealing} de vida. Selecione um feitiço e toque no alvo compatível.</p><p><b>Sigilos:</b> coloque um sigilo em um dos ${balance.fieldTopology.specialSpaces[0]?.count ?? 0} espaços e toque nele para revelar sua carta. Eles são visuais nesta versão e ainda não têm gatilhos.</p><p><b>Combate:</b> cada tropa tem sua recarga individual exibida na carta (de ${minAttackInterval.toFixed(2)} a ${maxAttackInterval.toFixed(2)} segundos). O valor varia por carta e é experimental. Os custos são somente demonstrativos; não há mana.</p><p><b>Limite experimental:</b> ${balance.startingLife} de vida, ${balance.deckSize} cartas por deck e IA básica. Os valores não são regras finais.</p><button class="close-help" id="close-help" type="button">Entendi</button></div></div>
+        <div class="overlay" id="help-overlay" aria-hidden="true"><div class="help-panel"><div class="help-tag">Experimento separado · versão jogável inicial</div><h2>Como experimentar</h2><p><b>Comprar:</b> toque no deck enquanto houver espaço na mão (máximo de ${balance.handLimit} cartas).</p><p><b>Posicionar:</b> arraste uma tropa a um espaço vazio. A linha próxima do centro protege a linha posterior na mesma coluna.</p><p><b>Ordens:</b> arraste suas tropas para mover ou recolher. Na frente, atacam automaticamente. Na retaguarda, selecione a tropa e toque no alvo inimigo; a Raposa pode vincular um aliado, e o Goblin pode selecionar a vida inimiga. Segure uma carta visível para inspecionar.</p><p><b>Feitiços:</b> Bola de Fogo atinge uma tropa e a outra da coluna. Cura Equivalente recupera o último dano registrado, até 4 pontos, em uma tropa aliada.</p><p><b>Ocultas:</b> Espinhos reage automaticamente a ataques contra tropas; Raízes reage à movimentação ou pode ser direcionada por toque; Vulcão é manual e atinge tropas dos dois lados em três ondas.</p><p><b>Combate:</b> cada tropa tem sua recarga individual exibida na carta (de ${minAttackInterval.toFixed(2)} a ${maxAttackInterval.toFixed(2)} segundos). O valor varia por carta e é experimental. Os custos são somente demonstrativos; não há mana.</p><p><b>Limite experimental:</b> ${balance.startingLife} de vida, ${balance.deckSize} cartas por deck e IA básica. Os valores não são regras finais.</p><button class="close-help" id="close-help" type="button">Entendi</button></div></div>
         <div class="overlay" id="palette-overlay" aria-hidden="true"><div class="help-panel"><div class="help-tag">Identidade visual V3</div><h2>Atmosfera da arena</h2><div class="theme-option-grid"><button type="button" class="theme-btn active" data-theme-set="mineral">Verde mineral</button><button type="button" class="theme-btn" data-theme-set="abissal">Azul abissal</button><button type="button" class="theme-btn" data-theme-set="rubro">Rubro arcano</button></div><button class="close-help" id="close-palette" type="button">Voltar à arena</button></div></div>
         <div class="overlay" id="result-overlay" aria-hidden="true"><div class="help-panel"><div class="help-tag">Fim da partida</div><h2 id="result-title">Vitória</h2><p id="result-copy"></p><button class="close-help" id="play-again" type="button">Voltar ao início</button></div></div>
       </main><svg class="attack-aim-overlay" id="attack-aim-overlay" aria-hidden="true"><defs><marker id="attack-arrowhead" markerWidth="18" markerHeight="18" refX="15" refY="9" markerUnits="userSpaceOnUse" orient="auto"><path d="M1 2L16 9L1 16L5 9Z"></path></marker></defs><path id="attack-aim-line" d=""></path></svg><div class="overlay card-preview-overlay" id="card-preview-overlay" aria-hidden="true"><div class="card-preview-wrap" id="card-preview-wrap"></div></div><div class="transition-curtain" id="transition-curtain" aria-hidden="true"></div></div>`;
@@ -183,16 +188,7 @@ export class GameApp {
         this.playerWins = Math.max(0, Number(stats.playerWins) || 0);
         this.cardsPlaced = Math.max(0, Number(stats.cardsPlaced) || 0);
       }
-      for (const definition of cardDefinitions) {
-        const level = Math.max(0, Math.min(10, Number(this.cardLevels[definition.id]) || 0));
-        this.cardLevels[definition.id] = level;
-        if (definition.kind === 'troop') {
-          definition.attack += level;
-          definition.maxHealth += level;
-        } else if (definition.kind === 'spell') {
-          definition.spellAmount = (definition.spellAmount ?? (definition.effect === 'damage' ? balance.spellDamage : balance.spellHealing)) + level;
-        }
-      }
+
     } catch {
       this.cardTickets = {};
       this.cardLevels = {};
@@ -222,28 +218,6 @@ export class GameApp {
     this.toast(`5 tickets de ${getCardDefinition(definitionId).name} adicionados.`);
   }
 
-  private upgradeCard(definitionId: string): void {
-    const definition = getCardDefinition(definitionId);
-    const ticketCost = 5;
-    if (definition.kind === 'hidden') return;
-    const level = this.cardLevels[definitionId] ?? 0;
-    if ((this.cardTickets[definitionId] ?? 0) < ticketCost) { this.toast(`Faltam ${ticketCost - (this.cardTickets[definitionId] ?? 0)} tickets desta carta.`); return; }
-    if (level >= 10) { this.toast('Esta carta já atingiu o limite experimental.'); return; }
-    this.cardTickets[definitionId] -= ticketCost;
-    this.cardLevels[definitionId] = level + 1;
-    if (definition.kind === 'troop') {
-      definition.attack += 1;
-      definition.maxHealth += 1;
-    } else {
-      definition.spellAmount = (definition.spellAmount ?? (definition.effect === 'damage' ? balance.spellDamage : balance.spellHealing)) + 1;
-    }
-    this.deckPreviewCards.filter((card) => card.definitionId === definitionId).forEach((card) => { card.health = definition.maxHealth; });
-    this.saveProgression();
-    this.renderDeckLibrary();
-    this.showPreview(this.deckPreviewCards.find((card) => card.definitionId === definitionId)!.instanceId, 'player');
-    this.toast(`${definition.name} melhorada para o nível ${level + 2}.`);
-  }
-
   private setHomeTab(tab: 'home' | 'deck' | 'missions'): void {
     if (this.matchHasStarted) return;
     this.activeHomeTab = tab;
@@ -253,6 +227,7 @@ export class GameApp {
 
   private startDemoSearch(): void {
     if (this.matchHasStarted || this.matchFlow.phase !== 'idle') return;
+    if (this.deckIds.length !== balance.deckSize) { this.setHomeTab('deck'); this.toast(`Complete seu deck: ${this.deckIds.length}/${balance.deckSize} cartas.`); return; }
     this.matchFlow = beginDemoMatchSearch(this.matchFlow);
     this.renderHome();
   }
@@ -268,7 +243,7 @@ export class GameApp {
     if (this.matchHasStarted) return;
     const seed = new Uint32Array(1);
     crypto.getRandomValues(seed);
-    this.state = beginPreparation(createGameImported(seed[0])).state;
+    this.state = beginPreparation(createGameImported(seed[0], this.deckIds)).state;
     this.matchHasStarted = true;
     this.matchResultRecorded = false;
     this.selectedId = null;
@@ -292,7 +267,7 @@ export class GameApp {
     this.selectedId = null;
     const seed = new Uint32Array(1);
     crypto.getRandomValues(seed);
-    this.state = createGameImported(seed[0]);
+    this.state = createGameImported(seed[0], this.deckIds);
     this.root.querySelector<HTMLElement>('#transition-curtain')?.classList.remove('active');
     this.root.querySelector<HTMLElement>('#home')?.removeAttribute('hidden');
     const game = this.root.querySelector<HTMLElement>('#game');
@@ -345,10 +320,28 @@ export class GameApp {
   private renderDeckLibrary(): void {
     const grid = this.root.querySelector<HTMLElement>('#deck-grid');
     if (!grid) return;
-    grid.innerHTML = this.deckPreviewCards.map((card, index) => {
+    this.setText('#deck-builder-count', `${this.deckIds.length}/${balance.deckSize}`);
+    grid.innerHTML = this.deckPreviewCards.map((card) => {
       const definition = getCardDefinition(card.definitionId);
-      return `<button class="deck-card-tile" type="button" data-card-inspect="${this.escapeAttribute(card.instanceId)}" aria-label="Ver detalhes de ${this.escapeAttribute(definition.name)}, cópia ${index % balance.copiesPerDefinition + 1}">${renderCardFace(definition, card, 'player', 'preview')}<span class="deck-card-number">${String(index + 1).padStart(2, '0')}</span><span class="deck-card-inspect-hint" aria-hidden="true">ⓘ Detalhes</span></button>`;
+      const count = this.deckIds.filter(id => id === definition.id).length;
+      return `<article class="deck-builder-card"><button class="deck-card-tile" type="button" data-card-inspect="${this.escapeAttribute(card.instanceId)}" aria-label="Ver detalhes de ${this.escapeAttribute(definition.name)}">${renderCardFace(definition, card, 'player', 'preview')}<span class="deck-card-inspect-hint" aria-hidden="true">ⓘ Detalhes</span></button><div class="deck-builder-controls"><button type="button" data-deck-remove="${definition.id}" aria-label="Remover ${this.escapeAttribute(definition.name)}" ${count === 0 ? 'disabled' : ''}>−</button><span aria-label="Quantidade de ${this.escapeAttribute(definition.name)}">${count}</span><button type="button" data-deck-add="${definition.id}" aria-label="Adicionar ${this.escapeAttribute(definition.name)}" ${this.deckIds.length >= balance.deckSize ? 'disabled' : ''}>+</button></div></article>`;
     }).join('');
+  }
+
+  private loadDeck(): void {
+    const defaultIds = Array.from({ length: balance.deckSize }, (_, index) => cardDefinitions[index % cardDefinitions.length].id);
+    try {
+      const saved: unknown = JSON.parse(localStorage.getItem(this.deckStorageKey) ?? 'null');
+      this.deckIds = Array.isArray(saved) && saved.length <= balance.deckSize && saved.every(id => typeof id === 'string' && cardDefinitions.some(card => card.id === id)) ? saved : defaultIds;
+    } catch { this.deckIds = defaultIds; }
+  }
+
+  private editDeck(id: string, add: boolean): void {
+    if (!cardDefinitions.some(card => card.id === id)) return;
+    if (add && this.deckIds.length < balance.deckSize) this.deckIds.push(id);
+    else if (!add) { const index = this.deckIds.indexOf(id); if (index >= 0) this.deckIds.splice(index, 1); }
+    try { localStorage.setItem(this.deckStorageKey, JSON.stringify(this.deckIds)); } catch { /* Session remains playable. */ }
+    this.renderDeckLibrary();
   }
 
   private renderMissions(): void {
@@ -400,6 +393,8 @@ export class GameApp {
     if (!(target instanceof Element)) return;
     const button = target.closest<HTMLElement>('button');
     if (!button) return;
+    if (button.dataset.deckAdd) { this.editDeck(button.dataset.deckAdd, true); return; }
+    if (button.dataset.deckRemove) { this.editDeck(button.dataset.deckRemove, false); return; }
     const claimMission = button.dataset.claimMission;
     if (claimMission) {
       const selectedCard = this.root.querySelector<HTMLSelectElement>(`[data-mission-card="${CSS.escape(claimMission)}"]`);
@@ -412,7 +407,7 @@ export class GameApp {
     if (button.id === 'cancel-search') { this.cancelDemoSearch(); return; }
     if (button.id === 'restart' || button.id === 'play-again') { this.returnToHome(); return; }
     if (button.id === 'close-card-preview') { this.closeOverlay('card-preview-overlay'); return; }
-    if (button.id === 'upgrade-card') { this.upgradeCard(button.dataset.definitionId ?? ''); return; }
+    if (button.id === 'upgrade-card') { this.toast('Balanceamento de teste: todas as cartas usam seus atributos base.'); return; }
     const inspectId = button.dataset.cardInspect;
     if (inspectId) { this.showPreview(inspectId, 'player'); return; }
     if (button.id === 'draw-deck') { this.transition(drawCard(this.state, 'player'), 'Não há espaço na mão ou o deck acabou.'); return; }
@@ -444,15 +439,17 @@ export class GameApp {
       this.toast('Esta carta não tem ações permitidas durante a preparação.');
       return;
     }
+    this.selectedSigilSlot = null;
     this.selectedId = this.selectedId === instanceId ? null : instanceId;
     this.syncSelection();
-    if (definition.kind === 'spell') this.toast(definition.effect === 'damage' ? 'Toque em uma tropa inimiga ou na vida adversária.' : 'Toque em uma tropa aliada ferida ou na sua vida.');
+    if (definition.kind === 'spell') this.toast(definition.effect === 'damage' ? 'Toque em uma tropa inimiga; a outra da coluna também recebe dano.' : 'Toque em uma tropa aliada com um último golpe registrado.');
     else if (definition.kind === 'hidden') this.toast('Escolha um espaço de sigilo vazio.');
   }
 
   private activateSlot(side: Side, slot: number): void {
     if (this.state.phase !== 'playing' && this.state.phase !== 'preparation') return;
     if (side === 'enemy') {
+      if (this.selectedSigilSlot !== null) { const selected = this.selectedSigilSlot; this.selectedSigilSlot = null; this.transition(activateSigil(this.state, 'player', selected, slot), 'Escolha uma tropa inimiga válida.'); return; }
       const selectedBoardSlot = this.selectedId ? this.findPlayerBoardSlot(this.selectedId) : -1;
       if (selectedBoardSlot >= 0) { this.setAttackTarget(selectedBoardSlot, slot); return; }
       if (this.selectedId && this.isSelectedSpell('damage')) this.tryCast({ kind: 'unit', side, slot });
@@ -475,6 +472,7 @@ export class GameApp {
     if (fieldCard && this.selectedId === fieldCard.instanceId) { this.selectedId = null; this.syncSelection(); return; }
     if (fieldCard) {
       const selectedBoard = this.selectedId ? this.findPlayerBoardSlot(this.selectedId) : -1;
+      if (selectedBoard >= 0 && this.state.players.player.slots[selectedBoard]?.definitionId === 'amber-phoenix') { this.transition(assignAllyLink(this.state, 'player', selectedBoard, slot), 'A Raposa precisa estar na retaguarda para vincular um aliado.'); return; }
       if (selectedBoard >= 0) { this.transition(moveTroop(this.state, 'player', selectedBoard, slot), 'O destino precisa estar vazio.'); return; }
       if (!this.selectedId) { this.selectedId = fieldCard.instanceId; this.syncSelection(); return; }
     }
@@ -488,8 +486,13 @@ export class GameApp {
         this.transition(placeSigil(this.state, 'player', selected.instanceId, slot), 'Esse espaço de sigilo já está ocupado.');
         return;
       }
-      this.transition(revealSigil(this.state, 'player', slot), this.state.phase === 'preparation' ? 'Sigilos não podem ser revelados durante a preparação.' : undefined);
-    } else this.transition(revealSigil(this.state, 'enemy', slot), this.state.phase === 'preparation' ? 'Sigilos não podem ser revelados durante a preparação.' : undefined);
+      const card = this.state.players.player.sigils[slot];
+      if (!card) return;
+      if (card.definitionId === 'sleeping-thorns') { this.toast('Espinhos: ativação automática ao atacarem uma tropa aliada.'); return; }
+      if (card.definitionId === 'vesper-blade') { this.selectedId = null; this.selectedSigilSlot = slot; this.toast('Raízes: toque em uma tropa inimiga.'); return; }
+      this.selectedSigilSlot = null;
+      this.transition(revealSigil(this.state, 'player', slot), 'Aguarde o início do combate. O Vulcão atinge ambos os lados!');
+    }
   }
 
   private findPlayerBoardSlot(instanceId: string): number {
@@ -513,6 +516,8 @@ export class GameApp {
 
   private tryTargetLife(side: Side): void {
     if (!this.selectedId) return;
+    const boardSlot = this.findPlayerBoardSlot(this.selectedId);
+    if (side === 'enemy' && boardSlot >= 0) { this.transition(assignDirectAttackTarget(this.state, 'player', boardSlot), 'Somente o Goblin da retaguarda pode escolher ataque direto.'); return; }
     const spell = this.state.players.player.hand.find((card) => card.instanceId === this.selectedId);
     if (!spell || getCardDefinition(spell.definitionId).kind !== 'spell') return;
     this.tryCast({ kind: 'life', side });
@@ -797,6 +802,12 @@ export class GameApp {
       if (event.type === 'place' && event.side === 'player') { this.cardsPlaced += 1; missionsChanged = true; }
       if (event.type === 'damage') this.animateImpact(event.instanceId, event.amount);
       if (event.type === 'heal') this.animateHeal(event.instanceId, event.amount);
+      if (event.type === 'resurrect') this.animateAbilityCard(event.instanceId, 'resurrect-pop');
+      if (event.type === 'summon') this.animateAbilityCard(event.instanceId, 'summon-pop');
+      if (event.type === 'root') this.animateAbilityCard(event.instanceId, 'is-rooted');
+      if (event.type === 'link') this.animateLink(event.instanceId, event.targetId);
+      if (event.type === 'reveal') this.animateSigilReveal(event.definitionId);
+      if (event.type === 'volcano-wave') this.animateVolcanoWave(event.side, event.wave);
       if (event.type === 'life-damage') this.animateLife(event.side, false);
       if (event.type === 'life-heal') this.animateLife(event.side, true);
       if (event.type === 'game-over') {
@@ -879,6 +890,45 @@ export class GameApp {
     window.setTimeout(() => card.classList.remove('place-pop'), 460);
   }
 
+  private animateAbilityCard(instanceId: string, className: string): void {
+    const card = this.root.querySelector<HTMLElement>(`[data-card-id="${CSS.escape(instanceId)}"]`);
+    if (!card) return;
+    card.classList.remove(className);
+    void card.offsetWidth;
+    card.classList.add(className);
+    if (className !== 'is-rooted') window.setTimeout(() => card.classList.remove(className), 900);
+  }
+
+  private animateLink(sourceId: string, targetId?: string): void {
+    const source = this.root.querySelector<HTMLElement>(`[data-card-id="${CSS.escape(sourceId)}"]`);
+    source?.classList.toggle('is-link-source', Boolean(targetId));
+    if (!targetId) return;
+    const target = this.root.querySelector<HTMLElement>(`[data-card-id="${CSS.escape(targetId)}"]`);
+    target?.classList.add('is-link-target');
+    window.setTimeout(() => { source?.classList.remove('is-link-source'); target?.classList.remove('is-link-target'); }, 700);
+  }
+
+  private animateSigilReveal(definitionId?: string): void {
+    const board = this.root.querySelector<HTMLElement>('.arena-board');
+    if (!board) return;
+    board.dataset.revealName = definitionId ? getCardDefinition(definitionId).name : '';
+    board.classList.remove('is-sigil-revealing');
+    void board.offsetWidth;
+    board.classList.add('is-sigil-revealing');
+    window.setTimeout(() => board.classList.remove('is-sigil-revealing'), 650);
+  }
+
+  private animateVolcanoWave(side: Side, wave: number): void {
+    const board = this.root.querySelector<HTMLElement>('.arena-board');
+    if (!board) return;
+    board.dataset.volcanoOwner = side;
+    board.dataset.volcanoWave = String(wave);
+    board.classList.remove('is-volcano-erupting');
+    void board.offsetWidth;
+    board.classList.add('is-volcano-erupting');
+    window.setTimeout(() => board.classList.remove('is-volcano-erupting'), 900);
+  }
+
   private animateLife(side: Side, healing: boolean): void {
     const target = this.root.querySelector<HTMLElement>(side === 'player' ? '#player-life-target' : '#enemy-life-target');
     if (!target) return;
@@ -892,6 +942,12 @@ export class GameApp {
     target.classList.remove('is-hit');
     void target.offsetWidth;
     target.classList.add('is-hit');
+    const board = this.root.querySelector<HTMLElement>('.arena-board');
+    if (board?.classList.contains('is-volcano-erupting')) {
+      const sideClass = target.dataset.side === board.dataset.volcanoOwner ? 'volcano-ally-hit' : 'volcano-enemy-hit';
+      target.classList.add(sideClass);
+      window.setTimeout(() => target.classList.remove(sideClass), 900);
+    }
     const number = document.createElement('span');
     number.className = 'impact-number';
     number.textContent = `−${amount}`;
@@ -1076,7 +1132,7 @@ export class GameApp {
       }
       if (displayedCard) {
         const unit = button.querySelector<HTMLElement>('.battle-card[data-card-id]');
-        if (unit) this.syncAttackTargetStatus(unit, displayedCard, side);
+        if (unit) { this.syncAttackTargetStatus(unit, displayedCard, side); this.syncAbilityClasses(unit, displayedCard, side); }
       }
       button.dataset.slotSide = side;
       button.dataset.side = side;
@@ -1191,7 +1247,22 @@ export class GameApp {
       : `Esta tropa prioriza ${status.slice('ALVO: '.length)}.`);
   }
 
+  private syncAbilityClasses(element: HTMLElement, card: CardInstance, side: Side): void {
+    const linkedTarget = this.state.players[side].slots.some((source) => source?.linkedAllyId === card.instanceId);
+    element.classList.toggle('is-rooted', (card.rootedUntilMs ?? 0) > this.state.clockMs);
+    element.classList.toggle('is-link-source', Boolean(card.linkedAllyId));
+    element.classList.toggle('is-link-target', linkedTarget);
+    element.classList.toggle('is-furious', getCardDefinition(card.definitionId).ability === 'fury' && card.health <= (getCardDefinition(card.definitionId).abilityConfig?.furyThreshold ?? 3));
+  }
+
   private updateAttackCooldowns(): void {
+    for (const side of ['player', 'enemy'] as const) {
+      this.state.players[side].slots.forEach((card) => {
+        if (!card) return;
+        const element = this.root.querySelector<HTMLElement>(`[data-card-id="${CSS.escape(card.instanceId)}"]`);
+        if (element) this.syncAbilityClasses(element, card, side);
+      });
+    }
     this.root.querySelectorAll<HTMLElement>('.attack-cooldown[data-cooldown-id]').forEach((indicator) => {
       const cardId = indicator.dataset.cooldownId;
       const card = cardId ? [...this.state.players.player.slots, ...this.state.players.enemy.slots].find((unit) => unit?.instanceId === cardId) : undefined;
@@ -1206,7 +1277,7 @@ export class GameApp {
         return;
       }
       const remaining = Math.max(0, card.nextAttackAtMs - this.state.clockMs);
-      const interval = attackIntervalFor(card.definitionId, this.state.attackIntervalMs);
+      const interval = effectiveAttackInterval(this.state, card);
       const progress = remaining === 0 ? 1 : 1 - Math.min(1, remaining / interval);
       fill.style.transform = `scaleX(${progress})`;
       label.textContent = remaining === 0 ? 'PRONTO' : `ATAQUE ${Math.ceil(remaining / 1000)}s`;
@@ -1233,7 +1304,7 @@ export class GameApp {
           ? `<span><b>Custo</b> ${definition.cost}</span><span><b>Efeito</b> ${definition.effect === 'damage' ? `${balance.spellDamage} de dano` : `${balance.spellHealing} de cura`}</span>`
           : `<span><b>Custo</b> ${definition.cost}</span><span><b>Efeito</b> Sigilo oculto</span>`;
       const behavior = definition.kind === 'troop'
-        ? 'Ataca automaticamente após a recarga. Um alvo escolhido pode ser bloqueado por uma tropa à frente na mesma coluna.'
+        ? 'Na frente ataca automaticamente; atrás aguarda sua ordem. Toque para selecionar, depois no alvo. A Raposa pode selecionar um aliado e o Goblin pode selecionar a vida inimiga.'
         : description;
       wrap.innerHTML = `<div class="quick-card-preview"><div class="preview-shell ${definition.kind}" data-foundation="${definition.foundation}">${renderCardFace(definition, card, side, 'preview')}</div><section class="card-preview-details"><div class="card-preview-heading"><strong>${this.escapeAttribute(definition.name)}</strong><span>${kind}</span></div><div class="card-preview-facts">${facts}</div><p>${this.escapeAttribute(description)}</p><p class="card-preview-how">${this.escapeAttribute(behavior)}</p><button class="card-preview-close" id="close-card-preview" type="button">Fechar</button></section></div>`;
       overlay.classList.add('open'); overlay.setAttribute('aria-hidden', 'false');
@@ -1248,7 +1319,7 @@ export class GameApp {
           const currentWidth = Math.max(8, stat.current / max * 100);
           return `<div class="deck-stat-row"><div><b>${stat.label}</b><span><strong>${stat.current}</strong><i> → </i><strong>${stat.nextLevel}</strong></span></div><div class="deck-stat-track" aria-hidden="true"><i class="deck-stat-next" style="width:100%"></i><i class="deck-stat-current" style="width:${currentWidth}%"></i></div></div>`;
         }).join('')}</div>`
-      : `<p class="deck-stat-empty">${definition.kind === 'hidden' ? 'Status e efeito ainda não definidos para este sigilo.' : `Custo: ${definition.cost}.`}</p>`;
+      : `<p class="deck-stat-empty">${definition.kind === 'hidden' ? this.escapeAttribute(definition.description) : `Custo: ${definition.cost}.`}</p>`;
     const suggestions = synergiesFor(definition.id);
     const synergyMarkup = suggestions.length
       ? suggestions.map(({ definition: suggestion, reason }) => `<article class="deck-synergy-item"><div class="deck-synergy-card" data-foundation="${suggestion.foundation}">${renderCardFace(suggestion, { ...card, instanceId: `suggestion-${suggestion.id}`, definitionId: suggestion.id, health: suggestion.maxHealth }, side, 'preview')}</div><div><b>${this.escapeAttribute(suggestion.name)}</b><p>${this.escapeAttribute(reason)}</p></div></article>`).join('')
@@ -1256,19 +1327,15 @@ export class GameApp {
     const level = (this.cardLevels[definition.id] ?? 0) + 1;
     const tickets = this.cardTickets[definition.id] ?? 0;
     const progression = definition.kind === 'hidden'
-      ? 'A progressão e os atributos deste sigilo ainda não foram definidos.'
+      ? 'Carta disponível para teste com atributos configuráveis.'
       : `Nível ${level}; ${tickets} ticket${tickets === 1 ? '' : 's'} desta carta disponíveis.`;
     const facts = definition.kind === 'troop'
       ? `<span><b>Ataque</b> ${definition.attack}</span><span><b>Vida</b> ${card.health}/${definition.maxHealth}</span>`
       : definition.kind === 'spell'
         ? `<span><b>Custo</b> ${definition.cost}</span><span><b>${definition.effect === 'damage' ? 'Dano' : 'Cura'}</b> ${definition.spellAmount ?? (definition.effect === 'damage' ? balance.spellDamage : balance.spellHealing)}</span>`
-        : `<span><b>Custo</b> ${definition.cost}</span><span><b>Efeito</b> A definir</span>`;
-    const howItWorks = definition.kind === 'troop'
-      ? 'Ataca automaticamente quando sua recarga termina. Você pode escolher uma tropa inimiga exposta para priorizar; uma tropa na frente protege a retaguarda da mesma coluna.'
-      : definition.kind === 'spell'
-        ? definition.effect === 'damage' ? 'Selecione a carta e escolha uma tropa inimiga ou a vida adversária para aplicar o dano indicado.' : 'Selecione a carta e escolha uma tropa aliada ferida ou sua vida para aplicar a cura indicada.'
-        : 'Pode ser colocada em um espaço de sigilo e revelada durante a partida. O efeito de ativação ainda não foi definido nesta versão.';
-    wrap.innerHTML = `<div class="card-preview-content"><section class="deck-inspect-panel deck-inspect-progression" aria-label="Status e evolução da carta"><div class="deck-inspect-kicker">STATUS DA CARTA</div><h2>Progressão</h2><div class="deck-level-row"><strong>NÍVEL ${level}</strong><span>${definition.kind === 'hidden' ? 'EM DEFINIÇÃO' : `${tickets} tickets`}</span></div><div class="deck-level-track" aria-hidden="true"><i style="width:${Math.min(100, tickets / 5 * 100)}%"></i></div><small class="deck-preview-note">Cada melhoria consome 5 tickets exclusivos desta carta.</small><h3>Atributos <span>atual <i>·</i> próxima melhoria</span></h3>${chart}${definition.kind !== 'hidden' ? `<button class="card-preview-close card-upgrade" id="upgrade-card" data-definition-id="${definition.id}" type="button" ${tickets < 5 || level >= 11 ? 'disabled' : ''}>Melhorar · 5 tickets</button>` : ''}</section><div class="deck-inspect-main"><div class="deck-inspect-card-row"><div class="preview-shell ${definition.kind}" data-foundation="${definition.foundation}" aria-label="${this.escapeAttribute(this.cardDetails(card))}">${renderCardFace(definition, card, 'player', 'preview')}</div><section class="card-preview-details" aria-label="Ficha resumida de ${this.escapeAttribute(definition.name)}"><div class="card-preview-heading"><strong>${this.escapeAttribute(definition.name)}</strong><span>${typeName} · CUSTO ${definition.cost}</span></div><div class="card-preview-facts">${facts}</div></section></div><section class="deck-inspect-copy" aria-label="Informações de ${this.escapeAttribute(definition.name)}"><p>${this.escapeAttribute(description)}</p><p class="card-preview-how"><b>Como funciona:</b> ${this.escapeAttribute(howItWorks)}</p><small class="deck-progression-caption">${this.escapeAttribute(progression)}</small><button class="card-preview-close" id="close-card-preview" type="button">Fechar ficha</button></section></div><section class="deck-inspect-panel deck-inspect-synergy" aria-label="Sugestões de sinergia"><div class="deck-inspect-kicker">COMPOSIÇÃO DO DECK</div><h2>Sinergias</h2><div class="deck-synergy-list">${synergyMarkup}</div><small class="deck-preview-note">Sugestões demonstrativas, sem bônus ou efeitos no combate.</small></section></div>`;
+        : `<span><b>Custo</b> ${definition.cost}</span><span><b>Efeito</b> Carta oculta</span>`;
+    const howItWorks = definition.description;
+    wrap.innerHTML = `<div class="card-preview-content"><section class="deck-inspect-panel deck-inspect-progression" aria-label="Status e evolução da carta"><div class="deck-inspect-kicker">STATUS DA CARTA</div><h2>Progressão</h2><div class="deck-level-row"><strong>NÍVEL ${level}</strong><span>${definition.kind === 'hidden' ? 'EM DEFINIÇÃO' : `${tickets} tickets`}</span></div><div class="deck-level-track" aria-hidden="true"><i style="width:${Math.min(100, tickets / 5 * 100)}%"></i></div><small class="deck-preview-note">Cada melhoria consome 5 tickets exclusivos desta carta.</small><h3>Atributos <span>atual <i>·</i> próxima melhoria</span></h3>${chart}${false ? `<button class="card-preview-close card-upgrade" id="upgrade-card" data-definition-id="${definition.id}" type="button" ${tickets < 5 || level >= 11 ? 'disabled' : ''}>Melhorar · 5 tickets</button>` : ''}</section><div class="deck-inspect-main"><div class="deck-inspect-card-row"><div class="preview-shell ${definition.kind}" data-foundation="${definition.foundation}" aria-label="${this.escapeAttribute(this.cardDetails(card))}">${renderCardFace(definition, card, 'player', 'preview')}</div><section class="card-preview-details" aria-label="Ficha resumida de ${this.escapeAttribute(definition.name)}"><div class="card-preview-heading"><strong>${this.escapeAttribute(definition.name)}</strong><span>${typeName} · CUSTO ${definition.cost}</span></div><div class="card-preview-facts">${facts}</div></section></div><section class="deck-inspect-copy" aria-label="Informações de ${this.escapeAttribute(definition.name)}"><p>${this.escapeAttribute(description)}</p><p class="card-preview-how"><b>Como funciona:</b> ${this.escapeAttribute(howItWorks)}</p><small class="deck-progression-caption">${this.escapeAttribute(progression)}</small><button class="card-preview-close" id="close-card-preview" type="button">Fechar ficha</button></section></div><section class="deck-inspect-panel deck-inspect-synergy" aria-label="Sugestões de sinergia"><div class="deck-inspect-kicker">COMPOSIÇÃO DO DECK</div><h2>Sinergias</h2><div class="deck-synergy-list">${synergyMarkup}</div><small class="deck-preview-note">Sugestões demonstrativas, sem bônus ou efeitos no combate.</small></section></div>`;
     overlay.classList.add('open'); overlay.setAttribute('aria-hidden', 'false');
   }
 
@@ -1278,15 +1345,13 @@ export class GameApp {
     const values = [definition.name, kind, `custo ${definition.cost}`];
     if (definition.kind === 'troop') values.push(`${definition.attack} ataque`, `${card.health} vida`);
     else if (definition.kind === 'spell') values.push(`${definition.spellAmount ?? (definition.effect === 'damage' ? balance.spellDamage : balance.spellHealing)} ${definition.effect === 'damage' ? 'dano' : 'cura'}`);
-    else values.push('efeito ainda não definido nesta versão');
+    else values.push('carta oculta com efeito funcional');
     values.push(this.descriptionFor(definition));
     return values.join(' · ');
   }
 
   private descriptionFor(definition: ReturnType<typeof getCardDefinition>): string {
-    if (definition.kind !== 'spell') return definition.description;
-    const amount = definition.spellAmount ?? (definition.effect === 'damage' ? balance.spellDamage : balance.spellHealing);
-    return definition.description.replace(/\d+/, String(amount));
+    return definition.description;
   }
 
   private escapeAttribute(value: string): string {

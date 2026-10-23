@@ -1,6 +1,7 @@
 import { balance } from '../game/config.ts';
 import type { CardDefinition, CardInstance, CardKind, Side } from '../game/types.ts';
 import { renderPlaceholderIllustration } from './card-art.ts';
+import { effectiveAttack } from '../game/combat-rules.ts';
 
 export type CardBackgroundId = 'red' | 'green' | 'blue' | 'purple' | 'yellow';
 export type CardSigilId = 'crystal-green' | 'crystal-purple' | 'crystal-orange';
@@ -64,12 +65,12 @@ export function renderDeckCardBack(): string {
 }
 
 function statValues(definition: CardDefinition, card: CardInstance): { left: number | null; right: number | null; labels: [string, string] } {
-  if (definition.kind === 'troop') return { left: definition.attack, right: card.health, labels: ['Ataque', 'Vida atual'] };
+  if (definition.kind === 'troop') return { left: effectiveAttack(card), right: card.health, labels: ['Ataque', 'Vida atual'] };
   if (definition.kind === 'spell') {
     const effectValue = definition.spellAmount ?? (definition.effect === 'damage' ? balance.spellDamage : balance.spellHealing);
     return { left: definition.cost, right: effectValue, labels: ['Custo demonstrativo', definition.effect === 'damage' ? 'Dano do feitiço' : 'Cura do feitiço'] };
   }
-  return { left: definition.cost, right: null, labels: ['Custo demonstrativo', 'Efeito'] };
+  return { left: null, right: null, labels: ['Carta oculta', 'Habilidade'] };
 }
 
 export function renderCardFace(definition: CardDefinition, card: CardInstance, side: Side, context: CardFaceContext): string {
@@ -77,7 +78,7 @@ export function renderCardFace(definition: CardDefinition, card: CardInstance, s
   if (!presentation) throw new Error(`Apresentação visual ausente para ${definition.id}`);
   const sigil = sigilByCardKind[definition.kind];
   const values = statValues(definition, card);
-  const accessible = `${presentation.illustration.kind === 'placeholder' ? 'Ilustração provisória. ' : ''}${definition.name}. ${values.labels[0]} ${values.left ?? 'não definido'}; ${values.labels[1]} ${values.right ?? 'ainda não definido nesta versão'}. ${definition.description}`;
+  const accessible = `${presentation.illustration.kind === 'placeholder' ? 'Ilustração provisória. ' : ''}${definition.name}. ${definition.kind === 'hidden' ? 'Carta oculta. ' : `${values.labels[0]} ${values.left ?? 'não definido'}; ${values.labels[1]} ${values.right ?? 'não definido'}. `}${definition.description}`;
   const stateKey = `${definition.id}:${card.health}:${card.revealed ? 1 : 0}:${presentation.background}:${sigil}`;
   const placeholder = presentation.illustration.kind === 'placeholder'
     ? `<span class="card-face__placeholder-tag">Ilustração provisória</span>${renderPlaceholderIllustration(presentation.illustration.motif)}`
@@ -88,7 +89,7 @@ export function renderCardFace(definition: CardDefinition, card: CardInstance, s
     <img class="card-face__sigil" src="${sigilAssets[sigil]}" alt="" aria-hidden="true" draggable="false">
     <span class="card-face__name" title="${escapeHtml(definition.name)}">${escapeHtml(definition.name)}</span>
     <span class="card-face__stat card-face__stat--blue" aria-label="${values.labels[0]} ${values.left ?? 'não definido'}">${values.left ?? ''}</span>
-    <span class="card-face__stat card-face__stat--red" aria-label="${values.labels[1]} ${values.right ?? 'ainda não definido nesta versão'}">${values.right ?? ''}</span>
+    <span class="card-face__stat card-face__stat--red" aria-label="${definition.kind === 'hidden' ? 'Habilidade ' + definition.description : values.labels[1] + ' ' + (values.right ?? 'não definido')}">${values.right ?? ''}</span>
     <span class="card-face__description">${escapeHtml(definition.description)}</span>
     <img class="card-face__frame" src="${frameAsset}" alt="" aria-hidden="true" draggable="false">
     <span class="card-face__sr-only">${escapeHtml(accessible)}</span>

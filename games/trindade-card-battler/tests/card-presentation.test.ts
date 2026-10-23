@@ -42,7 +42,7 @@ test('one face renderer covers hand, field, and preview while combat stats remai
     assert.match(html, /card-face__background/);
     assert.match(html, /card-face__frame/);
     assert.match(html, /card-face__sigil/);
-    assert.match(html, /card-face__stat--blue[^>]*>2</);
+    assert.match(html, /card-face__stat--blue[^>]*>1</);
     assert.match(html, /card-face__stat--red[^>]*>2</);
     assert.match(html, /card-face__art-image/);
   }
@@ -52,8 +52,9 @@ test('one face renderer covers hand, field, and preview while combat stats remai
 test('spells present their existing cost and configured effect, while sigils do not invent a second stat', () => {
   const spell = cardDefinitions.find((card) => card.id === 'wandering-flame')!;
   const sigil = cardDefinitions.find((card) => card.id === 'eclipse-seal')!;
-  assert.match(renderCardFace(spell, instance(spell.id, 0), 'player', 'preview'), /Custo demonstrativo 2; Dano do feitiço 2/);
-  assert.match(renderCardFace(sigil, instance(sigil.id, 0), 'player', 'preview'), /Efeito ainda não definido nesta versão/);
+  assert.match(renderCardFace(spell, instance(spell.id, 0), 'player', 'preview'), /Custo demonstrativo 2; Dano do feitiço 3/);
+  assert.match(renderCardFace(sigil, instance(sigil.id, 0), 'player', 'preview'), /três ondas/);
+  assert.doesNotMatch(renderCardFace(sigil, instance(sigil.id, 0), 'player', 'preview'), /Efeito ainda não definido/);
   assert.match(renderCardFace(spell, instance(spell.id, 0), 'player', 'preview'), /data-sigil="crystal-orange"/);
   assert.match(renderCardFace(sigil, instance(sigil.id, 0), 'player', 'preview'), /data-sigil="crystal-purple"/);
 });

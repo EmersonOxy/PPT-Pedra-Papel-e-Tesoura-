@@ -5,7 +5,12 @@ export type SpellEffect = 'damage' | 'heal';
 export type AttackAnimationProfile = 'advance' | 'impact' | 'spin' | 'pulse';
 export type GamePhase = 'preparation' | 'starting' | 'playing' | 'finished';
 
+export type CardAbility = 'resurrection' | 'necromancy' | 'crush' | 'mystic-link' | 'plunder' | 'fury' | 'equivalent-heal' | 'fireball' | 'thorns' | 'roots' | 'volcano';
+export interface AbilityConfig { resurrectionHealth?: number; summonLimit?: number; summonHealth?: number; intervalReductionMs?: number; healOnDirect?: number; furyThreshold?: number; furyBonus?: number; healCap?: number; splashDamage?: number; damage?: number; delayMs?: number; rootDurationMs?: number; waveCount?: number; waveIntervalMs?: number; enemyDamage?: number; allyDamage?: number; }
 export interface CardDefinition {
+  ability?: CardAbility;
+  abilityConfig?: AbilityConfig;
+  attackIntervalMs?: number;
   id: string;
   name: string;
   kind: CardKind;
@@ -28,6 +33,15 @@ export interface CardInstance {
   health: number;
   nextAttackAtMs: number;
   revealed: boolean;
+  resurrectionUsed?: boolean;
+  summonUsed?: boolean;
+  derived?: boolean;
+  lastDamageReceived?: number;
+  linkedAllyId?: string;
+  rootedUntilMs?: number;
+  placedAtMs?: number;
+  directAttackTarget?: boolean;
+  intervalReductionMs?: number;
   /** Optional player-selected target. Invalid or unavailable targets fall back to the normal lane rule. */
   attackTargetId?: string;
 }
@@ -40,9 +54,12 @@ export interface PlayerState {
   sigils: Array<CardInstance | null>;
   cycle: number;
   cardsDrawn: number;
+  discard?: CardInstance[];
 }
 
+export interface Eruption { instanceId: string; side: Side; nextWaveAtMs: number; wave: number; }
 export interface GameState {
+  eruptions?: Eruption[];
   phase: GamePhase;
   winner: Side | null;
   clockMs: number;
@@ -72,7 +89,13 @@ export type GameEvent =
   | { type: 'life-damage'; side: Side; amount: number; value: number }
   | { type: 'life-heal'; side: Side; amount: number; value: number }
   | { type: 'spell'; side: Side; instanceId: string; targetId?: string; targetSide: Side; targetSlot?: number; direct: boolean }
-  | { type: 'reveal'; side: Side; instanceId: string; slot: number }
+  | { type: 'reveal'; side: Side; instanceId: string; slot: number; definitionId?: string }
+  | { type: 'resurrect'; side: Side; instanceId: string; slot: number }
+  | { type: 'summon'; side: Side; instanceId: string; slot: number; sourceId: string }
+  | { type: 'link'; side: Side; instanceId: string; targetId?: string }
+  | { type: 'root'; side: Side; instanceId: string; untilMs: number }
+  | { type: 'volcano-wave'; side: Side; instanceId: string; wave: number }
+  | { type: 'recycle'; side: Side; cycle: number }
   | { type: 'game-over'; winner: Side }
   | { type: 'game-draw' };
 
