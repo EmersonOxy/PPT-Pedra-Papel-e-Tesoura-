@@ -205,9 +205,10 @@ body { overscroll-behavior: none; }
 .attack-aim-overlay { overflow: hidden; }
 .attack-aim-overlay #attack-aim-line { stroke-width: 7px; filter: drop-shadow(0 1px 3px #071523) drop-shadow(0 0 2px currentColor); }
 
-/* Pull the player's life rail away from the clipped edge of the tilted field. */
+/* Keep both life rails in the open gutters beside the playable columns. */
+.field-band.enemy .side-life { right: 14px !important; left: auto !important; }
 .field-band.player { padding-right: 22px !important; padding-left: 4px !important; }
-.field-band.player .side-life { right: 3px !important; left: auto !important; }
+.field-band.player .side-life { right: 32px !important; left: auto !important; }
 
 /* Card inspection keeps the card and quick facts together, then explains below. */
 .card-preview-overlay.open,
@@ -256,7 +257,8 @@ body { overscroll-behavior: none; }
 @media (max-width: 450px) {
   .game-shell { --slot-w: 68px; --slot-h: 95px; }
   .field-band.player { padding-right: 21px !important; padding-left: 3px !important; }
-  .field-band.player .side-life { right: 3px !important; left: auto !important; width: 15px; }
+  .field-band.enemy .side-life { right: 14px !important; left: auto !important; }
+  .field-band.player .side-life { right: 32px !important; left: auto !important; width: 15px; }
   .field-band.player .life-track { width: 5px; }
 }
 
