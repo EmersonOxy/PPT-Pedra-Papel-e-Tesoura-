@@ -781,6 +781,12 @@ export class GameApp {
 
   private render(): void {
     const player = this.state.players.player; const enemy = this.state.players.enemy;
+    const activeAim = this.drag;
+    if (activeAim?.started && activeAim.source === 'board' && !player.slots.some((card) => card?.instanceId === activeAim.id)) {
+      // A destroyed/moved attacker must not leave a live aim line behind.
+      this.hideAttackAim(activeAim);
+      this.drag = null;
+    }
     const game = this.root.querySelector<HTMLElement>('#game');
     game?.classList.toggle('is-preparing', this.state.phase === 'preparation' || this.state.phase === 'starting');
     this.renderGrid('player', player.slots);
@@ -867,7 +873,12 @@ export class GameApp {
     grid.style.gridTemplateRows = `repeat(${topology.rows}, minmax(0, 1fr))`;
     slots.forEach((card, slot) => {
       const [row, col] = [Math.floor(slot / topology.columns), slot % topology.columns];
-      const displayedCard = card && !this.isBeingDragged(card) ? card : null;
+      // A board drag only aims at a target; keep its troop mounted in the slot.
+      // Removing it during a simulation render detaches the pointer anchor and
+      // makes getBoundingClientRect() report (0, 0), drawing the aim arrow from
+      // the top-left corner of the screen.
+      const aimingCard = this.drag?.source === 'board' && this.drag.id === card?.instanceId;
+      const displayedCard = card && (!this.isBeingDragged(card) || aimingCard) ? card : null;
       const isAttackTarget = side === 'enemy' && Boolean(displayedCard && this.state.players.player.slots.some((unit) => unit?.attackTargetId === displayedCard.instanceId) && isAttackTargetExposed(this.state, 'enemy', slot));
       const targetClass = isAttackTarget ? ' is-attack-target' : '';
       const filled = displayedCard ? this.unitMarkup(displayedCard, side) : `<span class="empty-rune" aria-hidden="true">✧<small>${row === front ? 'FRENTE' : 'RETAGUARDA'}</small></span>`;
