@@ -141,7 +141,7 @@ body { overscroll-behavior: none; }
 .card-preview-close { display: block; margin: 10px 0 0 auto; padding: 6px 10px; border: 1px solid #d6c47d66; border-radius: 7px; color: #f0e4bd; background: #142a39; font: 700 10px system-ui,sans-serif; cursor: pointer; }
 
 /* Deck inspection follows the requested card / status / synergy composition. */
-.card-preview-overlay.open .card-preview-wrap { min-height: 100dvh; padding: 18px; }
+.card-preview-overlay.open .card-preview-wrap { width: min(100%,450px); min-height: 100dvh; padding: 18px; container-name: card-inspect; container-type: inline-size; }
 .card-preview-content { display: grid; grid-template-columns: minmax(155px,1fr) minmax(220px,260px) minmax(155px,1fr); align-items: center; gap: clamp(10px,2vw,20px); width: min(100%,1000px); }
 .deck-inspect-panel { min-width: 0; padding: 12px; border: 1px solid #a8d9c844; border-radius: 12px; color: #e8e7d9; background: linear-gradient(155deg,#102b3beF,#081827f5); box-shadow: 0 10px 28px #0008,inset 0 1px #ffffff0b; }
 .deck-inspect-kicker { color: #9bd9c5; font: 800 8px/1.2 system-ui,sans-serif; letter-spacing: .14em; }
@@ -199,4 +199,61 @@ body { overscroll-behavior: none; }
   .deck-inspect-main .preview-shell { width: min(57vw,178px); height: min(38dvh,255px); }
   .deck-inspect-panel { padding: 7px; }
   .deck-inspect-panel h2 { font-size: 14px; }
+}
+
+/* Keep target feedback compact in screen-pixel coordinates at every viewport. */
+.attack-aim-overlay { overflow: hidden; }
+.attack-aim-overlay line { stroke-width: 6px; filter: drop-shadow(0 1px 3px #071523) drop-shadow(0 0 2px currentColor); }
+
+/* Pull the player's life rail away from the clipped edge of the tilted field. */
+.field-band.player .side-life { left: 20px; }
+
+/* Card inspection keeps the card and quick facts together, then explains below. */
+.card-preview-overlay.open,
+.card-preview-overlay.open.card-preview-overlay { background: rgba(0,0,0,.68) !important; backdrop-filter: blur(5px) saturate(.58); }
+.deck-inspect-main { display: grid; width: 100%; grid-template-columns: minmax(0,1fr); align-items: start; gap: 9px; }
+.deck-inspect-card-row { display: grid; min-width: 0; grid-template-columns: minmax(0,1fr) minmax(0,.92fr); align-items: center; gap: 10px; }
+.deck-inspect-main .preview-shell { width: 100%; height: auto; max-height: min(46dvh,380px); aspect-ratio: 63/88; }
+.deck-inspect-main .card-preview-details { width: 100%; max-height: none; overflow: visible; padding: 10px; }
+.deck-inspect-main .card-preview-heading strong { font-size: clamp(12px,1.25vw,16px); }
+.deck-inspect-main .card-preview-heading span { line-height: 1.3; white-space: normal; }
+.deck-inspect-main .card-preview-facts { display: grid; gap: 8px; font-size: 11px; }
+.deck-inspect-copy { min-width: 0; padding: 0 3px; color: #e7e1cb; font: 500 12px/1.45 system-ui,sans-serif; }
+.deck-inspect-copy p { margin: 0 0 7px; }
+.deck-inspect-copy .card-preview-how { color: #d9e4d6; }
+.deck-inspect-copy .card-preview-how b { color: #f4d889; }
+.deck-inspect-copy .deck-progression-caption { margin-top: 5px; }
+@media (max-width: 700px) {
+  .deck-inspect-main { grid-column: 1 / -1; grid-row: 1; display: grid; gap: 8px; }
+  .deck-inspect-card-row { grid-template-columns: minmax(0,1fr) minmax(0,.9fr); gap: 8px; }
+  .deck-inspect-main .preview-shell { width: 100%; height: auto; max-height: min(42dvh,310px); }
+  .deck-inspect-main .card-preview-details { padding: 9px; }
+  .deck-inspect-main .card-preview-heading strong { font-size: 13px; }
+  .deck-inspect-main .card-preview-facts { gap: 7px; font-size: 10px; }
+  .deck-inspect-copy { font-size: 11px; }
+}
+@media (max-width: 360px) {
+  .deck-inspect-card-row { grid-template-columns: minmax(0,1fr) minmax(0,.88fr); gap: 6px; }
+  .deck-inspect-main .card-preview-details { padding: 7px; }
+  .deck-inspect-main .card-preview-heading strong { font-size: 12px; }
+  .deck-inspect-main .card-preview-facts { font-size: 9px; }
+}
+@container card-inspect (max-width: 700px) {
+  .card-preview-content { grid-template-columns: repeat(2,minmax(0,1fr)); align-items: start; gap: 9px; margin-block: auto; }
+  .deck-inspect-main { grid-column: 1 / -1; grid-row: 1; display: grid; gap: 8px; }
+  .deck-inspect-progression, .deck-inspect-synergy { grid-row: 2; }
+  .deck-inspect-main .preview-shell { width: 100%; height: auto; max-height: min(42dvh,310px); }
+  .deck-inspect-main .card-preview-details { max-height: none; padding: 9px; }
+  .deck-inspect-main .card-preview-heading strong { font-size: 13px; }
+  .deck-inspect-main .card-preview-facts { gap: 7px; font-size: 10px; }
+  .deck-inspect-copy { font-size: 11px; }
+  .deck-inspect-panel { padding: 9px; }
+  .deck-inspect-panel h2 { margin-bottom: 9px; font-size: 16px; }
+  .deck-synergy-item { grid-template-columns: 28px minmax(0,1fr); gap: 6px; padding: 5px; }
+  .deck-synergy-card { width: 28px; }
+}
+@media (max-width: 450px) {
+  .game-shell { --slot-w: 68px; --slot-h: 95px; }
+  .field-band.player .side-life { left: 34px; }
+  .field-band.player .life-track { width: 5px; }
 }
