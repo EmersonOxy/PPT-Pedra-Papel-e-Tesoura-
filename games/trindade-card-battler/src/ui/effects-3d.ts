@@ -594,11 +594,12 @@ export class BattleEffects3D {
 
     const group = new Group();
     const rect = first.getBoundingClientRect();
-    const baseRadius = Math.max(24, Math.min(44, rect.width * 0.48));
-    const topRadius = baseRadius * 0.38;
-    const height = Math.max(32, rect.height * 0.42);
+    const baseRadius = Math.max(36, Math.min(58, rect.width * 0.68));
+    const topRadius = baseRadius * 0.35;
+    const height = Math.max(52, Math.min(84, rect.height * 0.66));
+    const tiltX = 0.34;
 
-    // 3D Volcanic Cone with glowing lava fissures and molten rim
+    // 3D Volcanic Mountain Cone with rugged ridges and glowing magma rivers flowing down the slopes
     const volcanoMaterial = new ShaderMaterial({
       side: DoubleSide,
       uniforms: { time: { value: 0 }, pulse: { value: 0 } },
@@ -609,9 +610,11 @@ export class BattleEffects3D {
         void main() {
           vUv = uv;
           vec3 p = position;
-          float ridge = sin( atan(p.z, p.x) * 7.0 + p.y * 0.12 ) * 2.2 * (1.0 - uv.y * 0.5);
-          p.x += normalize(p.xz + vec2(0.001)).x * ridge;
-          p.z += normalize(p.xz + vec2(0.001)).y * ridge;
+          float angle = atan(p.z, p.x);
+          float ridge = (sin(angle * 7.0 + uv.y * 4.0) * 2.8 + cos(angle * 11.0 - uv.y * 6.0) * 1.4) * (1.0 - uv.y * 0.35);
+          vec2 dir = normalize(p.xz + vec2(0.0001));
+          p.x += dir.x * ridge;
+          p.z += dir.y * ridge;
           vPos = p;
           vNormal = normalize(normalMatrix * normal);
           gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
@@ -625,48 +628,81 @@ export class BattleEffects3D {
         uniform float pulse;
         void main() {
           float angle = vUv.x * 6.28318;
-          float veins = pow(max(0.0, sin(angle * 6.0 + sin(vUv.y * 8.0 - time * 3.5) * 1.4)), 4.0);
-          float craterGlow = smoothstep(0.58, 0.98, vUv.y);
-          float lava = clamp(veins * smoothstep(0.15, 0.9, vUv.y) + craterGlow * 0.85 + pulse * 0.35, 0.0, 1.0);
-          vec3 rock = vec3(0.16, 0.11, 0.10) * (0.55 + 0.45 * max(dot(normalize(vNormal), normalize(vec3(-0.3, 0.6, 1.0))), 0.0));
-          vec3 magma = mix(vec3(0.92, 0.18, 0.02), vec3(1.0, 0.78, 0.18), smoothstep(0.4, 0.95, lava));
-          vec3 col = mix(rock, magma, lava);
-          gl_FragColor = vec4(col, 0.98);
+          float stream1 = pow(max(0.0, sin(angle * 5.0 + sin(vUv.y * 9.0 + time * 3.8) * 0.85)), 5.0);
+          float stream2 = pow(max(0.0, cos(angle * 3.0 - sin(vUv.y * 6.0 + time * 2.6) * 0.7)), 6.0);
+          float streams = clamp((stream1 + stream2 * 0.8) * smoothstep(0.08, 0.88, vUv.y), 0.0, 1.0);
+          float craterRim = smoothstep(0.68, 0.98, vUv.y);
+          float baseGlow = smoothstep(0.22, 0.0, vUv.y) * 0.55;
+          float lava = clamp(streams * 0.9 + craterRim * 0.85 + baseGlow + pulse * 0.22, 0.0, 1.0);
+
+          vec3 n = normalize(vNormal);
+          float diff = 0.45 + 0.55 * max(dot(n, normalize(vec3(-0.35, 0.65, 1.0))), 0.0);
+          vec3 rock = mix(vec3(0.11, 0.08, 0.08), vec3(0.26, 0.17, 0.14), diff);
+          vec3 magma = mix(vec3(0.88, 0.14, 0.01), vec3(1.0, 0.54, 0.04), smoothstep(0.2, 0.65, lava));
+          magma = mix(magma, vec3(1.0, 0.94, 0.52), smoothstep(0.68, 0.98, lava));
+          vec3 col = mix(rock, magma, smoothstep(0.15, 0.85, lava));
+          gl_FragColor = vec4(col, 1.0);
         }
       `,
     });
 
-    const coneGeom = new CylinderGeometry(topRadius, baseRadius, height, 28, 14, true);
+    const mountGroup = new Group();
+    mountGroup.rotation.x = tiltX;
+    mountGroup.position.set(0, -rect.height * 0.06, 26);
+    group.add(mountGroup);
+
+    const coneGeom = new CylinderGeometry(topRadius, baseRadius, height, 32, 18, false);
     const coneMesh = new Mesh(coneGeom, volcanoMaterial);
-    // Tilt the cone toward the camera so both its 3D slopes and glowing crater are visible
-    coneMesh.rotation.x = 0.68;
-    coneMesh.position.z = 18;
-    group.add(coneMesh);
+    mountGroup.add(coneMesh);
 
-    // Molten lava pool inside the crater peak
+    // Rocky crater rim torus at the summit
+    const rimMesh = new Mesh(
+      new TorusGeometry(topRadius * 0.94, topRadius * 0.24, 14, 28),
+      new MeshStandardMaterial({ color: '#2b1915', emissive: '#ff4508', emissiveIntensity: 0.65, roughness: 0.82 }),
+    );
+    rimMesh.rotation.x = Math.PI / 2;
+    rimMesh.position.y = height * 0.49;
+    mountGroup.add(rimMesh);
+
+    // Bubbling molten lava pool inside the crater peak
     const craterMat = new MeshBasicMaterial({
-      color: '#ffcf48',
+      color: '#ffdf66',
       transparent: true,
-      opacity: 0.95,
-      blending: AdditiveBlending,
+      opacity: 0.98,
     });
-    const craterPool = new Mesh(new SphereGeometry(topRadius * 0.88, 18, 12), craterMat);
-    craterPool.scale.set(1, 0.38, 1);
-    craterPool.position.set(0, Math.cos(0.68) * (height * 0.46), 18 + Math.sin(0.68) * (height * 0.46));
-    craterPool.rotation.x = 0.68;
-    group.add(craterPool);
+    const craterPool = new Mesh(new SphereGeometry(topRadius * 0.84, 20, 14), craterMat);
+    craterPool.scale.set(1, 0.35, 1);
+    craterPool.position.y = height * 0.49;
+    mountGroup.add(craterPool);
 
-    // Rising 3D lava embers & ash above the crater
-    const emberCount = 32;
+    // Glowing magma fissure ring at the base of the volcano on the card
+    const baseRingMat = new MeshBasicMaterial({
+      color: '#ff6e14',
+      transparent: true,
+      opacity: 0.78,
+      blending: AdditiveBlending,
+      depthWrite: false,
+    });
+    const baseRing = new Mesh(new TorusGeometry(baseRadius * 0.95, 3.2, 12, 32), baseRingMat);
+    baseRing.rotation.x = Math.PI / 2;
+    baseRing.position.y = -height * 0.48;
+    mountGroup.add(baseRing);
+
+    // Continuous 3D fountain of 48 lava embers & smoke sparks erupting from the crater
+    const emberCount = 48;
     const embers = new InstancedMesh(
       new IcosahedronGeometry(1, 0),
-      new MeshBasicMaterial({ color: '#ff9624', transparent: true, opacity: 0.9, blending: AdditiveBlending, depthWrite: false }),
+      new MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.94, blending: AdditiveBlending, depthWrite: false }),
       emberCount,
     );
     embers.instanceMatrix.setUsage(DynamicDrawUsage);
     embers.frustumCulled = false;
-    group.add(embers);
+    mountGroup.add(embers);
     const dummy = new Object3D();
+    const cHot = new Color('#fff3a1');
+    const cOrange = new Color('#ff6810');
+    for (let i = 0; i < emberCount; i++) embers.setColorAt(i, i % 2 === 0 ? cHot : cOrange);
+    if (embers.instanceColor) embers.instanceColor.needsUpdate = true;
 
     const began = performance.now() / 1000;
     let retractStarted: number | null = null;
@@ -677,33 +713,35 @@ export class BattleEffects3D {
         const slot = slotTarget();
         if (!slot || !slot.isConnected) return true;
         const r = slot.getBoundingClientRect();
-        group.position.copy(this.center(r, 12));
+        group.position.copy(this.center(r, 18));
 
         if (remainingMs() <= 0 && retractStarted === null) {
           retractStarted = now;
         }
-        const grown = smooth((now - began) / (this.reduced ? 0.08 : 0.55));
+        const grown = smooth((now - began) / (this.reduced ? 0.08 : 0.52));
         const progress =
           retractStarted === null
             ? grown
             : grown * (1 - smooth((now - retractStarted) / (this.reduced ? 0.08 : 0.48)));
 
-        group.scale.set(progress, progress, progress);
+        const breathe = 1 + 0.045 * Math.sin((now - began) * 4.5);
+        mountGroup.scale.set(progress * breathe, progress, progress * breathe);
         volcanoMaterial.uniforms.time.value = now - began;
-        volcanoMaterial.uniforms.pulse.value = 0.5 + 0.5 * Math.sin((now - began) * 5.0);
-        craterPool.scale.setScalar(0.88 + 0.14 * Math.sin((now - began) * 7.0));
+        volcanoMaterial.uniforms.pulse.value = 0.5 + 0.5 * Math.sin((now - began) * 5.2);
+        craterPool.scale.set(0.9 + 0.14 * Math.sin((now - began) * 7.5), 0.35, 0.9 + 0.14 * Math.cos((now - began) * 7.5));
 
         for (let i = 0; i < emberCount; i++) {
-          const cycle = ((now - began) * 1.4 + i / emberCount) % 1;
-          const angle = i * 2.399 + now * 2.2;
-          const spread = topRadius * (0.3 + cycle * 1.1);
+          const cycle = ((now - began) * 1.35 + i / emberCount) % 1;
+          const angle = i * 2.39996 + (now - began) * 1.8;
+          const spread = topRadius * (0.25 + cycle * 1.45);
+          const arcY = height * 0.5 + Math.sin(cycle * Math.PI * 0.85) * 46;
           dummy.position.set(
             Math.cos(angle) * spread,
-            craterPool.position.y + cycle * 38,
-            craterPool.position.z + Math.sin(angle) * spread * 0.6 + cycle * 16,
+            arcY,
+            Math.sin(angle) * spread,
           );
-          dummy.scale.setScalar(progress * (1 - cycle) * 3.8);
-          dummy.rotation.set(now * 3, angle, i);
+          dummy.scale.setScalar(progress * (1 - cycle * 0.85) * 4.4);
+          dummy.rotation.set(now * 4, angle, i);
           dummy.updateMatrix();
           embers.setMatrixAt(i, dummy.matrix);
         }

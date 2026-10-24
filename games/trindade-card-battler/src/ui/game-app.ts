@@ -65,7 +65,7 @@ export class GameApp {
   private readonly progressionStorageKey = 'trindade.card-progression.v1';
   private pendingSigilFlips = new Map<string, HTMLElement>();
   private pendingSigilFlipSlots = new Map<string, HTMLElement>();
-  private activeRevealedSigils = new Map<string, { card: CardInstance; side: Side; slot: number; untilClockMs: number; untilWallMs: number }>();
+  private activeRevealedSigils = new Map<string, { card: CardInstance; side: Side; slot: number; ability?: string; untilClockMs: number; untilWallMs: number }>();
   private pendingSpellOrigins = new Map<string, DOMRect>();
   private pendingSpellFaces = new Map<string, string>();
   private fireballHitIds = new Set<string>();
@@ -530,6 +530,12 @@ export class GameApp {
 
   private activateSigil(side: Side, slot: number): void {
     if (side === 'player') {
+      const activeKey = `player:${slot}`;
+      const activeEntry = this.activeRevealedSigils.get(activeKey);
+      if (activeEntry && this.getSigilRemainingMs(activeKey, activeEntry.card.instanceId) > 0) {
+        this.toast('Aguarde o efeito deste sigilo terminar.');
+        return;
+      }
       const selected = this.selectedId ? this.state.players.player.hand.find((card) => card.instanceId === this.selectedId) : undefined;
       if (selected && getCardDefinition(selected.definitionId).kind === 'hidden') {
         this.transition(placeSigil(this.state, 'player', selected.instanceId, slot), 'Esse espaço de sigilo já está ocupado.');
@@ -661,8 +667,15 @@ export class GameApp {
       const target = document.elementFromPoint(event.clientX, event.clientY)?.closest<HTMLElement>(selector) ?? null;
       const before = this.state;
       this.suppressClickUntil = performance.now() + 100;
-      if (drag.source === 'hand') this.restoreDraggedCard(drag, false);
-      else this.hideAttackAim(drag);
+      if (drag.source === 'hand') {
+        const handCard = this.state.players.player.hand.find((card) => card.instanceId === drag.id);
+        if (handCard && getCardDefinition(handCard.definitionId).kind === 'spell') {
+          this.pendingSpellOrigins.set(drag.id, drag.origin.getBoundingClientRect());
+          const face = drag.origin.querySelector<HTMLElement>('.card-face');
+          if (face) this.pendingSpellFaces.set(drag.id, face.outerHTML);
+        }
+        this.restoreDraggedCard(drag, false);
+      } else this.hideAttackAim(drag);
       this.drag = null;
       this.completePlayerDrop(drag.id, target);
       if (drag.source === 'hand' && this.state === before) {
@@ -678,18 +691,30 @@ export class GameApp {
     const handCard = this.state.players.player.hand.find((card) => card.instanceId === instanceId);
     if (handCard) {
       if (!target) return;
+      const kind = getCardDefinition(handCard.definitionId).kind;
+      if (kind === 'spell' && target.dataset.slotSide && target.dataset.slotKind !== 'sigil') {
+        const targetSide = target.dataset.slotSide as Side;
+        this.selectedId = instanceId;
+        const effect = getCardDefinition(handCard.definitionId).effect;
+        if ((effect === 'damage' && targetSide === 'enemy') || (effect === 'heal' && targetSide === 'player')) {
+          this.tryCast({ kind: 'unit', side: targetSide, slot: Number(target.dataset.slot) });
+        }
+        return;
+      }
       if (target.dataset.slotSide === 'player') {
-        const kind = getCardDefinition(handCard.definitionId).kind;
         if (kind === 'troop') this.transition(placeCard(this.state, 'player', instanceId, Number(target.dataset.slot)));
-        else if (kind === 'hidden' && target.dataset.slotKind === 'sigil') this.transition(placeSigil(this.state, 'player', instanceId, Number(target.dataset.slot)));
-        else if (kind === 'spell') {
-          const targetSide = target.dataset.side as Side;
-          this.selectedId = instanceId;
-          const effect = getCardDefinition(handCard.definitionId).effect;
-          if ((effect === 'damage' && targetSide === 'enemy') || (effect === 'heal' && targetSide === 'player')) this.tryCast({ kind: 'unit', side: targetSide, slot: Number(target.dataset.slot) });
+        else if (kind === 'hidden' && target.dataset.slotKind === 'sigil') {
+          const slot = Number(target.dataset.slot);
+          const activeKey = `player:${slot}`;
+          const activeEntry = this.activeRevealedSigils.get(activeKey);
+          if (activeEntry && this.getSigilRemainingMs(activeKey, activeEntry.card.instanceId) > 0) {
+            this.toast('Aguarde o efeito deste sigilo terminar.');
+            return;
+          }
+          this.transition(placeSigil(this.state, 'player', instanceId, slot));
         }
       } else if (target.id === 'enemy-life-target' || target.id === 'player-life-target') {
-        if (getCardDefinition(handCard.definitionId).kind === 'spell') { this.selectedId = instanceId; this.tryCast({ kind: 'life', side: target.id === 'enemy-life-target' ? 'enemy' : 'player' }); }
+        if (kind === 'spell') { this.selectedId = instanceId; this.tryCast({ kind: 'life', side: target.id === 'enemy-life-target' ? 'enemy' : 'player' }); }
       }
       return;
     }
@@ -1112,16 +1137,17 @@ export class GameApp {
         ?? this.root.querySelector<HTMLElement>(`#game [data-slot-side="${event.side}"][data-slot="${event.slot}"]`);
       if (!card || !slot || this.pendingSigilFlips.has(event.instanceId)) continue;
       const definition = getCardDefinition(card.definitionId);
-      const durationMs = definition.ability === 'volcano' ? 8900 : definition.ability === 'roots' ? 4300 : 2200;
-      this.activeRevealedSigils.set(`${event.side}:${event.slot}`, {
+      const durationMs = definition.ability === 'volcano' ? 9600 : definition.ability === 'roots' ? 4600 : 2500;
+      const key = `${event.side}:${event.slot}`;
+      this.activeRevealedSigils.set(key, {
         card: { ...card, revealed: true },
         side: event.side,
         slot: event.slot,
+        ability: definition.ability,
         untilClockMs: before.clockMs + durationMs,
-        untilWallMs: performance.now() + durationMs + 400,
+        untilWallMs: performance.now() + durationMs + 900,
       });
       if (definition.ability === 'volcano') {
-        const key = `${event.side}:${event.slot}`;
         this.effects3d?.volcano(
           card.instanceId,
           () => this.root.querySelector<HTMLElement>(`#game [data-slot-side="${event.side}"][data-slot-kind="sigil"][data-slot="${event.slot}"]`),
@@ -1155,12 +1181,13 @@ export class GameApp {
   private getSigilRemainingMs(key: string, instanceId: string): number {
     const entry = this.activeRevealedSigils.get(key);
     if (!entry || entry.card.instanceId !== instanceId) return 0;
-    if (this.state.players[entry.side].sigils[entry.slot]) return 0;
-    const eruptionActive = (this.state.eruptions ?? []).some((e) => e.instanceId === instanceId);
-    const clockRem = entry.untilClockMs - this.state.clockMs;
-    const wallRem = entry.untilWallMs - performance.now();
-    if (eruptionActive) return Math.max(900, clockRem, wallRem);
-    return Math.min(clockRem, wallRem);
+    const occupant = this.state.players[entry.side].sigils[entry.slot];
+    if (occupant && occupant.instanceId !== instanceId) return 0;
+    if (entry.ability === 'volcano') {
+      const eruptionActive = (this.state.eruptions ?? []).some((e) => e.instanceId === instanceId);
+      if (eruptionActive || this.revealResolutionPending) return Math.max(1500, entry.untilWallMs - performance.now());
+    }
+    return Math.max(entry.untilClockMs - this.state.clockMs, entry.untilWallMs - performance.now());
   }
 
   private pruneExpiredActiveSigils(): void {
@@ -1199,14 +1226,19 @@ export class GameApp {
     window.setTimeout(() => board.classList.remove('is-volcano-erupting'), 900);
 
     // Find the active Vulcão sigil slot on the owner's side and pulse the card
-    let volcanoSlotEl = this.root.querySelector<HTMLElement>(`#game [data-slot-side="${side}"][data-slot-kind="sigil"] .battle-card[data-card-id]`)?.closest<HTMLElement>('.secret-slot') ?? null;
-    if (!volcanoSlotEl) {
-      for (const [, entry] of this.activeRevealedSigils) {
-        if (entry.side === side && entry.card.definitionId === 'eclipse-seal') {
-          volcanoSlotEl = this.root.querySelector<HTMLElement>(`#game [data-slot-side="${side}"][data-slot-kind="sigil"][data-slot="${entry.slot}"]`);
-          break;
+    let volcanoSlotEl: HTMLElement | null = null;
+    for (const [, entry] of this.activeRevealedSigils) {
+      if (entry.side === side && entry.card.definitionId === 'eclipse-seal') {
+        if (wave >= 3) {
+          entry.untilClockMs = this.state.clockMs + 1400;
+          entry.untilWallMs = performance.now() + 1400;
         }
+        volcanoSlotEl = this.root.querySelector<HTMLElement>(`#game [data-slot-side="${side}"][data-slot-kind="sigil"][data-slot="${entry.slot}"]`);
+        break;
       }
+    }
+    if (!volcanoSlotEl) {
+      volcanoSlotEl = this.root.querySelector<HTMLElement>(`#game [data-slot-side="${side}"][data-slot-kind="sigil"] .battle-card[data-card-id]`)?.closest<HTMLElement>('.secret-slot') ?? null;
     }
     const volcanoCardEl = volcanoSlotEl?.querySelector<HTMLElement>('.battle-card');
     if (volcanoCardEl) {
@@ -1307,10 +1339,14 @@ export class GameApp {
       originGhost.innerHTML = faceMarkup;
       document.body.append(originGhost);
     }
-    const dismissOriginGhost = () => {
+    const dismissOriginGhost = (delayMs = 420) => {
       if (!originGhost) return;
-      originGhost.classList.add('is-finishing');
-      window.setTimeout(() => originGhost?.remove(), 220);
+      const ghost = originGhost;
+      originGhost = null;
+      window.setTimeout(() => {
+        ghost.classList.add('is-finishing');
+        window.setTimeout(() => ghost.remove(), 240);
+      }, delayMs);
     };
 
     const resolveTarget = () =>
