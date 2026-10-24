@@ -53,15 +53,15 @@ test('Morto Vivo resurrects once in place and its second lethal hit destroys it 
   }
 });
 
-test('Bruxa waits for definitive death, summons one derived unit in the vacated column without deck copies', () => {
+test('Bruxa waits for definitive death and summons one 1/2 derived unit after an allied death in any column', () => {
   let state = game();
-  state.players.player.slots[0] = unit('player', ids.dead, 'original', 3);
+  state.players.player.slots[1] = unit('player', ids.dead, 'original', 3);
   state.players.player.slots[3] = unit('player', ids.witch, 'witch');
-  state = fire(state, 'enemy', 'player', 0);
-  assert.equal(state.players.player.slots[0]?.instanceId, 'original', 'resurrection is not definitive death');
+  state = fire(state, 'enemy', 'player', 1);
+  assert.equal(state.players.player.slots[1]?.instanceId, 'original', 'resurrection is not definitive death');
   assert.notEqual(state.players.player.slots[3]?.summonUsed, true);
-  state = fire(state, 'enemy', 'player', 0);
-  const summoned = state.players.player.slots[0]!;
+  state = fire(state, 'enemy', 'player', 1);
+  const summoned = state.players.player.slots[1]!;
   assert.equal(summoned.definitionId, ids.dead);
   assert.equal(summoned.health, 2);
   assert.equal(summoned.derived, true);
@@ -69,8 +69,8 @@ test('Bruxa waits for definitive death, summons one derived unit in the vacated 
   assert.equal(effectiveAttack(summoned), 1);
   assert.equal(effectiveAttackInterval(state, summoned), 7000);
   assert.equal(state.players.player.deck.length, 0);
-  state = fire(state, 'enemy', 'player', 0);
-  assert.equal(state.players.player.slots[0], null, 'derived undead cannot resurrect or be summoned twice');
+  state = fire(state, 'enemy', 'player', 1);
+  assert.equal(state.players.player.slots[1], null, 'derived undead cannot resurrect or be summoned twice');
 });
 
 test('Ogro spills excess frontal damage only to the rear of that column', () => {
@@ -223,6 +223,8 @@ test('volcano hits both sides over exactly three waves, includes new units and c
   state.players.enemy.slots[4] = unit('enemy', ids.ogre, 'hostile-other-column');
   state.players.player.sigils[0] = unit('player', ids.volcano, 'volcano');
   const start = activateSigil(state, 'player', 0);
+  start.state.nextAiAtMs = Number.POSITIVE_INFINITY;
+  start.state.aiStarted = false;
   assert.equal(start.state.players.player.sigils[0], null);
   assert.equal(start.state.players.player.slots[0], null);
   assert.equal(start.state.players.enemy.slots[0]?.health, 9);

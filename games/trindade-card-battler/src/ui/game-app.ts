@@ -11,6 +11,7 @@ import type { MatchFlowState } from '../game/session-flow.ts';
 import { renderCardBack, renderCardFace, renderDeckCardBack } from './card-presentation.ts';
 import { getOpponentProfile, opponentProfiles } from '../game/opponents.ts';
 import { attackProfileClass, attackProjectileClass, cooldownSweepDegrees, handFanSpacing, shouldHighlightDeck } from './combat-presentation.ts';
+import { animateFireballModel } from './fireball-model.ts';
 import type { AttackAnimationProfile } from '../game/types.ts';
 
 const missionRewards: Record<string, string> = { 'first-match': 'runic-pulse', 'first-win': 'amber-phoenix', 'first-formation': 'solemn-guardian' };
@@ -64,6 +65,7 @@ export class GameApp {
   private readonly progressionStorageKey = 'trindade.card-progression.v1';
   private pendingSigilFlips = new Map<string, HTMLElement>();
   private pendingSigilFlipSlots = new Map<string, HTMLElement>();
+  private pendingSpellOrigins = new Map<string, DOMRect>();
   private revealResolutionPending = false;
 
   constructor(root: HTMLElement) {
@@ -164,7 +166,7 @@ export class GameApp {
           </div>
         </section>
         <div id="toast" class="toast" role="status" aria-live="polite"></div>
-        <div class="overlay" id="help-overlay" aria-hidden="true"><div class="help-panel"><div class="help-tag">Experimento separado · versão jogável inicial</div><h2>Como experimentar</h2><p><b>Comprar:</b> toque no deck enquanto houver espaço na mão (máximo de ${balance.handLimit} cartas).</p><p><b>Posicionar:</b> arraste uma tropa a um espaço vazio. A linha próxima do centro protege a linha posterior na mesma coluna.</p><p><b>Ordens:</b> arraste suas tropas para mover ou recolher. Na frente, atacam automaticamente. Na retaguarda, selecione a tropa e toque no alvo inimigo; a Raposa mostra o aliado vinculado, e o Goblin pode escolher a vida inimiga para ataque direto e cura.</p><p><b>Necromancia:</b> o Morto Vivo mostra quando sua ressurreição foi gasta. A Bruxa invoca uma única unidade derivada enquanto estiver viva; seu selo informa quando ela já usou a habilidade.</p><p><b>Feitiços:</b> Bola de Fogo voa até a tropa e atinge também a outra da coluna. Cura Equivalente recupera o último dano registrado, até 4 pontos, em uma tropa aliada.</p><p><b>Ocultas:</b> Espinhos reage automaticamente a ataques contra tropas; Raízes reage à movimentação ou pode ser direcionada por toque; Vulcão é manual e atinge tropas dos dois lados em três ondas.</p><p><b>Combate:</b> cada tropa tem sua recarga individual exibida na carta (de ${minAttackInterval.toFixed(2)} a ${maxAttackInterval.toFixed(2)} segundos). Os custos são somente demonstrativos; não há mana.</p><p><b>Adversários de treino:</b> escolha Casa Carmesim (equilibrada), Bastião Verde (defensivo) ou Matilha Rubra (agressiva). São três decks e prioridades de campo locais; os números são experimentais.</p><button class="close-help" id="close-help" type="button">Entendi</button></div></div>
+        <div class="overlay" id="help-overlay" aria-hidden="true"><div class="help-panel"><div class="help-tag">Experimento separado · versão jogável inicial</div><h2>Como experimentar</h2><p><b>Comprar:</b> toque no deck enquanto houver espaço na mão (máximo de ${balance.handLimit} cartas).</p><p><b>Posicionar:</b> arraste uma tropa a um espaço vazio. A linha próxima do centro protege a linha posterior na mesma coluna.</p><p><b>Ordens:</b> arraste suas tropas para mover ou recolher. Na frente, atacam automaticamente. Na retaguarda, selecione a tropa e toque no alvo inimigo; a Raposa mostra o aliado vinculado, e o Goblin pode escolher a vida inimiga para ataque direto e cura.</p><p><b>Necromancia:</b> o Morto Vivo volta uma vez no espaço onde foi eliminado, com 2 de vida. Enquanto permanecer viva, a Bruxa invoca um Morto Vivo (1 ataque, 2 de vida) quando qualquer tropa aliada morrer em qualquer espaço do seu campo; cada Bruxa faz isso uma vez por vida. A chamada aparece em uma faixa grande sobre a arena.</p><p><b>Feitiços:</b> a Bola de Fogo parte da carta na sua mão, cruza o campo como uma esfera flamejante e atinge a tropa selecionada e outra da coluna. Cura Equivalente recupera o último dano registrado, até 4 pontos, em uma tropa aliada.</p><p><b>Ocultas:</b> Espinhos reage automaticamente a ataques contra tropas; Raízes reage à movimentação ou pode ser direcionada por toque; Vulcão é manual e atinge tropas dos dois lados em três ondas.</p><p><b>Combate:</b> cada tropa tem sua recarga individual exibida na carta (de ${minAttackInterval.toFixed(2)} a ${maxAttackInterval.toFixed(2)} segundos). Os custos são somente demonstrativos; não há mana.</p><p><b>Adversários de treino:</b> escolha Casa Carmesim (equilibrada), Bastião Verde (defensivo) ou Matilha Rubra (agressiva). São três decks e prioridades de campo locais; os números são experimentais.</p><button class="close-help" id="close-help" type="button">Entendi</button></div></div>
         <div class="overlay" id="palette-overlay" aria-hidden="true"><div class="help-panel"><div class="help-tag">Identidade visual V3</div><h2>Atmosfera da arena</h2><div class="theme-option-grid"><button type="button" class="theme-btn active" data-theme-set="mineral">Verde mineral</button><button type="button" class="theme-btn" data-theme-set="abissal">Azul abissal</button><button type="button" class="theme-btn" data-theme-set="rubro">Rubro arcano</button></div><button class="close-help" id="close-palette" type="button">Voltar à arena</button></div></div>
         <div class="overlay" id="result-overlay" aria-hidden="true"><div class="help-panel"><div class="help-tag">Fim da partida</div><h2 id="result-title">Vitória</h2><p id="result-copy"></p><button class="close-help" id="play-again" type="button">Voltar ao início</button></div></div>
       </main><svg class="attack-aim-overlay" id="attack-aim-overlay" aria-hidden="true"><defs><marker id="attack-arrowhead" markerWidth="18" markerHeight="18" refX="15" refY="9" markerUnits="userSpaceOnUse" orient="auto"><path d="M1 2L16 9L1 16L5 9Z"></path></marker></defs><path id="attack-aim-line" d=""></path></svg><div class="overlay card-preview-overlay" id="card-preview-overlay" aria-hidden="true"><div class="card-preview-wrap" id="card-preview-wrap"></div></div><div class="transition-curtain" id="transition-curtain" aria-hidden="true"></div></div>`;
@@ -550,6 +552,8 @@ export class GameApp {
     if (this.state.phase === 'preparation') { this.toast('Feitiços ficam inativos até o início do combate.'); return; }
     const result = castSpell(this.state, 'player', this.selectedId, target);
     if (result.events.length === 0) { this.toast('Este alvo não pode receber esse feitiço.'); return; }
+    const source = this.root.querySelector<HTMLElement>(`#hand-area [data-card-id="${CSS.escape(this.selectedId)}"]`);
+    if (source) this.pendingSpellOrigins.set(this.selectedId, source.getBoundingClientRect());
     this.selectedId = null;
     this.transition(result);
   }
@@ -888,7 +892,7 @@ export class GameApp {
       if (event.type === 'place' && event.side === 'player') { this.cardsPlaced += 1; missionsChanged = true; }
       if (event.type === 'damage') this.animateImpact(event.instanceId, event.amount);
       if (event.type === 'heal') this.animateHeal(event.instanceId, event.amount);
-      if (event.type === 'resurrect') this.animateAbilityCard(event.instanceId, 'resurrect-pop', 'RESSUSCITOU · 2 DE VIDA');
+      if (event.type === 'resurrect') this.animateAbilityCard(event.instanceId, 'resurrect-pop', 'Morto Vivo ressuscitou com 2 de vida.');
       if (event.type === 'summon') this.animateSummon(event);
       if (event.type === 'root') this.animateRoots(event.instanceId);
       if (event.type === 'link') this.animateLink(event.instanceId, event.targetId);
@@ -990,11 +994,11 @@ export class GameApp {
     const label = document.createElement('span');
     label.className = `ability-pop-label is-${tone}`;
     label.textContent = message;
-    const rect = anchor.getBoundingClientRect();
+    const rect = (this.root.querySelector<HTMLElement>('.arena-stage') ?? anchor).getBoundingClientRect();
     label.style.setProperty('--ability-x', `${rect.left + rect.width / 2}px`);
-    label.style.setProperty('--ability-y', `${Math.max(8, rect.top - 8)}px`);
+    label.style.setProperty('--ability-y', `${Math.max(10, rect.top + 8)}px`);
     document.body.append(label);
-    window.setTimeout(() => label.remove(), 1450);
+    window.setTimeout(() => label.remove(), 2100);
   }
 
   private animateSummon(event: Extract<GameEvent, { type: 'summon' }>): void {
@@ -1002,7 +1006,7 @@ export class GameApp {
     const target = this.root.querySelector<HTMLElement>(`[data-card-id="${CSS.escape(event.instanceId)}"]`);
     if (!witch || !target) return;
     witch.classList.add('summon-caster');
-    this.showAbilityLabel(witch, 'A BRUXA INVOCOU UM MORTO VIVO', 'green');
+    this.showAbilityLabel(witch, 'Bruxa Necromante: invocou um Morto Vivo · 1 ataque · 2 vida.', 'green');
     const from = witch.getBoundingClientRect(); const to = target.getBoundingClientRect();
     const face = target.querySelector<HTMLElement>('.card-face');
     if (face && from.width && to.width) {
@@ -1139,7 +1143,8 @@ export class GameApp {
   }
 
   private animateSpell(event: Extract<GameEvent, { type: 'spell' }>): Promise<void> {
-    const from = this.root.querySelector<HTMLElement>('#hand-area')?.getBoundingClientRect();
+    const from = this.pendingSpellOrigins.get(event.instanceId) ?? this.root.querySelector<HTMLElement>('#hand-area')?.getBoundingClientRect();
+    this.pendingSpellOrigins.delete(event.instanceId);
     const target = event.targetId
       ? this.root.querySelector<HTMLElement>(`[data-card-id="${CSS.escape(event.targetId)}"]`)
       : null;
@@ -1149,12 +1154,18 @@ export class GameApp {
     if (!from || !targetElement) return Promise.resolve();
     const to = targetElement.getBoundingClientRect();
     const projectile = document.createElement('i');
-    projectile.className = `combat-projectile ${event.targetSide === 'enemy' ? 'combat-projectile--enemy' : ''}`;
     const isFireball = event.definitionId === 'wandering-flame';
+    projectile.className = `combat-projectile ${isFireball ? 'is-fireball' : ''} ${event.targetSide === 'enemy' ? 'combat-projectile--enemy' : ''}`;
     const spellVisual = cardEffects[event.definitionId] ?? cardEffects[event.targetSide === event.side ? 'runic-pulse' : 'wandering-flame'];
-    projectile.classList.toggle('is-fireball', isFireball);
     projectile.dataset.trail = isFireball ? 'fireball' : event.targetSide === event.side ? 'orb' : 'spark';
     projectile.style.setProperty('--effect-color', spellVisual.color);
+    let stopFireballModel = () => {};
+    if (isFireball) {
+      projectile.setAttribute('aria-label', 'Bola de fogo em voo');
+      projectile.innerHTML = '<span class="fireball-flame fireball-flame--one"></span><span class="fireball-flame fireball-flame--two"></span><span class="fireball-flame fireball-flame--three"></span><span class="fireball-core"><i></i></span><canvas class="fireball-model" width="128" height="128" aria-hidden="true"></canvas><span class="fireball-ember fireball-ember--one"></span><span class="fireball-ember fireball-ember--two"></span>';
+      const model = projectile.querySelector<HTMLCanvasElement>('.fireball-model');
+      stopFireballModel = model ? animateFireballModel(model) : () => {};
+    }
     projectile.style.left = `${from.left + from.width / 2}px`; projectile.style.top = `${from.top + from.height / 2}px`;
     projectile.style.setProperty('--dx', `${to.left + to.width / 2 - from.left - from.width / 2}px`);
     projectile.style.setProperty('--dy', `${to.top + to.height / 2 - from.top - from.height / 2}px`);
@@ -1164,6 +1175,7 @@ export class GameApp {
       const finish = () => {
         if (finished) return;
         finished = true;
+        stopFireballModel();
         projectile.remove();
         if (isFireball) {
           const impact = document.createElement('i');
@@ -1176,7 +1188,9 @@ export class GameApp {
         }
         resolve();
       };
-      projectile.addEventListener('animationend', finish, { once: true });
+      projectile.addEventListener('animationend', (animation) => {
+        if (animation.target === projectile) finish();
+      });
       window.setTimeout(finish, 850);
     });
   }
@@ -1413,9 +1427,7 @@ export class GameApp {
     const details = this.cardDetails(card);
     const cooldown = definition.kind === 'troop' && !secret ? `<span class="attack-cooldown" data-cooldown-id="${card.instanceId}" aria-hidden="true"><i></i><small></small></span>` : '';
     const visual = cardEffects[definition.id];
-    const targetStatus = this.attackTargetStatus(card, side);
-    const targetStatusMarkup = targetStatus ? `<span class="attack-target-status" data-attack-target-status role="status">${this.escapeAttribute(targetStatus)}</span>` : '';
-    return `<div class="battle-card${side === 'enemy' ? ' enemy-unit' : ''}${secret ? ' sigil-card' : ''}" data-card-id="${card.instanceId}" data-side="${side}" data-foundation="${definition.foundation}" data-trail="${visual.trail}" data-hit="${visual.hit}" data-death="${visual.death}" style="--effect-color:${visual.color}" title="${this.escapeAttribute(details)}"><span class="damage-aura" aria-hidden="true"></span>${renderCardFace(definition, card, side, 'field')}${definition.kind === 'troop' && !secret ? '<span class="attack-cooldown-shade" data-cooldown-shade aria-hidden="true"></span>' : ''}${cooldown}${targetStatusMarkup}<span class="ability-state-badge" data-ability-state aria-live="polite"></span></div>`;
+    return `<div class="battle-card${side === 'enemy' ? ' enemy-unit' : ''}${secret ? ' sigil-card' : ''}" data-card-id="${card.instanceId}" data-side="${side}" data-foundation="${definition.foundation}" data-trail="${visual.trail}" data-hit="${visual.hit}" data-death="${visual.death}" style="--effect-color:${visual.color}" aria-label="${this.escapeAttribute(details)}" title="${this.escapeAttribute(details)}"><span class="damage-aura" aria-hidden="true"></span>${renderCardFace(definition, card, side, 'field')}${definition.kind === 'troop' && !secret ? '<span class="attack-cooldown-shade" data-cooldown-shade aria-hidden="true"></span>' : ''}${cooldown}<span class="ability-state-badge" data-ability-state></span></div>`;
   }
 
   private attackTargetStatus(card: CardInstance, side: Side): string {
@@ -1432,20 +1444,9 @@ export class GameApp {
 
   private syncAttackTargetStatus(element: HTMLElement, card: CardInstance, side: Side): void {
     const status = this.attackTargetStatus(card, side);
-    let badge = element.querySelector<HTMLElement>('[data-attack-target-status]');
-    if (!status) { badge?.remove(); return; }
-    if (!badge) {
-      badge = document.createElement('span');
-      badge.className = 'attack-target-status';
-      badge.dataset.attackTargetStatus = '';
-      badge.setAttribute('role', 'status');
-      element.append(badge);
-    }
-    badge.textContent = status;
-    badge.classList.toggle('is-target-fallback', status.includes('AUTOMÁTICO'));
-    badge.setAttribute('aria-label', status.includes('AUTOMÁTICO')
-      ? `${status}. A unidade retomou o alvo automático porque o alvo escolhido não está disponível.`
-      : `Esta tropa prioriza ${status.slice('ALVO: '.length)}.`);
+    const details = this.cardDetails(card);
+    element.setAttribute('aria-label', status ? `${details}. ${status}` : details);
+    element.title = status ? `${details}. ${status}` : details;
   }
 
   private syncAbilityClasses(element: HTMLElement, card: CardInstance, side: Side): void {
@@ -1464,15 +1465,18 @@ export class GameApp {
     const linkedBy = this.state.players[side].slots.find((source) => source?.linkedAllyId === card.instanceId);
     let text = '';
     let className = '';
-    if (card.derived && card.summonedById) { text = 'BRUXA · INVOCADO'; className = 'is-green'; }
-    else if (definition.ability === 'resurrection') { text = card.resurrectionUsed ? 'RESSURREIÇÃO · USADA' : 'RESSURREIÇÃO · PRONTA'; className = card.resurrectionUsed ? 'is-muted' : 'is-green'; }
-    else if (definition.ability === 'necromancy') { text = card.summonUsed ? 'NECROMANCIA · USADA NESTA VIDA' : 'NECROMANCIA · PRONTA'; className = card.summonUsed ? 'is-muted' : 'is-green'; }
-    else if (definition.ability === 'mystic-link') { text = card.linkedAllyId ? `VÍNCULO → ${getCardDefinition(this.state.players[side].slots.find((unit) => unit?.instanceId === card.linkedAllyId)?.definitionId ?? definition.id).name}` : 'VINCULE UM ALIADO'; className = card.linkedAllyId ? 'is-green' : ''; }
-    else if (linkedBy) { text = 'VÍNCULO MÍSTICO · ATAQUE −1s'; className = 'is-green'; }
-    else if (definition.ability === 'plunder') { text = card.directAttackTarget ? 'ALVO DIRETO · CURA +1' : Math.floor(this.state.players[side].slots.findIndex((unit) => unit?.instanceId === card.instanceId) / topology.columns) === topology.frontRow[side] ? 'FRENTE · ATAQUE AUTOMÁTICO' : 'RETAGUARDA · PODE ATACAR O JOGADOR'; className = card.directAttackTarget ? 'is-gold' : ''; }
-    badge.textContent = text;
-    badge.className = `ability-state-badge${text ? ' is-visible' : ''}${className ? ` ${className}` : ''}`;
+    let icon = '';
+    if (card.derived && card.summonedById) { text = 'Invocado pela Bruxa Necromante · 1 ataque, 2 de vida, sem ressurreição.'; icon = '✦'; className = 'is-green'; }
+    else if (definition.ability === 'resurrection') { text = card.resurrectionUsed ? 'Ressurreição usada; a próxima eliminação destrói a tropa.' : 'Ressuscita uma vez no mesmo espaço com 2 de vida.'; icon = card.resurrectionUsed ? '✓' : '↻'; className = card.resurrectionUsed ? 'is-muted' : 'is-green'; }
+    else if (definition.ability === 'necromancy') { text = card.summonUsed ? 'Necromancia usada nesta vida.' : 'Uma vez nesta vida: qualquer tropa aliada eliminada em qualquer espaço gera um Morto Vivo com 1 ataque e 2 de vida.'; icon = card.summonUsed ? '✓' : '☽'; className = card.summonUsed ? 'is-muted' : 'is-green'; }
+    else if (definition.ability === 'mystic-link') { text = card.linkedAllyId ? `Vínculo ativo com ${getCardDefinition(this.state.players[side].slots.find((unit) => unit?.instanceId === card.linkedAllyId)?.definitionId ?? definition.id).name}; ataques recarregam 1 segundo mais rápido.` : 'Na retaguarda: toque na Raposa e depois em um aliado para vinculá-lo.'; icon = card.linkedAllyId ? '∞' : '↔'; className = card.linkedAllyId ? 'is-green' : ''; }
+    else if (linkedBy) { text = 'Vínculo ativo: ataques recarregam 1 segundo mais rápido.'; icon = '∞'; className = 'is-green'; }
+    else if (definition.ability === 'plunder') { text = card.directAttackTarget ? 'Alvo direto ordenado; ao acertar o jogador inimigo, recupera 1 de vida.' : Math.floor(this.state.players[side].slots.findIndex((unit) => unit?.instanceId === card.instanceId) / topology.columns) === topology.frontRow[side] ? 'Linha da frente: ataque automático.' : 'Na retaguarda, pode receber ordem para atacar diretamente o jogador inimigo.'; icon = card.directAttackTarget ? '↗' : '☞'; className = card.directAttackTarget ? 'is-gold' : ''; }
+    badge.textContent = '';
+    badge.dataset.icon = icon;
+    badge.className = `ability-state-badge${icon ? ' is-visible' : ''}${className ? ` ${className}` : ''}`;
     badge.setAttribute('aria-label', text || '');
+    badge.title = text;
   }
 
   private updateAttackCooldowns(): void {
@@ -1525,7 +1529,7 @@ export class GameApp {
           : `<span><b>Custo</b> ${definition.cost}</span><span><b>Efeito</b> Sigilo oculto</span>`;
       const behavior = card.derived ? 'Invocado pela Bruxa Necromante. Esta unidade derivada tem 1 de ataque e 2 de vida; não ressuscita e não cria outras tropas.' : definition.kind === 'troop'
         ? definition.ability === 'resurrection' ? 'Ao receber dano letal pela primeira vez, retorna neste espaço com 2 de vida. Na próxima eliminação, é destruído.'
-          : definition.ability === 'necromancy' ? 'Uma vez enquanto esta Bruxa estiver viva, quando outra tropa aliada da mesma coluna for eliminada definitivamente, invoca um Morto Vivo com 2 de vida no espaço que ficou vazio. A carta aparece saindo da Bruxa e ocupa esse espaço.'
+          : definition.ability === 'necromancy' ? 'Uma vez enquanto esta Bruxa estiver viva, quando qualquer tropa aliada for eliminada em qualquer espaço do seu campo, invoca no espaço vazio um Morto Vivo com 1 de ataque e 2 de vida. A carta aparece saindo da Bruxa e ocupa o espaço livre.'
             : definition.ability === 'crush' ? 'Se eliminar uma tropa da frente, o dano excedente atinge a tropa de trás na mesma coluna.'
               : definition.ability === 'mystic-link' ? 'Na retaguarda, selecione esta carta e toque em uma tropa aliada para reduzir em 1 segundo o intervalo de ataque dela. Para mover, arraste-a a um espaço vazio.'
                 : definition.ability === 'plunder' ? 'Na retaguarda, selecione o Goblin e toque na barra de vida inimiga. Ele passa a atacar diretamente o jogador e recupera 1 de vida quando acerta. Esta exceção vale só para ele.'

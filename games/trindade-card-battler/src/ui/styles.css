@@ -195,6 +195,36 @@ body { overscroll-behavior: none; }
 @media (prefers-reduced-motion: reduce) { .battle-card.is-rooted::after { animation: none; } .battle-card.resurrect-pop, .battle-card.summon-pop, .arena-board.is-volcano-erupting::after, .arena-board.is-sigil-revealing::after { animation-duration: .01ms !important; } }
 .attack-target-status.is-target-fallback { border-color: #ffad647a; color: #fff0d4; background: #391d11eb; }
 
+/* Card states use a readable icon; explanatory copy lives in the card detail and arena callout. */
+.ability-state-badge { top: -5%; left: auto; right: -5%; width: clamp(17px,4.3vw,24px); height: clamp(17px,4.3vw,24px); max-width: none; display: grid; place-items: center; padding: 0; overflow: visible; border-radius: 50%; font-size: 0; opacity: 0; transform: scale(.85); }
+.ability-state-badge::before { content: attr(data-icon); display: block; color: currentColor; font: 900 clamp(11px,2.9vw,16px)/1 system-ui,sans-serif; }
+.ability-state-badge.is-visible { opacity: 1; transform: scale(1); }
+.attack-target-status { display: none !important; }
+.ability-pop-label { position: fixed; z-index: 280; left: var(--ability-x); top: var(--ability-y); width: max-content; max-width: min(90vw,440px); padding: 10px 16px; border: 1px solid #f2d88c; border-radius: 12px; color: #fff4d1; background: linear-gradient(135deg,#132d3bea,#07131ef5); box-shadow: 0 6px 24px #000c,0 0 18px #f4cb5b55; font: 800 clamp(13px,3.3vw,17px)/1.3 system-ui,sans-serif; letter-spacing: 0; text-align: center; white-space: normal; pointer-events: none; transform: translate(-50%,0); animation: ability-notice-readable 1950ms ease-out both; }
+.ability-pop-label.is-green { border-color: #81e9a8; box-shadow: 0 6px 24px #000c,0 0 18px #45dc8c66; }
+@keyframes ability-notice-readable { 0% { opacity: 0; transform: translate(-50%,-8px) scale(.97); } 10%,82% { opacity: 1; transform: translate(-50%,0) scale(1); } 100% { opacity: 0; transform: translate(-50%,-4px) scale(.99); } }
+.toast { top: clamp(46px,8%,76px); left: 50%; width: max-content; min-width: min(230px,86vw); max-width: min(90vw,430px); padding: 10px 14px; border-radius: 10px; font: 750 clamp(13px,3.2vw,16px)/1.35 system-ui,sans-serif; white-space: normal; transform: translate(-50%,-7px); }
+.toast.visible { transform: translate(-50%,0); }
+.combat-projectile.is-fireball { z-index: 240 !important; width: clamp(56px,16vw,84px); height: clamp(56px,16vw,84px); overflow: visible; border: 0; border-radius: 50%; background: transparent !important; box-shadow: none !important; filter: drop-shadow(0 0 8px #ff9c26) drop-shadow(0 0 18px #ee321a); perspective: 180px; transform-style: preserve-3d; animation: fireball-flight 760ms cubic-bezier(.2,.68,.25,1) forwards; }
+.combat-projectile.is-fireball::before,.combat-projectile.is-fireball::after { content: none !important; }
+.fireball-core { position: absolute; inset: 17%; display: block; border: 1px solid #fff5b9a8; border-radius: 48% 52% 55% 45%; background: radial-gradient(ellipse at 31% 23%,#fffde4 0 6%,#fff09a 14%,#ffc13a 30%,#ff6922 51%,#d92818 72%,#65101c 91%); box-shadow: inset -7px -7px 12px #710d20b8,inset 4px 4px 9px #fff6a9,0 0 11px #ffb42e; transform-style: preserve-3d; animation: fireball-core-turn 480ms linear infinite; }
+.fireball-model { position: absolute; z-index: 3; inset: 5%; display: block; width: 90%; height: 90%; overflow: visible; pointer-events: none; filter: drop-shadow(0 0 8px #ff9f28); }
+.fireball-core::before { content: ''; position: absolute; inset: 12% 22% 26% 10%; border-radius: 50%; background: radial-gradient(ellipse,#fffbd5b8 0 4%,#ffe68370 28%,transparent 68%); filter: blur(2px); transform: translateZ(7px) rotate(-28deg); }
+.fireball-core i { position: absolute; inset: 23%; border: 2px solid #ffe06eaa; border-left-color: transparent; border-bottom-color: #fff0a877; border-radius: 50%; box-shadow: 0 0 8px #ffea78; transform: rotateX(58deg) rotateZ(-35deg) translateZ(5px); }
+.fireball-flame { position: absolute; z-index: 2; display: block; width: 42%; height: 64%; left: 31%; top: -12%; border-radius: 55% 45% 58% 42%; background: linear-gradient(165deg,#fff8c6 0,#ffe564 22%,#ff9c22 51%,#f43d17 76%,#b9181e 100%); clip-path: polygon(50% 0,73% 33%,100% 55%,81% 88%,54% 100%,20% 89%,0 60%,30% 39%); filter: drop-shadow(0 0 6px #ffb832); transform-origin: 50% 86%; }
+.fireball-flame--one { animation: fireball-flame-turn 330ms ease-in-out infinite alternate; transform: translateZ(12px) rotate(-11deg); }
+.fireball-flame--two { left: 0; top: 24%; width: 48%; height: 60%; opacity: .9; animation: fireball-flame-turn 380ms ease-in-out infinite alternate-reverse; transform: translateZ(-5px) rotate(-68deg); }
+.fireball-flame--three { left: 52%; top: 19%; width: 45%; height: 61%; opacity: .86; animation: fireball-flame-turn 290ms ease-in-out infinite alternate; transform: translateZ(-7px) rotate(65deg); }
+.fireball-ember { position: absolute; z-index: 3; width: 7px; height: 7px; border-radius: 50%; background: #fff2a0; box-shadow: 0 0 8px 3px #ff9f25,0 0 15px 5px #ed3c18; }
+.fireball-ember--one { left: 17%; top: 15%; animation: fireball-ember 370ms ease-in-out infinite alternate; }
+.fireball-ember--two { right: 16%; bottom: 18%; width: 5px; height: 5px; animation: fireball-ember 290ms ease-in-out infinite alternate-reverse; }
+.fireball-impact-burst { z-index: 245 !important; width: 58px; height: 58px; }
+@keyframes fireball-core-turn { to { transform: rotateY(360deg) rotateX(12deg); } }
+@keyframes fireball-flame-turn { to { filter: hue-rotate(-12deg) brightness(1.3) drop-shadow(0 0 9px #ffd15b); } }
+@keyframes fireball-ember { to { transform: translate3d(4px,-8px,8px) scale(.65); opacity: .55; } }
+@keyframes fireball-flight { 0% { opacity: 0; transform: translate(0,0) rotateY(0) scale(.2); } 12% { opacity: 1; transform: translate(calc(var(--dx)*.05),calc(var(--dy)*.05)) rotateY(42deg) scale(1); } 38% { opacity: 1; transform: translate(calc(var(--dx)*.35),calc(var(--dy)*.35)) rotateY(150deg) scale(1.12); } 70% { opacity: 1; transform: translate(calc(var(--dx)*.72),calc(var(--dy)*.72)) rotateY(270deg) scale(1); } 100% { opacity: .95; transform: translate(var(--dx),var(--dy)) rotateY(390deg) scale(.9); } }
+@media (prefers-reduced-motion: reduce) { .ability-pop-label { animation-duration: .01ms !important; } .combat-projectile.is-fireball,.fireball-core,.fireball-flame,.fireball-ember { animation-duration: .01ms !important; animation-iteration-count: 1 !important; } }
+
 /* A compact, readable cooldown is visible without changing combat state or card stats. */
 .attack-cooldown { position: absolute; z-index: 8; left: 31%; right: 31%; bottom: 10%; display: flex; flex-direction: column; align-items: center; gap: 2px; pointer-events: none; }
 .attack-cooldown i { display: block; width: 100%; height: 2px; border-radius: 2px; background: linear-gradient(90deg,#8ee0c3,#f7d879); box-shadow: 0 0 4px #f7d87999; transform: scaleX(0); transform-origin: left; }

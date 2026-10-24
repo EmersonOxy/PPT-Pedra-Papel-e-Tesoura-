@@ -51,14 +51,21 @@ export function damageUnit(state: GameState, side: Side, slot: number, amount: n
   if (destroyed) {
     discardCard(state, card);
     refreshLinks(state, events);
-    const witchSlot = state.players[side].slots.findIndex((unit, index) => unit && index % topology.columns === slot % topology.columns && getCardDefinition(unit.definitionId).ability === 'necromancy' && !unit.summonUsed);
-    if (witchSlot >= 0) {
-      const witch = state.players[side].slots[witchSlot]!;
+    // Necromancy listens across the whole allied field. Each living witch gets
+    // one summon for her current life; prioritize the fallen unit's empty slot.
+    const witches: Array<{ unit: CardInstance; witchSlot: number }> = [];
+    state.players[side].slots.forEach((unit, witchSlot) => {
+      if (unit && getCardDefinition(unit.definitionId).ability === 'necromancy' && !unit.summonUsed) witches.push({ unit, witchSlot });
+    });
+    for (const { unit: witch, witchSlot } of witches) {
+      const openSlot = state.players[side].slots[slot] === null ? slot
+        : state.players[side].slots.findIndex((candidate) => candidate === null);
+      if (openSlot < 0) break;
       const instanceId = `${side}-${state.nextInstanceNumber++}`;
       const summoned: CardInstance = { instanceId, definitionId: 'solemn-guardian', owner: side, health: getCardDefinition(witch.definitionId).abilityConfig?.summonHealth ?? 2, nextAttackAtMs: state.clockMs + attackIntervalFor('solemn-guardian'), revealed: true, derived: true, summonedById: witch.instanceId, resurrectionUsed: true };
       state.players[side].slots[witchSlot] = { ...witch, summonUsed: true };
-      state.players[side].slots[slot] = summoned;
-      events.push({ type: 'summon', side, instanceId, slot, sourceId: witch.instanceId });
+      state.players[side].slots[openSlot] = summoned;
+      events.push({ type: 'summon', side, instanceId, slot: openSlot, sourceId: witch.instanceId });
     }
   }
   return { eliminated: destroyed, excess: destroyed ? Math.max(0, amount - card.health) : 0 };
