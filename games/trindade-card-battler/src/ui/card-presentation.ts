@@ -78,8 +78,10 @@ export function renderCardFace(definition: CardDefinition, card: CardInstance, s
   if (!presentation) throw new Error(`Apresentação visual ausente para ${definition.id}`);
   const sigil = sigilByCardKind[definition.kind];
   const values = statValues(definition, card);
-  const accessible = `${presentation.illustration.kind === 'placeholder' ? 'Ilustração provisória. ' : ''}${definition.name}. ${definition.kind === 'hidden' ? 'Carta oculta. ' : `${values.labels[0]} ${values.left ?? 'não definido'}; ${values.labels[1]} ${values.right ?? 'não definido'}. `}${definition.description}`;
-  const stateKey = `${definition.id}:${card.health}:${card.revealed ? 1 : 0}:${presentation.background}:${sigil}`;
+  const shownName = card.derived ? 'Morto Vivo · Invocado' : definition.name;
+  const shownDescription = card.derived ? 'Invocado pela Bruxa Necromante. Tem 1 de ataque e 2 de vida; não ressuscita nem invoca outras tropas.' : definition.description;
+  const accessible = `${presentation.illustration.kind === 'placeholder' ? 'Ilustração provisória. ' : ''}${shownName}. ${definition.kind === 'hidden' ? 'Carta oculta. ' : `${values.labels[0]} ${values.left ?? 'não definido'}; ${values.labels[1]} ${values.right ?? 'não definido'}. `}${shownDescription}`;
+  const stateKey = `${definition.id}:${card.health}:${card.revealed ? 1 : 0}:${card.derived ? 'derived' : 'normal'}:${presentation.background}:${sigil}`;
   const placeholder = presentation.illustration.kind === 'placeholder'
     ? `<span class="card-face__placeholder-tag">Ilustração provisória</span>${renderPlaceholderIllustration(presentation.illustration.motif)}`
     : `<img class="card-face__art-image" src="${escapeHtml(presentation.illustration.src)}" alt="" draggable="false">`;
@@ -87,10 +89,10 @@ export function renderCardFace(definition: CardDefinition, card: CardInstance, s
     <img class="card-face__background" src="${backgroundAssets[presentation.background]}" alt="" aria-hidden="true" draggable="false">
     <div class="card-face__illustration${presentation.illustration.kind === 'image' ? ' card-face__illustration--image' : ''}" aria-hidden="true">${placeholder}</div>
     <img class="card-face__sigil" src="${sigilAssets[sigil]}" alt="" aria-hidden="true" draggable="false">
-    <span class="card-face__name" title="${escapeHtml(definition.name)}">${escapeHtml(definition.name)}</span>
+    <span class="card-face__name" title="${escapeHtml(shownName)}">${escapeHtml(shownName)}</span>
     <span class="card-face__stat card-face__stat--blue" aria-label="${values.labels[0]} ${values.left ?? 'não definido'}">${values.left ?? ''}</span>
     <span class="card-face__stat card-face__stat--red" aria-label="${definition.kind === 'hidden' ? 'Habilidade ' + definition.description : values.labels[1] + ' ' + (values.right ?? 'não definido')}">${values.right ?? ''}</span>
-    <span class="card-face__description">${escapeHtml(definition.description)}</span>
+    <span class="card-face__description">${escapeHtml(shownDescription)}</span>
     <img class="card-face__frame" src="${frameAsset}" alt="" aria-hidden="true" draggable="false">
     <span class="card-face__sr-only">${escapeHtml(accessible)}</span>
   </div>`;

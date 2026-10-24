@@ -1,6 +1,6 @@
 import { getCardDefinition } from './cards.ts';
 import { balance } from './config.ts';
-import { activateSigil, assignAllyLink, assignAttackTarget, assignDirectAttackTarget, castSpell, drawCard, placeCard, placeSigil } from './engine.ts';
+import { activateSigil, assignAllyLink, assignAttackTarget, assignDirectAttackTarget, castSpell, drawCard, moveTroop, placeCard, placeSigil } from './engine.ts';
 import { topology } from './config.ts';
 import { isAttackTargetExposed } from './targeting.ts';
 import type { GameEvent, GameState, Side } from './types.ts';
@@ -16,6 +16,17 @@ function firstFrontEmpty(state: GameState): number {
   }
   return firstEmpty(state.players[side].slots);
 }
+function preferredSlot(state: GameState, definitionId: string): number {
+  const definition = getCardDefinition(definitionId);
+  const rear = topology.frontRow.enemy === 0 ? 1 : 0;
+  if (definition.ability === 'plunder' || definition.ability === 'mystic-link' || definition.ability === 'necromancy') {
+    for (let column = 0; column < topology.columns; column += 1) {
+      const slot = rear * topology.columns + column;
+      if (!state.players.enemy.slots[slot]) return slot;
+    }
+  }
+  return firstFrontEmpty(state);
+}
 
 export function takeAiAction(state: GameState): { state: GameState; events: GameEvent[] } {
   if (state.phase === 'preparation') {
@@ -23,7 +34,7 @@ export function takeAiAction(state: GameState): { state: GameState; events: Game
     for (const card of hand) {
       const definition = getCardDefinition(card.definitionId);
       if (definition.kind === 'troop') {
-        const slot = firstFrontEmpty(state);
+        const slot = preferredSlot(state, card.definitionId);
         if (slot >= 0) {
           const action = placeCard(state, 'enemy', card.instanceId, slot);
           if (action.events.length) return action;
@@ -58,6 +69,22 @@ export function takeAiAction(state: GameState): { state: GameState; events: Game
       if (targetSlot >= 0) { const order = assignAttackTarget(next, 'enemy', slot, targetSlot); if (order.events.length) { next = order.state; events.push(...order.events); return { state: next, events }; } }
     }
   }
+  // The opponent actively rotates reserves into open frontline lanes. Support
+  // units that need a rear position keep their role, while the aggressive deck
+  // advances every other reserve as soon as its lane opens.
+  const profile = next.aiProfileId;
+  const rearRow = topology.frontRow.enemy === 0 ? 1 : 0;
+  for (let column = 0; column < topology.columns; column += 1) {
+    const front = topology.frontRow.enemy * topology.columns + column;
+    const rear = rearRow * topology.columns + column;
+    const reserve = next.players.enemy.slots[rear];
+    if (!reserve || next.players.enemy.slots[front]) continue;
+    const ability = getCardDefinition(reserve.definitionId).ability;
+    if (ability === 'plunder' || ability === 'mystic-link' || (profile === 'bastilha' && ability !== 'resurrection' && ability !== 'necromancy')) continue;
+    if (profile === 'bastilha' && !next.players.player.slots.some(Boolean)) continue;
+    const moved = moveTroop(next, 'enemy', rear, front);
+    if (moved.events.length) return { state: moved.state, events: [...events, ...moved.events] };
+  }
   for (let slot = 0; slot < next.players.enemy.sigils.length; slot += 1) {
     const hidden = next.players.enemy.sigils[slot]; if (!hidden) continue;
     const ability = getCardDefinition(hidden.definitionId).ability;
@@ -78,7 +105,7 @@ export function takeAiAction(state: GameState): { state: GameState; events: Game
     if (next.phase !== 'playing') break;
     const definition = getCardDefinition(card.definitionId);
     if (definition.kind === 'troop') {
-      const slot = firstFrontEmpty(next);
+      const slot = preferredSlot(next, card.definitionId);
       if (slot >= 0) {
         const action = placeCard(next, 'enemy', card.instanceId, slot);
         if (action.events.length) {

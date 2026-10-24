@@ -2,7 +2,8 @@ import { attackIntervalFor, balance, boardSlotCount, initialAttackDelayFor, sigi
 import { isAttackTargetExposed, oppositeSide } from './targeting.ts';
 import { isPreparationActionAllowed, sessionConfig } from './session-flow.ts';
 import { cardDefinitions, getCardDefinition } from './cards.ts';
-import type { CardInstance, GameEvent, GameState, PlayerState, Side, SpellTarget, Transition } from './types.ts';
+import type { AiProfileId, CardInstance, GameEvent, GameState, PlayerState, Side, SpellTarget, Transition } from './types.ts';
+import { getOpponentProfile } from './opponents.ts';
 import { applyVolcanoWave, damageUnit as resolveDamage, discardCard, effectiveAttackInterval, healUnit, maxHealthFor, refreshLinks } from './combat-rules.ts';
 
 function clonePlayer(player: PlayerState): PlayerState {
@@ -77,7 +78,7 @@ function blankPlayer(): PlayerState {
   };
 }
 
-export function createGame(seed = 0x7a31f22d, selectedDeck?: string[]): GameState {
+export function createGame(seed = 0x7a31f22d, selectedDeck?: string[], aiProfileId: AiProfileId = 'carmesim'): GameState {
   const base: GameState = {
     phase: 'playing',
     winner: null,
@@ -88,6 +89,7 @@ export function createGame(seed = 0x7a31f22d, selectedDeck?: string[]): GameStat
     aiStarted: false,
     attackIntervalMs: balance.attackIntervalMs,
     aiActionIntervalMs: balance.aiActionIntervalMs,
+    aiProfileId,
     rngState: seed >>> 0 || 1,
     nextInstanceNumber: 1,
     eruptions: [],
@@ -95,7 +97,9 @@ export function createGame(seed = 0x7a31f22d, selectedDeck?: string[]): GameStat
   };
   let state = base;
   for (const side of ['player', 'enemy'] as const) {
-    const ids = selectedDeck?.length === balance.deckSize ? selectedDeck : Array.from({ length: balance.deckSize }, (_, i) => cardDefinitions[i % cardDefinitions.length]!.id);
+    const ids = side === 'player'
+      ? selectedDeck?.length === balance.deckSize ? selectedDeck : Array.from({ length: balance.deckSize }, (_, i) => cardDefinitions[i % cardDefinitions.length]!.id)
+      : getOpponentProfile(aiProfileId).deck;
     const created = createDeck(state, side, ids);
     state = created.state;
     const player = clonePlayer(state.players[side]);
@@ -237,7 +241,7 @@ export function castSpell(state: GameState, side: Side, instanceId: string, targ
   if (target.kind === 'life') return { state, events: [] };
   caster.hand.splice(handIndex, 1);
   let next = replacePlayer(state, side, caster);
-  const events: GameEvent[] = [{ type: 'spell', side, instanceId, targetId: state.players[target.side].slots[target.slot]?.instanceId, targetSide: target.side, targetSlot: target.slot, direct: false }];
+  const events: GameEvent[] = [{ type: 'spell', side, instanceId, definitionId: card.definitionId, targetId: state.players[target.side].slots[target.slot]?.instanceId, targetSide: target.side, targetSlot: target.slot, direct: false }];
   if (definition.effect === 'damage') {
     if (definition.ability === 'fireball' && target.kind === 'unit') {
       const chosen = next.players[target.side].slots[target.slot]!;

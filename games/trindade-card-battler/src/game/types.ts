@@ -4,6 +4,7 @@ export type Foundation = 'guarda' | 'tecnica' | 'impacto';
 export type SpellEffect = 'damage' | 'heal';
 export type AttackAnimationProfile = 'advance' | 'impact' | 'spin' | 'pulse';
 export type GamePhase = 'preparation' | 'starting' | 'playing' | 'finished';
+export type AiProfileId = 'carmesim' | 'bastilha' | 'predador';
 
 export type CardAbility = 'resurrection' | 'necromancy' | 'crush' | 'mystic-link' | 'plunder' | 'fury' | 'equivalent-heal' | 'fireball' | 'thorns' | 'roots' | 'volcano';
 export interface AbilityConfig { resurrectionHealth?: number; summonLimit?: number; summonHealth?: number; intervalReductionMs?: number; healOnDirect?: number; furyThreshold?: number; furyBonus?: number; healCap?: number; splashDamage?: number; damage?: number; delayMs?: number; rootDurationMs?: number; waveCount?: number; waveIntervalMs?: number; enemyDamage?: number; allyDamage?: number; }
@@ -36,6 +37,7 @@ export interface CardInstance {
   resurrectionUsed?: boolean;
   summonUsed?: boolean;
   derived?: boolean;
+  summonedById?: string;
   lastDamageReceived?: number;
   linkedAllyId?: string;
   rootedUntilMs?: number;
@@ -69,6 +71,7 @@ export interface GameState {
   aiStarted: boolean;
   attackIntervalMs: number;
   aiActionIntervalMs: number;
+  aiProfileId: AiProfileId;
   rngState: number;
   nextInstanceNumber: number;
   players: Record<Side, PlayerState>;
@@ -88,7 +91,7 @@ export type GameEvent =
   | { type: 'heal'; side: Side; instanceId: string; amount: number }
   | { type: 'life-damage'; side: Side; amount: number; value: number }
   | { type: 'life-heal'; side: Side; amount: number; value: number }
-  | { type: 'spell'; side: Side; instanceId: string; targetId?: string; targetSide: Side; targetSlot?: number; direct: boolean }
+  | { type: 'spell'; side: Side; instanceId: string; definitionId: string; targetId?: string; targetSide: Side; targetSlot?: number; direct: boolean }
   | { type: 'reveal'; side: Side; instanceId: string; slot: number; definitionId?: string }
   | { type: 'resurrect'; side: Side; instanceId: string; slot: number }
   | { type: 'summon'; side: Side; instanceId: string; slot: number; sourceId: string }

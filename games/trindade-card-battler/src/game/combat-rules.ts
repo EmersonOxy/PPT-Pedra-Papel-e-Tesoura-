@@ -55,7 +55,7 @@ export function damageUnit(state: GameState, side: Side, slot: number, amount: n
     if (witchSlot >= 0) {
       const witch = state.players[side].slots[witchSlot]!;
       const instanceId = `${side}-${state.nextInstanceNumber++}`;
-      const summoned: CardInstance = { instanceId, definitionId: 'solemn-guardian', owner: side, health: getCardDefinition(witch.definitionId).abilityConfig?.summonHealth ?? 2, nextAttackAtMs: state.clockMs + attackIntervalFor('solemn-guardian'), revealed: true, derived: true, resurrectionUsed: true };
+      const summoned: CardInstance = { instanceId, definitionId: 'solemn-guardian', owner: side, health: getCardDefinition(witch.definitionId).abilityConfig?.summonHealth ?? 2, nextAttackAtMs: state.clockMs + attackIntervalFor('solemn-guardian'), revealed: true, derived: true, summonedById: witch.instanceId, resurrectionUsed: true };
       state.players[side].slots[witchSlot] = { ...witch, summonUsed: true };
       state.players[side].slots[slot] = summoned;
       events.push({ type: 'summon', side, instanceId, slot, sourceId: witch.instanceId });

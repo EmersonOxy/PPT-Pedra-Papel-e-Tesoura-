@@ -205,3 +205,6 @@
   .match-orbit svg { animation: none; }
   .transition-curtain.active { animation: none; transform: translateY(0); }
 }
+.opponent-picker { display: grid; gap: 7px; width: min(100%,390px); margin: 18px auto 14px; color: #9fc9bb; font: 800 10px/1.2 system-ui,sans-serif; letter-spacing: .12em; text-align: left; text-transform: uppercase; }
+.opponent-picker select { width: 100%; min-height: 42px; padding: 9px 12px; border: 1px solid #c8aa6266; border-radius: 8px; color: #f2e5c7; background: linear-gradient(135deg,#112734,#091721); font: 700 13px/1.3 system-ui,sans-serif; letter-spacing: 0; text-transform: none; box-shadow: inset 0 1px #ffffff0b,0 3px 12px #0004; }
+.opponent-picker select:focus-visible { outline: 2px solid #e2c278; outline-offset: 2px; }

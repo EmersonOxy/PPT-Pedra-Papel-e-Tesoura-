@@ -5,10 +5,11 @@ import { effectiveAttack, effectiveAttackInterval, maxHealthFor } from '../game/
 import { advanceTime } from '../game/simulation.ts';
 import { frontRow, isAttackTargetExposed } from '../game/targeting.ts';
 import { attackIntervalFor, balance, boardSlotCount, topology } from '../game/config.ts';
-import type { CardInstance, GameEvent, GameState, Side, SpellTarget, Transition } from '../game/types.ts';
+import type { AiProfileId, CardInstance, GameEvent, GameState, Side, SpellTarget, Transition } from '../game/types.ts';
 import { advanceMatchFlow, beginDemoMatchSearch, cancelDemoMatchSearch, createMatchFlow, isPreparationActionAllowed, sessionConfig, setMatchFlowPhase } from '../game/session-flow.ts';
 import type { MatchFlowState } from '../game/session-flow.ts';
 import { renderCardBack, renderCardFace, renderDeckCardBack } from './card-presentation.ts';
+import { getOpponentProfile, opponentProfiles } from '../game/opponents.ts';
 import { attackProfileClass, attackProjectileClass, cooldownSweepDegrees, handFanSpacing, shouldHighlightDeck } from './combat-presentation.ts';
 import type { AttackAnimationProfile } from '../game/types.ts';
 
@@ -42,6 +43,7 @@ export class GameApp {
   private deckIds: string[] = [];
   private readonly deckStorageKey = 'trindade.battle-deck.v2';
   private theme = 'mineral';
+  private aiProfileId: AiProfileId = 'carmesim';
   private drag: ActiveDrag | null = null;
   private toastTimer: number | undefined;
   private lastFrame = 0;
@@ -61,11 +63,16 @@ export class GameApp {
   private claimedMissions = new Set<string>();
   private readonly progressionStorageKey = 'trindade.card-progression.v1';
   private pendingSigilFlips = new Map<string, HTMLElement>();
+  private pendingSigilFlipSlots = new Map<string, HTMLElement>();
   private revealResolutionPending = false;
 
   constructor(root: HTMLElement) {
     this.root = root;
     this.loadProgression();
+    try {
+      const savedProfile = localStorage.getItem('trindade.ai-profile.v1') as AiProfileId | null;
+      if (savedProfile && opponentProfiles.some((profile) => profile.id === savedProfile)) this.aiProfileId = savedProfile;
+    } catch { /* The default training opponent is used when storage is unavailable. */ }
     this.deckPreviewCards = cardDefinitions.flatMap((definition) => Array.from({ length: 3 }, (_, index) => ({
       instanceId: `collection-${definition.id}-${index + 1}`,
       definitionId: definition.id,
@@ -94,7 +101,7 @@ export class GameApp {
         <header class="home-header"><div class="home-brand"><span class="home-brand-mark" aria-hidden="true">${sigil}</span><span><strong>TRINDADE</strong><small>CARD BATTLES · EXPERIMENTO</small></span></div><div class="home-profile"><span class="home-avatar" aria-hidden="true">T</span><span><strong>JOGADOR</strong><small>LOCAL</small></span></div></header>
         <div class="home-scroll" id="home-scroll">
           <section class="home-page home-page--start" data-home-page="home">
-            <div class="home-hero"><div class="hero-kicker"><i></i> ARENA EXPERIMENTAL · IA LOCAL</div><div class="hero-emblem" aria-hidden="true">${sigil}</div><h1>As três forças<br>se encontram.</h1><p>Monte sua formação e enfrente a Casa Carmesim em uma partida local de demonstração.</p><div class="hero-facts"><span><b>3 × 2</b> arena</span><span><b>${balance.deckSize}</b> cartas</span><span><b>IA</b> local</span></div><button class="battle-cta" id="start-battle" type="button"><span class="battle-cta-icon" aria-hidden="true">⚔</span><span><strong>BATALHA</strong><small>Encontrar adversário</small></span><span class="battle-cta-arrow" aria-hidden="true">→</span></button>
+            <div class="home-hero"><div class="hero-kicker"><i></i> ARENA EXPERIMENTAL · IA LOCAL</div><div class="hero-emblem" aria-hidden="true">${sigil}</div><h1>As três forças<br>se encontram.</h1><p>Monte sua formação e escolha um adversário de treino com deck e estratégia próprios.</p><div class="hero-facts"><span><b>3 × 2</b> arena</span><span><b>${balance.deckSize}</b> cartas</span><span><b>3</b> estilos de IA</span></div><label class="opponent-picker" for="ai-profile">Adversário de treino<select id="ai-profile">${opponentProfiles.map((profile) => `<option value="${profile.id}"${profile.id === this.aiProfileId ? ' selected' : ''}>${profile.name} — ${profile.style}</option>`).join('')}</select></label><button class="battle-cta" id="start-battle" type="button"><span class="battle-cta-icon" aria-hidden="true">⚔</span><span><strong>BATALHA</strong><small>Encontrar adversário</small></span><span class="battle-cta-arrow" aria-hidden="true">→</span></button>
               <div class="match-panel" id="match-panel" hidden aria-live="polite"><div class="match-orbit" aria-hidden="true"><span>${sigil}</span></div><div class="match-copy"><strong id="match-title">Buscando adversário</strong><small id="match-detail">Partida experimental contra IA local</small></div><strong class="match-countdown" id="match-countdown" hidden></strong><button class="cancel-search" id="cancel-search" type="button">Cancelar busca</button></div>
               <div class="hero-disclaimer">Esta versão usa IA local. Ainda não existe PvP online.</div>
             </div>
@@ -123,7 +130,7 @@ export class GameApp {
         <section class="top-zone" aria-label="Informações do adversário">
           <div class="top-status">
             <div class="logo-mark" aria-hidden="true">${sigil}</div>
-            <div class="status-stack"><div class="status-title">Casa Carmesim</div><div class="status-sub" id="enemy-status-sub" role="status" aria-live="polite">Adversário experimental</div></div>
+            <div class="status-stack"><div class="status-title" id="enemy-name">Casa Carmesim</div><div class="status-sub" id="enemy-status-sub" role="status" aria-live="polite">Adversário experimental</div></div>
             <div class="enemy-cycle" role="status" aria-label="Ciclo do deck adversário"><span class="enemy-cycle-icon" id="enemy-cycle">1</span><span class="enemy-cycle-label">CICLO</span></div>
             <div class="top-actions"><button class="top-btn" id="themes" type="button" aria-label="Escolher tema">◒</button><button class="top-btn" id="help" type="button" aria-label="Como jogar">?</button><button class="top-btn" id="restart" type="button" aria-label="Voltar ao menu" title="Voltar ao menu">⌂</button></div>
           </div>
@@ -157,7 +164,7 @@ export class GameApp {
           </div>
         </section>
         <div id="toast" class="toast" role="status" aria-live="polite"></div>
-        <div class="overlay" id="help-overlay" aria-hidden="true"><div class="help-panel"><div class="help-tag">Experimento separado · versão jogável inicial</div><h2>Como experimentar</h2><p><b>Comprar:</b> toque no deck enquanto houver espaço na mão (máximo de ${balance.handLimit} cartas).</p><p><b>Posicionar:</b> arraste uma tropa a um espaço vazio. A linha próxima do centro protege a linha posterior na mesma coluna.</p><p><b>Ordens:</b> arraste suas tropas para mover ou recolher. Na frente, atacam automaticamente. Na retaguarda, selecione a tropa e toque no alvo inimigo; a Raposa pode vincular um aliado, e o Goblin pode selecionar a vida inimiga. Segure uma carta visível para inspecionar.</p><p><b>Feitiços:</b> Bola de Fogo atinge uma tropa e a outra da coluna. Cura Equivalente recupera o último dano registrado, até 4 pontos, em uma tropa aliada.</p><p><b>Ocultas:</b> Espinhos reage automaticamente a ataques contra tropas; Raízes reage à movimentação ou pode ser direcionada por toque; Vulcão é manual e atinge tropas dos dois lados em três ondas.</p><p><b>Combate:</b> cada tropa tem sua recarga individual exibida na carta (de ${minAttackInterval.toFixed(2)} a ${maxAttackInterval.toFixed(2)} segundos). O valor varia por carta e é experimental. Os custos são somente demonstrativos; não há mana.</p><p><b>Limite experimental:</b> ${balance.startingLife} de vida, ${balance.deckSize} cartas por deck e IA básica. Os valores não são regras finais.</p><button class="close-help" id="close-help" type="button">Entendi</button></div></div>
+        <div class="overlay" id="help-overlay" aria-hidden="true"><div class="help-panel"><div class="help-tag">Experimento separado · versão jogável inicial</div><h2>Como experimentar</h2><p><b>Comprar:</b> toque no deck enquanto houver espaço na mão (máximo de ${balance.handLimit} cartas).</p><p><b>Posicionar:</b> arraste uma tropa a um espaço vazio. A linha próxima do centro protege a linha posterior na mesma coluna.</p><p><b>Ordens:</b> arraste suas tropas para mover ou recolher. Na frente, atacam automaticamente. Na retaguarda, selecione a tropa e toque no alvo inimigo; a Raposa mostra o aliado vinculado, e o Goblin pode escolher a vida inimiga para ataque direto e cura.</p><p><b>Necromancia:</b> o Morto Vivo mostra quando sua ressurreição foi gasta. A Bruxa invoca uma única unidade derivada enquanto estiver viva; seu selo informa quando ela já usou a habilidade.</p><p><b>Feitiços:</b> Bola de Fogo voa até a tropa e atinge também a outra da coluna. Cura Equivalente recupera o último dano registrado, até 4 pontos, em uma tropa aliada.</p><p><b>Ocultas:</b> Espinhos reage automaticamente a ataques contra tropas; Raízes reage à movimentação ou pode ser direcionada por toque; Vulcão é manual e atinge tropas dos dois lados em três ondas.</p><p><b>Combate:</b> cada tropa tem sua recarga individual exibida na carta (de ${minAttackInterval.toFixed(2)} a ${maxAttackInterval.toFixed(2)} segundos). Os custos são somente demonstrativos; não há mana.</p><p><b>Adversários de treino:</b> escolha Casa Carmesim (equilibrada), Bastião Verde (defensivo) ou Matilha Rubra (agressiva). São três decks e prioridades de campo locais; os números são experimentais.</p><button class="close-help" id="close-help" type="button">Entendi</button></div></div>
         <div class="overlay" id="palette-overlay" aria-hidden="true"><div class="help-panel"><div class="help-tag">Identidade visual V3</div><h2>Atmosfera da arena</h2><div class="theme-option-grid"><button type="button" class="theme-btn active" data-theme-set="mineral">Verde mineral</button><button type="button" class="theme-btn" data-theme-set="abissal">Azul abissal</button><button type="button" class="theme-btn" data-theme-set="rubro">Rubro arcano</button></div><button class="close-help" id="close-palette" type="button">Voltar à arena</button></div></div>
         <div class="overlay" id="result-overlay" aria-hidden="true"><div class="help-panel"><div class="help-tag">Fim da partida</div><h2 id="result-title">Vitória</h2><p id="result-copy"></p><button class="close-help" id="play-again" type="button">Voltar ao início</button></div></div>
       </main><svg class="attack-aim-overlay" id="attack-aim-overlay" aria-hidden="true"><defs><marker id="attack-arrowhead" markerWidth="18" markerHeight="18" refX="15" refY="9" markerUnits="userSpaceOnUse" orient="auto"><path d="M1 2L16 9L1 16L5 9Z"></path></marker></defs><path id="attack-aim-line" d=""></path></svg><div class="overlay card-preview-overlay" id="card-preview-overlay" aria-hidden="true"><div class="card-preview-wrap" id="card-preview-wrap"></div></div><div class="transition-curtain" id="transition-curtain" aria-hidden="true"></div></div>`;
@@ -167,6 +174,12 @@ export class GameApp {
 
   private bindEvents(): void {
     this.root.addEventListener('click', this.onClick);
+    this.root.querySelector<HTMLSelectElement>('#ai-profile')?.addEventListener('change', (event) => {
+      const value = (event.currentTarget as HTMLSelectElement).value as AiProfileId;
+      if (!opponentProfiles.some((profile) => profile.id === value)) return;
+      this.aiProfileId = value;
+      try { localStorage.setItem('trindade.ai-profile.v1', value); } catch { /* Choice still applies for this session. */ }
+    });
     this.root.addEventListener('pointerdown', this.onPointerDown);
     window.addEventListener('pointermove', this.onPointerMove);
     window.addEventListener('pointerup', this.onPointerUp);
@@ -245,7 +258,7 @@ export class GameApp {
     if (this.matchHasStarted) return;
     const seed = new Uint32Array(1);
     crypto.getRandomValues(seed);
-    this.state = beginPreparation(createGameImported(seed[0], this.deckIds)).state;
+    this.state = beginPreparation(createGameImported(seed[0], this.deckIds, this.aiProfileId)).state;
     this.matchHasStarted = true;
     this.matchResultRecorded = false;
     this.selectedId = null;
@@ -269,7 +282,7 @@ export class GameApp {
     this.selectedId = null;
     const seed = new Uint32Array(1);
     crypto.getRandomValues(seed);
-    this.state = createGameImported(seed[0], this.deckIds);
+    this.state = createGameImported(seed[0], this.deckIds, this.aiProfileId);
     this.root.querySelector<HTMLElement>('#transition-curtain')?.classList.remove('active');
     this.root.querySelector<HTMLElement>('#home')?.removeAttribute('hidden');
     const game = this.root.querySelector<HTMLElement>('#game');
@@ -309,7 +322,7 @@ export class GameApp {
         : this.matchFlow.phase === 'countdown' ? 'A partida começa em'
           : this.matchFlow.phase === 'transition' ? 'Abrindo a arena' : '';
     if (detail) detail.textContent = this.matchFlow.phase === 'searching' ? 'Procurando uma partida experimental local.'
-      : this.matchFlow.phase === 'found' ? 'Casa Carmesim · adversário controlado por IA local.'
+        : this.matchFlow.phase === 'found' ? `${getOpponentProfile(this.aiProfileId).name} · ${getOpponentProfile(this.aiProfileId).style}.`
         : this.matchFlow.phase === 'countdown' ? 'Partida experimental contra IA local.'
           : this.matchFlow.phase === 'transition' ? 'A IA local está preparando o campo.' : '';
     const showCountdown = this.matchFlow.phase === 'countdown';
@@ -387,6 +400,7 @@ export class GameApp {
   private renderPhaseStatus(): void {
     const subtitle = this.root.querySelector<HTMLElement>('#enemy-status-sub');
     if (!subtitle) return;
+    this.setText('#enemy-name', getOpponentProfile(this.aiProfileId).name);
     if (this.state.phase === 'preparation') {
       const remaining = Math.max(0, (this.state.preparationEndsAtMs ?? this.state.clockMs) - this.state.clockMs);
       subtitle.textContent = `Preparação · ${Math.ceil(remaining / 1000)}s`;
@@ -753,14 +767,7 @@ export class GameApp {
       void this.resolveAfterSigilReveal(result, attackProfiles);
       return;
     }
-    const origins = new Map<string, DOMRect>();
-    for (const event of result.events) {
-      if (event.type !== 'draw' && event.type !== 'move' && event.type !== 'place' && event.type !== 'return') continue;
-      const source = event.type === 'draw'
-        ? this.root.querySelector<HTMLElement>(event.side === 'player' ? '#draw-deck' : '.enemy-deck-display')
-        : this.root.querySelector<HTMLElement>(`#game [data-card-id="${CSS.escape(event.instanceId)}"]`);
-      if (source) origins.set(event.instanceId, source.getBoundingClientRect());
-    }
+    const origins = this.captureTransferOrigins(result.events);
     const attackProfiles = this.captureAttackProfiles(result.events, this.state);
     this.captureSigilFlips(result.events, this.state);
     this.captureDestructions(result.events);
@@ -780,6 +787,10 @@ export class GameApp {
     this.syncMatchFlowWithEngine();
     if (result.events.some((event) => event.type === 'place' || event.type === 'spell' || event.type === 'return' || event.type === 'move' || event.type === 'target')) this.selectedId = null;
     this.render();
+    for (const reveal of reveals) {
+      this.pendingSigilFlipSlots.get(reveal.instanceId)?.classList.remove('is-revealing');
+      this.pendingSigilFlipSlots.delete(reveal.instanceId);
+    }
     this.playEvents(result.events, attackProfiles, true);
     this.revealResolutionPending = false;
   }
@@ -814,6 +825,18 @@ export class GameApp {
     }
   }
 
+  private captureTransferOrigins(events: GameEvent[]): Map<string, DOMRect> {
+    const origins = new Map<string, DOMRect>();
+    for (const event of events) {
+      if (event.type !== 'draw' && event.type !== 'move' && event.type !== 'place' && event.type !== 'return') continue;
+      const source = event.type === 'draw'
+        ? this.root.querySelector<HTMLElement>(event.side === 'player' ? '#draw-deck' : '.enemy-deck-display')
+        : this.root.querySelector<HTMLElement>(`#game [data-card-id="${CSS.escape(event.instanceId)}"]`);
+      if (source) origins.set(event.instanceId, source.getBoundingClientRect());
+    }
+    return origins;
+  }
+
   private tick = (now: number): void => {
     const delta = this.lastFrame ? Math.min(now - this.lastFrame, 250) : 0;
     this.lastFrame = now;
@@ -827,6 +850,7 @@ export class GameApp {
       if (arenaWasActive && this.matchHasStarted && this.state.phase !== 'finished' && !this.revealResolutionPending) {
         const priorState = this.state;
         const result = advanceTime(this.state, delta);
+        const transferOrigins = this.captureTransferOrigins(result.events);
         const attackProfiles = this.captureAttackProfiles(result.events, priorState);
         if (result.events.some((event) => event.type === 'reveal')) {
           this.captureSigilFlips(result.events, priorState);
@@ -835,7 +859,7 @@ export class GameApp {
         } else {
           this.state = result.state;
           this.syncMatchFlowWithEngine();
-          if (result.events.length) { this.captureDestructions(result.events); this.render(); this.playEvents(result.events, attackProfiles); }
+          if (result.events.length) { this.captureDestructions(result.events); this.render(); this.animateCardTransfers(transferOrigins); this.playEvents(result.events, attackProfiles); }
         }
       }
       this.renderMatchStatus();
@@ -859,14 +883,14 @@ export class GameApp {
     let missionsChanged = false;
     for (const event of events) {
       if (event.type === 'attack') this.animateAttack(event, attackProfiles.get(event.attackerId));
-      if (event.type === 'spell') this.animateSpell(event);
+      if (event.type === 'spell') await this.animateSpell(event);
       if (event.type === 'place') this.animateEntry(event.instanceId);
       if (event.type === 'place' && event.side === 'player') { this.cardsPlaced += 1; missionsChanged = true; }
       if (event.type === 'damage') this.animateImpact(event.instanceId, event.amount);
       if (event.type === 'heal') this.animateHeal(event.instanceId, event.amount);
-      if (event.type === 'resurrect') this.animateAbilityCard(event.instanceId, 'resurrect-pop');
-      if (event.type === 'summon') this.animateAbilityCard(event.instanceId, 'summon-pop');
-      if (event.type === 'root') this.animateAbilityCard(event.instanceId, 'is-rooted');
+      if (event.type === 'resurrect') this.animateAbilityCard(event.instanceId, 'resurrect-pop', 'RESSUSCITOU · 2 DE VIDA');
+      if (event.type === 'summon') this.animateSummon(event);
+      if (event.type === 'root') this.animateRoots(event.instanceId);
       if (event.type === 'link') this.animateLink(event.instanceId, event.targetId);
       if (event.type === 'reveal' && !revealsAlreadyShown) await this.animateSigilReveal(event);
       if (event.type === 'volcano-wave') this.animateVolcanoWave(event.side, event.wave);
@@ -877,7 +901,7 @@ export class GameApp {
         const title = this.root.querySelector<HTMLElement>('#result-title');
         const copy = this.root.querySelector<HTMLElement>('#result-copy');
         if (title) title.textContent = event.winner === 'player' ? 'Vitória' : 'Derrota';
-        if (copy) copy.textContent = event.winner === 'player' ? 'A Casa Carmesim ficou sem vida.' : 'Sua vida chegou a zero. Tente outra estratégia.';
+        if (copy) copy.textContent = event.winner === 'player' ? `${getOpponentProfile(this.aiProfileId).name} ficou sem vida.` : 'Sua vida chegou a zero. Tente outra estratégia.';
         this.openOverlay('result-overlay');
       }
       if (event.type === 'game-draw') {
@@ -952,13 +976,66 @@ export class GameApp {
     window.setTimeout(() => card.classList.remove('place-pop'), 460);
   }
 
-  private animateAbilityCard(instanceId: string, className: string): void {
+  private animateAbilityCard(instanceId: string, className: string, message?: string): void {
     const card = this.root.querySelector<HTMLElement>(`[data-card-id="${CSS.escape(instanceId)}"]`);
     if (!card) return;
     card.classList.remove(className);
     void card.offsetWidth;
     card.classList.add(className);
     if (className !== 'is-rooted') window.setTimeout(() => card.classList.remove(className), 900);
+    if (message) this.showAbilityLabel(card, message, className === 'resurrect-pop' ? 'green' : 'gold');
+  }
+
+  private showAbilityLabel(anchor: HTMLElement, message: string, tone: 'green' | 'gold' | 'red'): void {
+    const label = document.createElement('span');
+    label.className = `ability-pop-label is-${tone}`;
+    label.textContent = message;
+    const rect = anchor.getBoundingClientRect();
+    label.style.setProperty('--ability-x', `${rect.left + rect.width / 2}px`);
+    label.style.setProperty('--ability-y', `${Math.max(8, rect.top - 8)}px`);
+    document.body.append(label);
+    window.setTimeout(() => label.remove(), 1450);
+  }
+
+  private animateSummon(event: Extract<GameEvent, { type: 'summon' }>): void {
+    const witch = this.root.querySelector<HTMLElement>(`[data-card-id="${CSS.escape(event.sourceId)}"]`);
+    const target = this.root.querySelector<HTMLElement>(`[data-card-id="${CSS.escape(event.instanceId)}"]`);
+    if (!witch || !target) return;
+    witch.classList.add('summon-caster');
+    this.showAbilityLabel(witch, 'A BRUXA INVOCOU UM MORTO VIVO', 'green');
+    const from = witch.getBoundingClientRect(); const to = target.getBoundingClientRect();
+    const face = target.querySelector<HTMLElement>('.card-face');
+    if (face && from.width && to.width) {
+      const ghost = document.createElement('div');
+      ghost.className = 'summon-transfer-ghost';
+      ghost.setAttribute('aria-hidden', 'true');
+      Object.assign(ghost.style, { left: `${to.left}px`, top: `${to.top}px`, width: `${to.width}px`, height: `${to.height}px` });
+      ghost.append(face.cloneNode(true));
+      document.body.append(ghost);
+      const previousVisibility = target.style.visibility;
+      target.style.visibility = 'hidden';
+      const flight = ghost.animate([
+        { transform: `translate(${from.left - to.left}px,${from.top - to.top}px) scale(.62) rotateY(-28deg)`, opacity: .2 },
+        { transform: 'translate(0,-12px) scale(1.08) rotateY(180deg)', opacity: 1, offset: .72 },
+        { transform: 'none', opacity: 1 },
+      ], { duration: 760, easing: 'cubic-bezier(.18,.75,.25,1)' });
+      const finish = () => { ghost.remove(); target.style.visibility = previousVisibility; target.classList.add('summon-pop'); window.setTimeout(() => target.classList.remove('summon-pop'), 800); };
+      flight.onfinish = finish; flight.oncancel = finish;
+    } else this.animateAbilityCard(event.instanceId, 'summon-pop');
+    window.setTimeout(() => witch.classList.remove('summon-caster'), 1100);
+  }
+
+  private animateRoots(instanceId: string): void {
+    const target = this.root.querySelector<HTMLElement>(`[data-card-id="${CSS.escape(instanceId)}"]`);
+    if (!target) return;
+    target.classList.add('is-rooted', 'roots-binding');
+    const vines = document.createElement('span');
+    vines.className = 'roots-vines';
+    vines.setAttribute('aria-hidden', 'true');
+    vines.innerHTML = '<svg viewBox="0 0 100 140" preserveAspectRatio="none"><path d="M-4 129C22 110 4 89 30 78S22 45 43 28 44 5 50-4M104 130C76 110 97 89 70 76S79 47 58 29 57 5 50-4M-2 72C19 66 23 50 16 37M102 71C82 64 78 49 85 35"/><path d="M29 82l-10-5 3 13M70 80l10-6-2 13M44 31l-9-5 2 12M57 31l9-6-2 12"/></svg>';
+    target.append(vines);
+    window.setTimeout(() => { vines.remove(); target.classList.remove('roots-binding'); }, 1150);
+    this.showAbilityLabel(target, 'RAÍZES PRENDERAM · 4s', 'green');
   }
 
   private animateLink(sourceId: string, targetId?: string): void {
@@ -978,6 +1055,8 @@ export class GameApp {
       if (!card || !slot || this.pendingSigilFlips.has(event.instanceId)) continue;
       const rect = slot.getBoundingClientRect();
       if (!rect.width || !rect.height) continue;
+      slot.classList.add('is-revealing');
+      this.pendingSigilFlipSlots.set(event.instanceId, slot);
       const ghost = document.createElement('div');
       ghost.className = 'sigil-reveal-ghost';
       ghost.setAttribute('aria-hidden', 'true');
@@ -1059,23 +1138,47 @@ export class GameApp {
     window.setTimeout(() => { target.classList.remove('is-hit', 'is-healing'); number.remove(); }, 850);
   }
 
-  private animateSpell(event: Extract<GameEvent, { type: 'spell' }>): void {
+  private animateSpell(event: Extract<GameEvent, { type: 'spell' }>): Promise<void> {
     const from = this.root.querySelector<HTMLElement>('#hand-area')?.getBoundingClientRect();
     const target = event.targetId
       ? this.root.querySelector<HTMLElement>(`[data-card-id="${CSS.escape(event.targetId)}"]`)
-      : this.root.querySelector<HTMLElement>(event.targetSide === 'player' ? '#player-life-target' : '#enemy-life-target');
-    if (!from || !target) return;
-    const to = target.getBoundingClientRect();
+      : null;
+    const targetElement = target
+      ?? (event.targetSlot !== undefined ? this.root.querySelector<HTMLElement>(`[data-slot-side="${event.targetSide}"][data-slot="${event.targetSlot}"]`) : null)
+      ?? this.root.querySelector<HTMLElement>(event.targetSide === 'player' ? '#player-life-target' : '#enemy-life-target');
+    if (!from || !targetElement) return Promise.resolve();
+    const to = targetElement.getBoundingClientRect();
     const projectile = document.createElement('i');
     projectile.className = `combat-projectile ${event.targetSide === 'enemy' ? 'combat-projectile--enemy' : ''}`;
-    const spellVisual = cardEffects[event.targetSide === event.side ? 'runic-pulse' : 'wandering-flame'];
-    projectile.dataset.trail = event.targetSide === event.side ? 'orb' : 'spark';
+    const isFireball = event.definitionId === 'wandering-flame';
+    const spellVisual = cardEffects[event.definitionId] ?? cardEffects[event.targetSide === event.side ? 'runic-pulse' : 'wandering-flame'];
+    projectile.classList.toggle('is-fireball', isFireball);
+    projectile.dataset.trail = isFireball ? 'fireball' : event.targetSide === event.side ? 'orb' : 'spark';
     projectile.style.setProperty('--effect-color', spellVisual.color);
     projectile.style.left = `${from.left + from.width / 2}px`; projectile.style.top = `${from.top + from.height / 2}px`;
     projectile.style.setProperty('--dx', `${to.left + to.width / 2 - from.left - from.width / 2}px`);
     projectile.style.setProperty('--dy', `${to.top + to.height / 2 - from.top - from.height / 2}px`);
     document.body.appendChild(projectile);
-    window.setTimeout(() => projectile.remove(), 520);
+    return new Promise((resolve) => {
+      let finished = false;
+      const finish = () => {
+        if (finished) return;
+        finished = true;
+        projectile.remove();
+        if (isFireball) {
+          const impact = document.createElement('i');
+          impact.className = 'fireball-impact-burst';
+          impact.setAttribute('aria-hidden', 'true');
+          impact.style.left = `${to.left + to.width / 2}px`;
+          impact.style.top = `${to.top + to.height / 2}px`;
+          document.body.append(impact);
+          window.setTimeout(() => impact.remove(), 430);
+        }
+        resolve();
+      };
+      projectile.addEventListener('animationend', finish, { once: true });
+      window.setTimeout(finish, 850);
+    });
   }
 
   private render(): void {
@@ -1218,7 +1321,9 @@ export class GameApp {
           nextFace.innerHTML = renderCardFace(definition, displayedCard, side, 'field').trim();
           const currentFace = currentCard.querySelector<HTMLElement>('.card-face');
           const desiredFace = nextFace.content.firstElementChild as HTMLElement;
-          if (currentFace?.dataset.visualState !== desiredFace.dataset.visualState) currentCard.replaceChildren(desiredFace);
+          if (currentFace?.dataset.visualState !== desiredFace.dataset.visualState) {
+            if (currentFace) currentFace.replaceWith(desiredFace); else currentCard.prepend(desiredFace);
+          }
         }
       }
       if (displayedCard) {
@@ -1310,16 +1415,18 @@ export class GameApp {
     const visual = cardEffects[definition.id];
     const targetStatus = this.attackTargetStatus(card, side);
     const targetStatusMarkup = targetStatus ? `<span class="attack-target-status" data-attack-target-status role="status">${this.escapeAttribute(targetStatus)}</span>` : '';
-    return `<div class="battle-card${side === 'enemy' ? ' enemy-unit' : ''}${secret ? ' sigil-card' : ''}" data-card-id="${card.instanceId}" data-side="${side}" data-foundation="${definition.foundation}" data-trail="${visual.trail}" data-hit="${visual.hit}" data-death="${visual.death}" style="--effect-color:${visual.color}" title="${this.escapeAttribute(details)}"><span class="damage-aura" aria-hidden="true"></span>${renderCardFace(definition, card, side, 'field')}${definition.kind === 'troop' && !secret ? '<span class="attack-cooldown-shade" data-cooldown-shade aria-hidden="true"></span>' : ''}${cooldown}${targetStatusMarkup}</div>`;
+    return `<div class="battle-card${side === 'enemy' ? ' enemy-unit' : ''}${secret ? ' sigil-card' : ''}" data-card-id="${card.instanceId}" data-side="${side}" data-foundation="${definition.foundation}" data-trail="${visual.trail}" data-hit="${visual.hit}" data-death="${visual.death}" style="--effect-color:${visual.color}" title="${this.escapeAttribute(details)}"><span class="damage-aura" aria-hidden="true"></span>${renderCardFace(definition, card, side, 'field')}${definition.kind === 'troop' && !secret ? '<span class="attack-cooldown-shade" data-cooldown-shade aria-hidden="true"></span>' : ''}${cooldown}${targetStatusMarkup}<span class="ability-state-badge" data-ability-state aria-live="polite"></span></div>`;
   }
 
   private attackTargetStatus(card: CardInstance, side: Side): string {
-    if (side !== 'player' || !card.attackTargetId) return '';
-    const targets = this.state.players.enemy.slots;
+    if (card.directAttackTarget) return 'ALVO DIRETO: JOGADOR · CURA +1';
+    if (!card.attackTargetId) return '';
+    const targetSide = side === 'player' ? 'enemy' : 'player';
+    const targets = this.state.players[targetSide].slots;
     const slot = targets.findIndex((target) => target?.instanceId === card.attackTargetId);
     if (slot < 0) return 'ALVO SAIU · AUTOMÁTICO';
     const target = targets[slot];
-    if (!target || !isAttackTargetExposed(this.state, 'enemy', slot)) return 'ALVO PROTEGIDO · AUTOMÁTICO';
+    if (!target || !isAttackTargetExposed(this.state, targetSide, slot)) return 'ALVO PROTEGIDO · AUTOMÁTICO';
     return `ALVO: ${getCardDefinition(target.definitionId).name}`;
   }
 
@@ -1347,6 +1454,25 @@ export class GameApp {
     element.classList.toggle('is-link-source', Boolean(card.linkedAllyId));
     element.classList.toggle('is-link-target', linkedTarget);
     element.classList.toggle('is-furious', getCardDefinition(card.definitionId).ability === 'fury' && card.health <= (getCardDefinition(card.definitionId).abilityConfig?.furyThreshold ?? 3));
+    this.syncAbilityStatus(element, card, side);
+  }
+
+  private syncAbilityStatus(element: HTMLElement, card: CardInstance, side: Side): void {
+    const definition = getCardDefinition(card.definitionId);
+    const badge = element.querySelector<HTMLElement>('[data-ability-state]');
+    if (!badge || definition.kind !== 'troop') return;
+    const linkedBy = this.state.players[side].slots.find((source) => source?.linkedAllyId === card.instanceId);
+    let text = '';
+    let className = '';
+    if (card.derived && card.summonedById) { text = 'BRUXA · INVOCADO'; className = 'is-green'; }
+    else if (definition.ability === 'resurrection') { text = card.resurrectionUsed ? 'RESSURREIÇÃO · USADA' : 'RESSURREIÇÃO · PRONTA'; className = card.resurrectionUsed ? 'is-muted' : 'is-green'; }
+    else if (definition.ability === 'necromancy') { text = card.summonUsed ? 'NECROMANCIA · USADA NESTA VIDA' : 'NECROMANCIA · PRONTA'; className = card.summonUsed ? 'is-muted' : 'is-green'; }
+    else if (definition.ability === 'mystic-link') { text = card.linkedAllyId ? `VÍNCULO → ${getCardDefinition(this.state.players[side].slots.find((unit) => unit?.instanceId === card.linkedAllyId)?.definitionId ?? definition.id).name}` : 'VINCULE UM ALIADO'; className = card.linkedAllyId ? 'is-green' : ''; }
+    else if (linkedBy) { text = 'VÍNCULO MÍSTICO · ATAQUE −1s'; className = 'is-green'; }
+    else if (definition.ability === 'plunder') { text = card.directAttackTarget ? 'ALVO DIRETO · CURA +1' : Math.floor(this.state.players[side].slots.findIndex((unit) => unit?.instanceId === card.instanceId) / topology.columns) === topology.frontRow[side] ? 'FRENTE · ATAQUE AUTOMÁTICO' : 'RETAGUARDA · PODE ATACAR O JOGADOR'; className = card.directAttackTarget ? 'is-gold' : ''; }
+    badge.textContent = text;
+    badge.className = `ability-state-badge${text ? ' is-visible' : ''}${className ? ` ${className}` : ''}`;
+    badge.setAttribute('aria-label', text || '');
   }
 
   private updateAttackCooldowns(): void {
@@ -1393,20 +1519,20 @@ export class GameApp {
       const kind = definition.kind === 'troop' ? 'Tropa' : definition.kind === 'spell' ? 'Feitiço' : 'Sigilo';
       const description = this.descriptionFor(definition);
       const facts = definition.kind === 'troop'
-        ? `<span><b>Ataque</b> ${definition.attack}</span><span><b>Vida</b> ${card.health}/${definition.maxHealth}</span>`
+        ? `<span><b>Ataque</b> ${effectiveAttack(card)}</span><span><b>Vida</b> ${card.health}/${maxHealthFor(card)}</span>`
         : definition.kind === 'spell'
           ? `<span><b>Custo</b> ${definition.cost}</span><span><b>Efeito</b> ${definition.effect === 'damage' ? `${balance.spellDamage} de dano` : `${balance.spellHealing} de cura`}</span>`
           : `<span><b>Custo</b> ${definition.cost}</span><span><b>Efeito</b> Sigilo oculto</span>`;
-      const behavior = definition.kind === 'troop'
+      const behavior = card.derived ? 'Invocado pela Bruxa Necromante. Esta unidade derivada tem 1 de ataque e 2 de vida; não ressuscita e não cria outras tropas.' : definition.kind === 'troop'
         ? definition.ability === 'resurrection' ? 'Ao receber dano letal pela primeira vez, retorna neste espaço com 2 de vida. Na próxima eliminação, é destruído.'
-          : definition.ability === 'necromancy' ? 'Uma vez, invoca um Morto Vivo no espaço livre da mesma coluna quando outra tropa aliada morre definitivamente.'
+          : definition.ability === 'necromancy' ? 'Uma vez enquanto esta Bruxa estiver viva, quando outra tropa aliada da mesma coluna for eliminada definitivamente, invoca um Morto Vivo com 2 de vida no espaço que ficou vazio. A carta aparece saindo da Bruxa e ocupa esse espaço.'
             : definition.ability === 'crush' ? 'Se eliminar uma tropa da frente, o dano excedente atinge a tropa de trás na mesma coluna.'
               : definition.ability === 'mystic-link' ? 'Na retaguarda, selecione esta carta e toque em uma tropa aliada para reduzir em 1 segundo o intervalo de ataque dela. Para mover, arraste-a a um espaço vazio.'
-                : definition.ability === 'plunder' ? 'Selecione esta carta e toque na vida inimiga para ordenar um ataque direto, mesmo da retaguarda. Ao acertar, recupera 1 de vida.'
+                : definition.ability === 'plunder' ? 'Na retaguarda, selecione o Goblin e toque na barra de vida inimiga. Ele passa a atacar diretamente o jogador e recupera 1 de vida quando acerta. Esta exceção vale só para ele.'
                   : definition.ability === 'fury' ? 'Quando fica com 3 ou menos de vida, recebe +1 de ataque. O bônus termina se recuperar mais de 3 de vida.'
                     : 'Na frente, ataca automaticamente. Na retaguarda, selecione esta tropa e depois o alvo inimigo.'
         : description;
-      wrap.innerHTML = `<div class="quick-card-preview"><div class="preview-shell ${definition.kind}" data-foundation="${definition.foundation}">${renderCardFace(definition, card, side, 'preview')}</div><section class="card-preview-details"><div class="card-preview-heading"><strong>${this.escapeAttribute(definition.name)}</strong><span>${kind}</span></div><div class="card-preview-facts">${facts}</div><p>${this.escapeAttribute(description)}</p><p class="card-preview-how">${this.escapeAttribute(behavior)}</p><button class="card-preview-close" id="close-card-preview" type="button">Fechar</button></section></div>`;
+      wrap.innerHTML = `<div class="quick-card-preview"><div class="preview-shell ${definition.kind}" data-foundation="${definition.foundation}">${renderCardFace(definition, card, side, 'preview')}</div><section class="card-preview-details"><div class="card-preview-heading"><strong>${this.escapeAttribute(card.derived ? 'Morto Vivo · Invocado' : definition.name)}</strong><span>${kind}</span></div><div class="card-preview-facts">${facts}</div><p>${this.escapeAttribute(card.derived ? behavior : description)}</p><p class="card-preview-how">${this.escapeAttribute(behavior)}</p><button class="card-preview-close" id="close-card-preview" type="button">Fechar</button></section></div>`;
       overlay.classList.add('open'); overlay.setAttribute('aria-hidden', 'false');
       return;
     }
@@ -1441,7 +1567,7 @@ export class GameApp {
     const config = definition.abilityConfig ?? {};
     switch (definition.ability) {
       case 'resurrection': return `Quando receber dano letal pela primeira vez, volta ao campo na mesma posição com ${config.resurrectionHealth ?? 2} de vida. Isso só acontece uma vez; na próxima eliminação, é destruído.`;
-      case 'necromancy': return `Uma vez por partida, quando outra tropa aliada da mesma coluna for eliminada definitivamente, invoca um Morto Vivo com ${config.summonHealth ?? 2} de vida no espaço que ficou livre. A unidade invocada não ressuscita.`;
+      case 'necromancy': return `Uma vez enquanto esta Bruxa permanecer viva, quando outra tropa aliada da mesma coluna for eliminada definitivamente, invoca um Morto Vivo com ${config.summonHealth ?? 2} de vida no espaço que ficou livre. A invocação não consome uma carta do deck; a unidade derivada não ressuscita e não invoca outra tropa.`;
       case 'crush': return 'Se eliminar uma tropa da linha frontal, o dano que exceder a vida dela atinge a tropa da retaguarda na mesma coluna. O excedente não atinge o jogador.';
       case 'mystic-link': return `Na retaguarda, vincula-se a uma tropa aliada escolhida. Enquanto ambas permanecerem em campo, o intervalo de ataque do aliado diminui em ${(config.intervalReductionMs ?? 1000) / 1000} segundo. Se o vínculo acabar, o bônus também acaba.`;
       case 'plunder': return `Pode atacar diretamente a vida do adversário mesmo estando na retaguarda. Ao acertar, recupera ${config.healOnDirect ?? 1} de vida, sem ultrapassar o máximo.`;
@@ -1462,7 +1588,7 @@ export class GameApp {
     if (definition.kind === 'troop') values.push(`${effectiveAttack(card)} ataque`, `${card.health}/${maxHealthFor(card)} vida`, `intervalo de ${attackIntervalFor(definition.id, balance.attackIntervalMs) / 1000} segundos`);
     else if (definition.kind === 'spell') values.push('efeito instantâneo');
     else values.push('carta oculta com efeito funcional');
-    values.push(this.descriptionFor(definition));
+    values.push(card.derived ? 'Invocado pela Bruxa Necromante; 1 de ataque, 2 de vida, sem ressurreição.' : this.descriptionFor(definition));
     return values.join(' · ');
   }
 
