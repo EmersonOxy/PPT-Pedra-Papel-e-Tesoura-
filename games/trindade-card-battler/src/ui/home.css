@@ -148,6 +148,11 @@
 .deck-builder-controls { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 5px; color: #f2e6c4; font: 800 11px/1 system-ui,sans-serif; text-align: center; }
 .deck-builder-controls button { min-width: 24px; min-height: 26px; border: 1px solid #d8c67866; border-radius: 6px; color: #f1df9c; background: #14283a; font: 800 16px/1 system-ui,sans-serif; cursor: pointer; }
 .deck-builder-controls button:disabled { opacity: .4; cursor: default; }
+.deck-builder-card.is-in-deck .deck-card-tile { border-color: #93e2bd; box-shadow: 0 0 0 2px #47ce9b66,0 6px 16px #0008; }
+.deck-copy-meta { display: flex; justify-content: space-between; gap: 4px; color: #a9c0b8; font: 700 8px/1.2 system-ui,sans-serif; }
+.deck-copy-toggle { min-height: 28px; padding: 4px 5px; border: 1px solid #cdbd7866; border-radius: 7px; color: #f1df9c; background: #14283a; font: 800 8px/1.2 system-ui,sans-serif; cursor: pointer; }
+.deck-copy-toggle.is-selected { border-color: #68d7a8; color: #adf1cb; background: #123a31; }
+.deck-copy-toggle:disabled { opacity: .4; cursor: default; }
 .deck-card-number { position: absolute; top: 3px; left: 4px; display: grid; width: 17px; height: 17px; place-items: center; border: 1px solid #f4d88988; border-radius: 50%; color: #f7e9c6; background: #071522d9; font: 700 7px system-ui,sans-serif; }
 .deck-card-inspect-hint { position: absolute; right: 3px; bottom: 3px; padding: 2px 4px; border: 1px solid #f4d88988; border-radius: 4px; color: #fff3cf; background: #071522e8; font: 800 7px/1.1 system-ui,sans-serif; box-shadow: 0 1px 4px #0008; }
 .mission-list { display: grid; gap: 10px; }

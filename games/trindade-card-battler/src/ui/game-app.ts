@@ -40,7 +40,7 @@ export class GameApp {
   private selectedId: string | null = null;
   private selectedSigilSlot: number | null = null;
   private deckIds: string[] = [];
-  private readonly deckStorageKey = 'trindade.battle-deck.v1';
+  private readonly deckStorageKey = 'trindade.battle-deck.v2';
   private theme = 'mineral';
   private drag: ActiveDrag | null = null;
   private toastTimer: number | undefined;
@@ -54,27 +54,30 @@ export class GameApp {
   private playerWins = 0;
   private cardsPlaced = 0;
   private deckPreviewCards: CardInstance[] = [];
+  private selectedCollectionIds: string[] = [];
   private longPressTimer: number | undefined;
   private cardTickets: Record<string, number> = {};
   private cardLevels: Record<string, number> = {};
   private claimedMissions = new Set<string>();
   private readonly progressionStorageKey = 'trindade.card-progression.v1';
+  private pendingSigilFlips = new Map<string, HTMLElement>();
+  private revealResolutionPending = false;
 
   constructor(root: HTMLElement) {
     this.root = root;
     this.loadProgression();
-    this.loadDeck();
-    const seed = new Uint32Array(1);
-    crypto.getRandomValues(seed);
-    this.state = createGameImported(seed[0], this.deckIds);
-    this.deckPreviewCards = cardDefinitions.map((definition, index) => ({
-      instanceId: `catalog-${definition.id}-${index + 1}`,
+    this.deckPreviewCards = cardDefinitions.flatMap((definition) => Array.from({ length: 3 }, (_, index) => ({
+      instanceId: `collection-${definition.id}-${index + 1}`,
       definitionId: definition.id,
       owner: 'player' as const,
       health: definition.maxHealth,
       nextAttackAtMs: 0,
       revealed: false,
-    }));
+    })));
+    this.loadDeck();
+    const seed = new Uint32Array(1);
+    crypto.getRandomValues(seed);
+    this.state = createGameImported(seed[0], this.deckIds);
     this.mount();
     this.render();
     this.bindEvents();
@@ -100,9 +103,9 @@ export class GameApp {
           </section>
           <section class="home-page" data-home-page="deck" hidden>
             <div class="page-heading"><span class="page-overline">PREPARAÇÃO</span><h1>Seu deck</h1><p>Escolha as cartas do seu deck. Todas estão disponíveis para teste.</p></div>
-            <div class="deck-summary"><div><strong id="deck-builder-count">${balance.deckSize}/${balance.deckSize}</strong><span>cartas no deck de batalha</span></div><div><strong>${cardDefinitions.length}</strong><span>modelos disponíveis</span></div></div>
-            <div class="experimental-note"><b>Deck experimental</b><span>Use + e − para montar ${balance.deckSize} cartas. Salvo neste dispositivo. Sem custo ou desbloqueio.</span></div>
-            <div class="deck-grid" id="deck-grid" aria-label="As ${balance.deckSize} cartas do deck"></div>
+            <div class="deck-summary"><div><strong id="deck-builder-count">${balance.deckSize}/${balance.deckSize}</strong><span>cartas no deck de batalha</span></div><div><strong>${cardDefinitions.length * 3}</strong><span>cartas individuais na coleção</span></div></div>
+            <div class="experimental-note"><b>Coleção de cartas</b><span>Selecione cada cópia física individualmente para montar um deck de ${balance.deckSize}. A escolha fica salva neste dispositivo.</span></div>
+            <div class="deck-grid" id="deck-grid" aria-label="Coleção de ${cardDefinitions.length * 3} cartas individuais"></div>
           </section>
           <section class="home-page" data-home-page="missions" hidden>
             <div class="page-heading"><span class="page-overline">OBJETIVOS DE TREINO</span><h1>Missões</h1><p>Conclua objetivos e resgate tickets exclusivos das cartas indicadas.</p></div>
@@ -322,24 +325,44 @@ export class GameApp {
     this.setText('#deck-builder-count', `${this.deckIds.length}/${balance.deckSize}`);
     grid.innerHTML = this.deckPreviewCards.map((card) => {
       const definition = getCardDefinition(card.definitionId);
-      const count = this.deckIds.filter(id => id === definition.id).length;
-      return `<article class="deck-builder-card"><button class="deck-card-tile" type="button" data-card-inspect="${this.escapeAttribute(card.instanceId)}" aria-label="Ver detalhes de ${this.escapeAttribute(definition.name)}">${renderCardFace(definition, card, 'player', 'preview')}<span class="deck-card-inspect-hint" aria-hidden="true">ⓘ Detalhes</span></button><div class="deck-builder-controls"><button type="button" data-deck-remove="${definition.id}" aria-label="Remover ${this.escapeAttribute(definition.name)}" ${count === 0 ? 'disabled' : ''}>−</button><span aria-label="Quantidade de ${this.escapeAttribute(definition.name)}">${count}</span><button type="button" data-deck-add="${definition.id}" aria-label="Adicionar ${this.escapeAttribute(definition.name)}" ${this.deckIds.length >= balance.deckSize ? 'disabled' : ''}>+</button></div></article>`;
+      const selected = this.selectedCollectionIds.includes(card.instanceId);
+      const copy = Number(card.instanceId.split('-').at(-1));
+      const level = this.cardLevels[card.instanceId] ?? 1;
+      return `<article class="deck-builder-card${selected ? ' is-in-deck' : ''}"><button class="deck-card-tile" type="button" data-card-inspect="${this.escapeAttribute(card.instanceId)}" aria-label="Ver detalhes da cópia ${copy} de ${this.escapeAttribute(definition.name)}">${renderCardFace(definition, card, 'player', 'preview')}<span class="deck-card-inspect-hint" aria-hidden="true">ⓘ Detalhes</span></button><div class="deck-copy-meta"><span>Cópia ${copy}</span><span>Nível ${level}</span></div><button class="deck-copy-toggle${selected ? ' is-selected' : ''}" type="button" data-deck-toggle="${this.escapeAttribute(card.instanceId)}" aria-pressed="${selected}" ${!selected && this.deckIds.length >= balance.deckSize ? 'disabled' : ''}>${selected ? 'No deck' : 'Adicionar ao deck'}</button></article>`;
     }).join('');
   }
 
   private loadDeck(): void {
-    const defaultIds = Array.from({ length: balance.deckSize }, (_, index) => cardDefinitions[index % cardDefinitions.length].id);
+    const allCollectionIds = this.deckPreviewCards.map((card) => card.instanceId);
+    const defaultCollectionIds = allCollectionIds.slice(0, balance.deckSize);
     try {
       const saved: unknown = JSON.parse(localStorage.getItem(this.deckStorageKey) ?? 'null');
-      this.deckIds = Array.isArray(saved) && saved.length <= balance.deckSize && saved.every(id => typeof id === 'string' && cardDefinitions.some(card => card.id === id)) ? saved : defaultIds;
-    } catch { this.deckIds = defaultIds; }
+      const legacy: unknown = JSON.parse(localStorage.getItem('trindade.battle-deck.v1') ?? 'null');
+      const value = Array.isArray(saved) ? saved : legacy;
+      if (Array.isArray(value) && value.length <= balance.deckSize && value.every(id => typeof id === 'string' && (allCollectionIds.includes(id) || cardDefinitions.some((definition) => definition.id === id)))) {
+        const chosen: string[] = [];
+        for (const id of value) {
+          if (allCollectionIds.includes(id) && !chosen.includes(id)) chosen.push(id);
+          else if (cardDefinitions.some((definition) => definition.id === id)) {
+            const copy = this.deckPreviewCards.find((card) => card.definitionId === id && !chosen.includes(card.instanceId));
+            if (copy) chosen.push(copy.instanceId);
+          } else { chosen.length = 0; break; }
+        }
+        this.selectedCollectionIds = chosen;
+      } else this.selectedCollectionIds = defaultCollectionIds;
+    } catch { this.selectedCollectionIds = defaultCollectionIds; }
+    this.deckIds = this.selectedCollectionIds.map((id) => this.deckPreviewCards.find((card) => card.instanceId === id)!.definitionId);
+    try { localStorage.setItem(this.deckStorageKey, JSON.stringify(this.selectedCollectionIds)); } catch { /* Session remains playable. */ }
   }
 
-  private editDeck(id: string, add: boolean): void {
-    if (!cardDefinitions.some(card => card.id === id)) return;
-    if (add && this.deckIds.length < balance.deckSize) this.deckIds.push(id);
-    else if (!add) { const index = this.deckIds.indexOf(id); if (index >= 0) this.deckIds.splice(index, 1); }
-    try { localStorage.setItem(this.deckStorageKey, JSON.stringify(this.deckIds)); } catch { /* Session remains playable. */ }
+  private toggleDeckCard(collectionId: string): void {
+    const card = this.deckPreviewCards.find((item) => item.instanceId === collectionId);
+    if (!card) return;
+    const index = this.selectedCollectionIds.indexOf(collectionId);
+    if (index >= 0) this.selectedCollectionIds.splice(index, 1);
+    else if (this.selectedCollectionIds.length < balance.deckSize) this.selectedCollectionIds.push(collectionId);
+    this.deckIds = this.selectedCollectionIds.map((id) => this.deckPreviewCards.find((item) => item.instanceId === id)!.definitionId);
+    try { localStorage.setItem(this.deckStorageKey, JSON.stringify(this.selectedCollectionIds)); } catch { /* Session remains playable. */ }
     this.renderDeckLibrary();
   }
 
@@ -383,6 +406,7 @@ export class GameApp {
   }
 
   private onClick = (event: MouseEvent): void => {
+    if (this.revealResolutionPending) { event.preventDefault(); return; }
     if (event.detail > 0 && performance.now() < this.suppressClickUntil) {
       event.preventDefault();
       event.stopPropagation();
@@ -392,8 +416,7 @@ export class GameApp {
     if (!(target instanceof Element)) return;
     const button = target.closest<HTMLElement>('button');
     if (!button) return;
-    if (button.dataset.deckAdd) { this.editDeck(button.dataset.deckAdd, true); return; }
-    if (button.dataset.deckRemove) { this.editDeck(button.dataset.deckRemove, false); return; }
+    if (button.dataset.deckToggle) { this.toggleDeckCard(button.dataset.deckToggle); return; }
     const claimMission = button.dataset.claimMission;
     if (claimMission) {
       const selectedCard = this.root.querySelector<HTMLSelectElement>(`[data-mission-card="${CSS.escape(claimMission)}"]`);
@@ -527,6 +550,7 @@ export class GameApp {
   }
 
   private onPointerDown = (event: PointerEvent): void => {
+    if (this.revealResolutionPending) { event.preventDefault(); return; }
     if (event.button !== 0 && event.pointerType === 'mouse') return;
     if (!this.matchHasStarted || this.state.phase === 'starting' || this.state.phase === 'finished') return;
     const target = event.target;
@@ -722,6 +746,13 @@ export class GameApp {
 
   private transition(result: Transition, failureMessage?: string): void {
     if (!result.events.length && failureMessage) { this.toast(failureMessage); return; }
+    if (result.events.some((event) => event.type === 'reveal')) {
+      const attackProfiles = this.captureAttackProfiles(result.events, this.state);
+      this.captureSigilFlips(result.events, this.state);
+      this.revealResolutionPending = true;
+      void this.resolveAfterSigilReveal(result, attackProfiles);
+      return;
+    }
     const origins = new Map<string, DOMRect>();
     for (const event of result.events) {
       if (event.type !== 'draw' && event.type !== 'move' && event.type !== 'place' && event.type !== 'return') continue;
@@ -731,12 +762,26 @@ export class GameApp {
       if (source) origins.set(event.instanceId, source.getBoundingClientRect());
     }
     const attackProfiles = this.captureAttackProfiles(result.events, this.state);
+    this.captureSigilFlips(result.events, this.state);
     this.captureDestructions(result.events);
     this.state = result.state;
+    this.syncMatchFlowWithEngine();
     if (result.events.some((event) => event.type === 'place' || event.type === 'spell' || event.type === 'return' || event.type === 'move' || event.type === 'target')) this.selectedId = null;
     this.render();
     this.animateCardTransfers(origins);
     this.playEvents(result.events, attackProfiles);
+  }
+
+  private async resolveAfterSigilReveal(result: Transition, attackProfiles: Map<string, AttackAnimationProfile | undefined>): Promise<void> {
+    const reveals = result.events.filter((event): event is Extract<GameEvent, { type: 'reveal' }> => event.type === 'reveal');
+    for (const reveal of reveals) await this.animateSigilReveal(reveal);
+    this.captureDestructions(result.events);
+    this.state = result.state;
+    this.syncMatchFlowWithEngine();
+    if (result.events.some((event) => event.type === 'place' || event.type === 'spell' || event.type === 'return' || event.type === 'move' || event.type === 'target')) this.selectedId = null;
+    this.render();
+    this.playEvents(result.events, attackProfiles, true);
+    this.revealResolutionPending = false;
   }
 
   private animateCardTransfers(origins: Map<string, DOMRect>): void {
@@ -779,13 +824,19 @@ export class GameApp {
       if (flow.events.includes('transition-start')) this.root.querySelector('#transition-curtain')?.classList.add('active');
       if (flow.events.includes('mount-arena')) this.mountArenaForPreparation();
       if (flow.events.includes('transition-complete')) this.root.querySelector('#transition-curtain')?.classList.remove('active');
-      if (arenaWasActive && this.matchHasStarted && this.state.phase !== 'finished') {
+      if (arenaWasActive && this.matchHasStarted && this.state.phase !== 'finished' && !this.revealResolutionPending) {
         const priorState = this.state;
         const result = advanceTime(this.state, delta);
         const attackProfiles = this.captureAttackProfiles(result.events, priorState);
-        this.state = result.state;
-        this.syncMatchFlowWithEngine();
-        if (result.events.length) { this.captureDestructions(result.events); this.render(); this.playEvents(result.events, attackProfiles); }
+        if (result.events.some((event) => event.type === 'reveal')) {
+          this.captureSigilFlips(result.events, priorState);
+          this.revealResolutionPending = true;
+          void this.resolveAfterSigilReveal(result, attackProfiles);
+        } else {
+          this.state = result.state;
+          this.syncMatchFlowWithEngine();
+          if (result.events.length) { this.captureDestructions(result.events); this.render(); this.playEvents(result.events, attackProfiles); }
+        }
       }
       this.renderMatchStatus();
       this.renderPhaseStatus();
@@ -804,7 +855,7 @@ export class GameApp {
     return profiles;
   }
 
-  private playEvents(events: GameEvent[], attackProfiles = new Map<string, AttackAnimationProfile | undefined>()): void {
+  private async playEvents(events: GameEvent[], attackProfiles = new Map<string, AttackAnimationProfile | undefined>(), revealsAlreadyShown = false): Promise<void> {
     let missionsChanged = false;
     for (const event of events) {
       if (event.type === 'attack') this.animateAttack(event, attackProfiles.get(event.attackerId));
@@ -817,7 +868,7 @@ export class GameApp {
       if (event.type === 'summon') this.animateAbilityCard(event.instanceId, 'summon-pop');
       if (event.type === 'root') this.animateAbilityCard(event.instanceId, 'is-rooted');
       if (event.type === 'link') this.animateLink(event.instanceId, event.targetId);
-      if (event.type === 'reveal') this.animateSigilReveal(event.definitionId);
+      if (event.type === 'reveal' && !revealsAlreadyShown) await this.animateSigilReveal(event);
       if (event.type === 'volcano-wave') this.animateVolcanoWave(event.side, event.wave);
       if (event.type === 'life-damage') this.animateLife(event.side, false);
       if (event.type === 'life-heal') this.animateLife(event.side, true);
@@ -919,14 +970,33 @@ export class GameApp {
     window.setTimeout(() => { source?.classList.remove('is-link-source'); target?.classList.remove('is-link-target'); }, 700);
   }
 
-  private animateSigilReveal(definitionId?: string): void {
-    const board = this.root.querySelector<HTMLElement>('.arena-board');
-    if (!board) return;
-    board.dataset.revealName = definitionId ? getCardDefinition(definitionId).name : '';
-    board.classList.remove('is-sigil-revealing');
-    void board.offsetWidth;
-    board.classList.add('is-sigil-revealing');
-    window.setTimeout(() => board.classList.remove('is-sigil-revealing'), 650);
+  private captureSigilFlips(events: GameEvent[], before: GameState): void {
+    for (const event of events) {
+      if (event.type !== 'reveal') continue;
+      const card = before.players[event.side].sigils[event.slot];
+      const slot = this.root.querySelector<HTMLElement>(`#game [data-slot-side="${event.side}"][data-slot="${event.slot}"]`);
+      if (!card || !slot || this.pendingSigilFlips.has(event.instanceId)) continue;
+      const rect = slot.getBoundingClientRect();
+      if (!rect.width || !rect.height) continue;
+      const ghost = document.createElement('div');
+      ghost.className = 'sigil-reveal-ghost';
+      ghost.setAttribute('aria-hidden', 'true');
+      Object.assign(ghost.style, { left: `${rect.left}px`, top: `${rect.top}px`, width: `${rect.width}px`, height: `${rect.height}px` });
+      ghost.innerHTML = `<div class="sigil-reveal-flipper"><div class="sigil-reveal-back">${renderCardBack(event.side)}</div><div class="sigil-reveal-front">${renderCardFace(getCardDefinition(card.definitionId), card, event.side, 'field')}</div></div>`;
+      document.body.appendChild(ghost);
+      this.pendingSigilFlips.set(event.instanceId, ghost);
+    }
+  }
+
+  private animateSigilReveal(event: Extract<GameEvent, { type: 'reveal' }>): Promise<void> {
+    const ghost = this.pendingSigilFlips.get(event.instanceId);
+    if (!ghost) return Promise.resolve();
+    this.pendingSigilFlips.delete(event.instanceId);
+    ghost.classList.add('is-flipping');
+    return new Promise((resolve) => window.setTimeout(() => {
+      ghost.classList.add('is-revealed');
+      window.setTimeout(() => { ghost.remove(); resolve(); }, 280);
+    }, 460));
   }
 
   private animateVolcanoWave(side: Side, wave: number): void {
@@ -938,13 +1008,12 @@ export class GameApp {
     void board.offsetWidth;
     board.classList.add('is-volcano-erupting');
     window.setTimeout(() => board.classList.remove('is-volcano-erupting'), 900);
-    const bounds = board.getBoundingClientRect();
     const eruption = document.createElement('div');
     eruption.className = `volcano-eruption-overlay volcano-eruption-overlay--${side}`;
     eruption.setAttribute('aria-hidden', 'true');
     eruption.innerHTML = `<i class="volcano-eruption-fissures"></i><i class="volcano-eruption-ring"></i><i class="volcano-eruption-core"></i><span class="volcano-eruption-label">ERUPÇÃO · ONDA ${wave}</span>`;
-    Object.assign(eruption.style, { left: `${bounds.left}px`, top: `${bounds.top}px`, width: `${bounds.width}px`, height: `${bounds.height}px` });
-    document.body.appendChild(eruption);
+    Object.assign(eruption.style, { left: '0', top: '0', width: '100%', height: '100%' });
+    board.appendChild(eruption);
     window.setTimeout(() => eruption.remove(), 1350);
   }
 
@@ -1329,8 +1398,13 @@ export class GameApp {
           ? `<span><b>Custo</b> ${definition.cost}</span><span><b>Efeito</b> ${definition.effect === 'damage' ? `${balance.spellDamage} de dano` : `${balance.spellHealing} de cura`}</span>`
           : `<span><b>Custo</b> ${definition.cost}</span><span><b>Efeito</b> Sigilo oculto</span>`;
       const behavior = definition.kind === 'troop'
-        ? definition.ability === 'mystic-link' ? 'Na retaguarda, selecione a Raposa e toque em outra tropa aliada para vinculá-las. Para reposicionar, arraste-a até um espaço vazio.'
-          : 'Na frente ataca automaticamente; atrás aguarda sua ordem. Toque para selecionar, depois no alvo. O Goblin pode selecionar a vida inimiga.'
+        ? definition.ability === 'resurrection' ? 'Ao receber dano letal pela primeira vez, retorna neste espaço com 2 de vida. Na próxima eliminação, é destruído.'
+          : definition.ability === 'necromancy' ? 'Uma vez, invoca um Morto Vivo no espaço livre da mesma coluna quando outra tropa aliada morre definitivamente.'
+            : definition.ability === 'crush' ? 'Se eliminar uma tropa da frente, o dano excedente atinge a tropa de trás na mesma coluna.'
+              : definition.ability === 'mystic-link' ? 'Na retaguarda, selecione esta carta e toque em uma tropa aliada para reduzir em 1 segundo o intervalo de ataque dela. Para mover, arraste-a a um espaço vazio.'
+                : definition.ability === 'plunder' ? 'Selecione esta carta e toque na vida inimiga para ordenar um ataque direto, mesmo da retaguarda. Ao acertar, recupera 1 de vida.'
+                  : definition.ability === 'fury' ? 'Quando fica com 3 ou menos de vida, recebe +1 de ataque. O bônus termina se recuperar mais de 3 de vida.'
+                    : 'Na frente, ataca automaticamente. Na retaguarda, selecione esta tropa e depois o alvo inimigo.'
         : description;
       wrap.innerHTML = `<div class="quick-card-preview"><div class="preview-shell ${definition.kind}" data-foundation="${definition.foundation}">${renderCardFace(definition, card, side, 'preview')}</div><section class="card-preview-details"><div class="card-preview-heading"><strong>${this.escapeAttribute(definition.name)}</strong><span>${kind}</span></div><div class="card-preview-facts">${facts}</div><p>${this.escapeAttribute(description)}</p><p class="card-preview-how">${this.escapeAttribute(behavior)}</p><button class="card-preview-close" id="close-card-preview" type="button">Fechar</button></section></div>`;
       overlay.classList.add('open'); overlay.setAttribute('aria-hidden', 'false');
