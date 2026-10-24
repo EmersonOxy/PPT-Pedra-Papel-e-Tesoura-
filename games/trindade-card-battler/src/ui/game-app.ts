@@ -471,9 +471,13 @@ export class GameApp {
     if (fieldCard && this.selectedId === fieldCard.instanceId) { this.selectedId = null; this.syncSelection(); return; }
     if (fieldCard) {
       const selectedBoard = this.selectedId ? this.findPlayerBoardSlot(this.selectedId) : -1;
-      if (selectedBoard >= 0 && this.state.players.player.slots[selectedBoard]?.definitionId === 'amber-phoenix') { this.transition(assignAllyLink(this.state, 'player', selectedBoard, slot), 'A Raposa precisa estar na retaguarda para vincular um aliado.'); return; }
-      if (selectedBoard >= 0) { this.transition(moveTroop(this.state, 'player', selectedBoard, slot), 'O destino precisa estar vazio.'); return; }
-      if (!this.selectedId) { this.selectedId = fieldCard.instanceId; this.syncSelection(); return; }
+      if (selectedBoard >= 0 && getCardDefinition(this.state.players.player.slots[selectedBoard]!.definitionId).ability === 'mystic-link') { this.transition(assignAllyLink(this.state, 'player', selectedBoard, slot), 'Para vincular, deixe a Raposa na retaguarda e toque em outra tropa aliada. Para mover, escolha um espaço vazio.'); return; }
+      if (selectedBoard >= 0) { this.toast('Para reposicionar, escolha um espaço vazio. Para vincular um aliado, selecione a Raposa Mística na retaguarda.'); return; }
+      if (!this.selectedId) {
+        this.selectedId = fieldCard.instanceId; this.syncSelection();
+        if (getCardDefinition(fieldCard.definitionId).ability === 'mystic-link') this.toast('Raposa selecionada: toque em outra tropa aliada para vincular, ou arraste para um espaço vazio para reposicionar.');
+        return;
+      }
     }
     if (fieldCard && this.isSelectedSpell('heal')) this.tryCast({ kind: 'unit', side: 'player', slot });
   }
@@ -639,7 +643,15 @@ export class GameApp {
     const from = this.findPlayerBoardSlot(instanceId);
     if (from < 0 || !target) return;
     if (target.id === 'hand-area') this.transition(returnTroop(this.state, 'player', from), 'A mão está cheia ou a carta não pode ser recolhida.');
-    else if (target.dataset.slotSide === 'player') this.transition(moveTroop(this.state, 'player', from, Number(target.dataset.slot)), 'O destino precisa estar vazio.');
+    else if (target.dataset.slotSide === 'player') {
+      const destination = Number(target.dataset.slot);
+      const source = this.state.players.player.slots[from];
+      const occupant = this.state.players.player.slots[destination];
+      if (occupant && source && getCardDefinition(source.definitionId).ability === 'mystic-link') {
+        this.transition(assignAllyLink(this.state, 'player', from, destination), 'A Raposa precisa estar na retaguarda e o alvo deve ser outra tropa aliada.');
+      } else if (occupant) this.toast('Destino ocupado. Solte em um espaço vazio para reposicionar.');
+      else this.transition(moveTroop(this.state, 'player', from, destination), 'Não foi possível reposicionar essa tropa.');
+    }
     else if (target.dataset.slotSide === 'enemy') this.setAttackTarget(from, Number(target.dataset.slot));
   }
 
@@ -926,6 +938,14 @@ export class GameApp {
     void board.offsetWidth;
     board.classList.add('is-volcano-erupting');
     window.setTimeout(() => board.classList.remove('is-volcano-erupting'), 900);
+    const bounds = board.getBoundingClientRect();
+    const eruption = document.createElement('div');
+    eruption.className = `volcano-eruption-overlay volcano-eruption-overlay--${side}`;
+    eruption.setAttribute('aria-hidden', 'true');
+    eruption.innerHTML = `<i class="volcano-eruption-fissures"></i><i class="volcano-eruption-ring"></i><i class="volcano-eruption-core"></i><span class="volcano-eruption-label">ERUPÇÃO · ONDA ${wave}</span>`;
+    Object.assign(eruption.style, { left: `${bounds.left}px`, top: `${bounds.top}px`, width: `${bounds.width}px`, height: `${bounds.height}px` });
+    document.body.appendChild(eruption);
+    window.setTimeout(() => eruption.remove(), 1350);
   }
 
   private animateLife(side: Side, healing: boolean): void {
@@ -1016,16 +1036,19 @@ export class GameApp {
     if (playerLife) playerLife.style.height = `${Math.max(0, player.life / balance.startingLife * 100)}%`;
     if (enemyLife) enemyLife.style.height = `${Math.max(0, enemy.life / balance.startingLife * 100)}%`;
     const deck = this.root.querySelector<HTMLButtonElement>('#draw-deck');
-    const canDraw = player.hand.length < balance.handLimit && player.deck.length > 0 && this.state.phase === 'playing';
+    const discardCount = player.discard?.length ?? 0;
+    const availableToDraw = player.deck.length + discardCount;
+    const canDraw = player.hand.length < balance.handLimit && availableToDraw > 0 && this.state.phase === 'playing';
     const needsDraw = shouldHighlightDeck({
       phase: this.state.phase, handCount: player.hand.length, handLimit: balance.handLimit,
-      deckCount: player.deck.length, hasTroopInHand: player.hand.some((card) => getCardDefinition(card.definitionId).kind === 'troop'),
+      deckCount: availableToDraw, hasTroopInHand: player.hand.some((card) => getCardDefinition(card.definitionId).kind === 'troop'),
     });
     if (deck) {
-      const drawStatus = player.deck.length === 0 ? 'Deck esgotado'
-        : this.state.phase === 'finished' ? 'Partida encerrada'
+      const drawStatus = this.state.phase === 'finished' ? 'Partida encerrada'
           : this.state.phase !== 'playing' ? 'Aguarde o combate'
             : player.hand.length >= balance.handLimit ? 'Mão cheia'
+              : player.deck.length === 0 && discardCount > 0 ? `${discardCount} cartas · Reciclar e comprar`
+                : player.deck.length === 0 ? 'Deck esgotado'
               : `${player.deck.length} cartas · Comprar`;
       deck.parentElement?.setAttribute('data-draw-status', drawStatus);
       deck.title = drawStatus;
@@ -1148,7 +1171,9 @@ export class GameApp {
       const content = !displayedCard ? '<span class="empty-rune" aria-hidden="true">✧</span>' : displayedCard.revealed
         ? this.unitMarkup(displayedCard, side, true)
         : renderCardBack(side);
-      const label = `${side === 'player' ? 'Seu' : 'Adversário'}: sigilo ${slot + 1}${displayedCard?.revealed ? `, ${getCardDefinition(displayedCard.definitionId).name}` : displayedCard ? ', oculto' : ', vazio'}`;
+      const armedThorns = Boolean(displayedCard && side === 'player' && !displayedCard.revealed && getCardDefinition(displayedCard.definitionId).ability === 'thorns');
+      const label = armedThorns ? `Seu sigilo ${slot + 1}, armadilha de Espinhos armada; ativa quando uma tropa inimiga atacar uma tropa sua.`
+        : `${side === 'player' ? 'Seu' : 'Adversário'}: sigilo ${slot + 1}${displayedCard?.revealed ? `, ${getCardDefinition(displayedCard.definitionId).name}` : displayedCard ? ', oculto' : ', vazio'}`;
       let button = target.children[slot] as HTMLButtonElement | undefined;
       if (!button) {
         const template = document.createElement('template');
@@ -1159,14 +1184,14 @@ export class GameApp {
       const cardId = displayedCard?.instanceId ?? '';
       const revealed = displayedCard?.revealed ? 'true' : 'false';
       const changed = button.dataset.sigilId !== cardId || button.dataset.sigilRevealed !== revealed;
-      button.className = `slot secret-slot ${side === 'enemy' ? 'enemy-slot' : 'player-slot'}${this.selectedId === displayedCard?.instanceId ? ' is-selected' : ''}`;
+      button.className = `slot secret-slot ${side === 'enemy' ? 'enemy-slot' : 'player-slot'}${this.selectedId === displayedCard?.instanceId ? ' is-selected' : ''}${armedThorns ? ' is-thorns-armed' : ''}`;
       button.dataset.slotSide = side;
       button.dataset.slotKind = 'sigil';
       button.dataset.slot = String(slot);
       button.dataset.sigilId = cardId;
       button.dataset.sigilRevealed = revealed;
       button.setAttribute('aria-label', this.escapeAttribute(label));
-      if (changed) button.innerHTML = content;
+      if (changed || button.dataset.thornsArmed !== String(armedThorns)) button.innerHTML = content + (armedThorns ? '<span class="sigil-armed-badge" aria-hidden="true">ARMADA</span>' : '');
       else if (displayedCard?.revealed) {
         const unit = button.querySelector<HTMLElement>('.battle-card');
         if (unit) {
@@ -1175,6 +1200,7 @@ export class GameApp {
           unit.setAttribute('title', this.escapeAttribute(details));
         }
       }
+      button.dataset.thornsArmed = String(armedThorns);
     });
     while (target.children.length > sigils.length) target.lastElementChild?.remove();
   }
@@ -1294,6 +1320,22 @@ export class GameApp {
     const overlay = this.root.querySelector<HTMLElement>('#card-preview-overlay');
     const wrap = this.root.querySelector<HTMLElement>('#card-preview-wrap');
     if (!overlay || !wrap) return;
+    if (mode === 'quick') {
+      const kind = definition.kind === 'troop' ? 'Tropa' : definition.kind === 'spell' ? 'Feitiço' : 'Sigilo';
+      const description = this.descriptionFor(definition);
+      const facts = definition.kind === 'troop'
+        ? `<span><b>Ataque</b> ${definition.attack}</span><span><b>Vida</b> ${card.health}/${definition.maxHealth}</span>`
+        : definition.kind === 'spell'
+          ? `<span><b>Custo</b> ${definition.cost}</span><span><b>Efeito</b> ${definition.effect === 'damage' ? `${balance.spellDamage} de dano` : `${balance.spellHealing} de cura`}</span>`
+          : `<span><b>Custo</b> ${definition.cost}</span><span><b>Efeito</b> Sigilo oculto</span>`;
+      const behavior = definition.kind === 'troop'
+        ? definition.ability === 'mystic-link' ? 'Na retaguarda, selecione a Raposa e toque em outra tropa aliada para vinculá-las. Para reposicionar, arraste-a até um espaço vazio.'
+          : 'Na frente ataca automaticamente; atrás aguarda sua ordem. Toque para selecionar, depois no alvo. O Goblin pode selecionar a vida inimiga.'
+        : description;
+      wrap.innerHTML = `<div class="quick-card-preview"><div class="preview-shell ${definition.kind}" data-foundation="${definition.foundation}">${renderCardFace(definition, card, side, 'preview')}</div><section class="card-preview-details"><div class="card-preview-heading"><strong>${this.escapeAttribute(definition.name)}</strong><span>${kind}</span></div><div class="card-preview-facts">${facts}</div><p>${this.escapeAttribute(description)}</p><p class="card-preview-how">${this.escapeAttribute(behavior)}</p><button class="card-preview-close" id="close-card-preview" type="button">Fechar</button></section></div>`;
+      overlay.classList.add('open'); overlay.setAttribute('aria-hidden', 'false');
+      return;
+    }
     const kind = definition.kind === 'troop' ? 'Tropa' : definition.kind === 'spell' ? 'Feitiço' : 'Carta oculta';
     const foundation = definition.foundation[0].toUpperCase() + definition.foundation.slice(1);
     const intervalMs = attackIntervalFor(definition.id, balance.attackIntervalMs);
@@ -1317,8 +1359,7 @@ export class GameApp {
       thorns: 'Contra-ataque Espinhoso', roots: 'Aprisionamento Natural', volcano: 'Erupção Descontrolada',
     } as const;
     const abilityTitle = definition.ability ? abilityTitles[definition.ability] : 'Efeito';
-    const closeLabel = mode === 'quick' ? 'Fechar' : 'Fechar ficha';
-    wrap.innerHTML = `<article class="card-detail-sheet ${mode === 'quick' ? 'is-quick' : ''}" aria-label="Detalhes de ${this.escapeAttribute(definition.name)}"><header class="card-detail-header"><div><span class="card-detail-kicker">${this.escapeAttribute(foundation)} · ${kind}</span><h2>${this.escapeAttribute(definition.name)}</h2></div><button class="card-detail-x" id="close-card-preview" type="button" aria-label="Fechar">×</button></header><div class="card-detail-layout"><div class="card-detail-art preview-shell ${definition.kind}" data-foundation="${definition.foundation}">${renderCardFace(definition, card, side, 'preview')}</div><div class="card-detail-body"><div class="card-detail-stats">${facts}</div><section class="card-detail-section"><span class="card-detail-kicker">HABILIDADE · ${this.escapeAttribute(abilityTitle)}</span><p>${this.escapeAttribute(effectCopy)}</p></section><section class="card-detail-section card-detail-how"><span class="card-detail-kicker">COMO USAR</span><p>${this.escapeAttribute(useCopy)}</p></section></div></div><footer class="card-detail-footer"><span>Atributos atuais da carta</span><button class="card-preview-close" data-close-card-preview type="button">${closeLabel}</button></footer></article>`;
+    wrap.innerHTML = `<article class="card-detail-sheet" aria-label="Detalhes de ${this.escapeAttribute(definition.name)}"><header class="card-detail-header"><div><span class="card-detail-kicker">${this.escapeAttribute(foundation)} · ${kind}</span><h2>${this.escapeAttribute(definition.name)}</h2></div><button class="card-detail-x" id="close-card-preview" type="button" aria-label="Fechar">×</button></header><div class="card-detail-layout"><div class="card-detail-art preview-shell ${definition.kind}" data-foundation="${definition.foundation}">${renderCardFace(definition, card, side, 'preview')}</div><div class="card-detail-body"><div class="card-detail-stats">${facts}</div><section class="card-detail-section"><span class="card-detail-kicker">HABILIDADE · ${this.escapeAttribute(abilityTitle)}</span><p>${this.escapeAttribute(effectCopy)}</p></section><section class="card-detail-section card-detail-how"><span class="card-detail-kicker">COMO USAR</span><p>${this.escapeAttribute(useCopy)}</p></section></div></div><footer class="card-detail-footer"><span>Atributos atuais da carta</span><button class="card-preview-close" data-close-card-preview type="button">Fechar ficha</button></footer></article>`;
     overlay.classList.add('open'); overlay.setAttribute('aria-hidden', 'false');
   }
 
