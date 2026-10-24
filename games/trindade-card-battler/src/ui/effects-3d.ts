@@ -1,9 +1,10 @@
 import {
   AdditiveBlending, AmbientLight, BackSide, BoxGeometry, BufferGeometry, CatmullRomCurve3,
-  Color, DirectionalLight, DynamicDrawUsage, Float32BufferAttribute, Group,
-  IcosahedronGeometry, InstancedMesh, Material, Mesh, MeshBasicMaterial, MeshStandardMaterial,
-  Object3D, PerspectiveCamera, QuadraticBezierCurve3, Scene, ShaderMaterial, SphereGeometry,
-  Vector3, WebGLRenderer,
+  Color, ConeGeometry, CylinderGeometry, DirectionalLight, DoubleSide, DynamicDrawUsage,
+  Float32BufferAttribute, Group, IcosahedronGeometry, InstancedMesh, Material, Mesh,
+  MeshBasicMaterial, MeshStandardMaterial, Object3D, OctahedronGeometry, PerspectiveCamera,
+  QuadraticBezierCurve3, Scene, ShaderMaterial, SphereGeometry, TorusGeometry, Vector3,
+  WebGLRenderer,
 } from 'three';
 
 type Effect = { group: Group; update: (seconds: number, delta: number) => boolean; dispose?: () => void };
@@ -26,7 +27,7 @@ function release(group: Group): void {
   group.removeFromParent();
 }
 
-/** Shared WebGL 3D overlay for spell projectiles and 3D board bindings. */
+/** Shared WebGL 3D overlay for all spells, sigil constructs, combat strikes, and abilities. */
 export class BattleEffects3D {
   private readonly renderer: WebGLRenderer;
   private readonly scene = new Scene();
@@ -50,12 +51,12 @@ export class BattleEffects3D {
     document.body.append(this.renderer.domElement);
 
     this.camera.position.set(0, 0, 1000);
-    this.scene.add(new AmbientLight('#b8d4c8', 1.45));
-    const key = new DirectionalLight('#ffe2b5', 2.5);
-    key.position.set(-260, 440, 620);
+    this.scene.add(new AmbientLight('#b8d4c8', 1.5));
+    const key = new DirectionalLight('#ffe2b5', 2.65);
+    key.position.set(-260, 440, 640);
     this.scene.add(key);
-    const rim = new DirectionalLight('#8ee69b', 1.15);
-    rim.position.set(360, -180, 280);
+    const rim = new DirectionalLight('#8ee69b', 1.25);
+    rim.position.set(360, -180, 300);
     this.scene.add(rim);
 
     this.renderer.domElement.addEventListener('webglcontextlost', (event) => {
@@ -130,8 +131,9 @@ export class BattleEffects3D {
   }
 
   /**
-   * 3D Fireball sphere that emerges from inside the source card, arcs across the arena
-   * shedding 3D flame particles, and bursts on impact.
+   * Large, high-impact 3D Fireball sphere that emerges from inside the spell card,
+   * arcs across the arena with a blazing tail and 96 3D flame particles, and detonates
+   * with a 3D shockwave ring and magma burst on impact.
    */
   fireball(source: Rect, target: () => HTMLElement | null): Promise<void> {
     if (this.lost) return Promise.resolve();
@@ -142,9 +144,9 @@ export class BattleEffects3D {
     const flameGroup = new Group();
     group.add(flameGroup);
 
-    const radius = Math.max(12, Math.min(20, source.width * 0.18));
+    const radius = Math.max(26, Math.min(44, source.width * 0.42));
 
-    // Inner molten 3D sphere with animated turbulent fire veins and Fresnel rim
+    // Inner molten 3D sphere with rolling magma veins and intense Fresnel rim
     const coreMaterial = new ShaderMaterial({
       uniforms: { time: { value: 0 } },
       vertexShader: `
@@ -153,7 +155,7 @@ export class BattleEffects3D {
         varying vec3 vPos;
         void main() {
           vec3 p = position;
-          float wave = sin(p.y * 6.0 - time * 9.0) * 0.04 + cos(p.x * 5.0 + time * 7.0) * 0.03;
+          float wave = sin(p.y * 6.5 - time * 10.0) * 0.055 + cos(p.x * 5.5 + time * 8.0) * 0.04;
           p *= 1.0 + wave;
           vPos = p;
           vNormal = normalize(normalMatrix * normal);
@@ -177,22 +179,22 @@ export class BattleEffects3D {
         }
         void main() {
           vec3 n = normalize(vNormal);
-          vec3 q = normalize(vPos) * 3.2 + vec3(0.0, -time * 3.8, time * 1.6);
-          float f = noise(q) * 0.65 + noise(q * 2.3 - time * 2.4) * 0.35;
-          float rim = pow(1.0 - max(dot(n, vec3(0.0, 0.0, 1.0)), 0.0), 1.8);
-          vec3 darkRed = vec3(0.58, 0.05, 0.01);
-          vec3 brightOrange = vec3(1.0, 0.36, 0.02);
-          vec3 hotGold = vec3(1.0, 0.78, 0.22);
-          vec3 whiteHot = vec3(1.0, 0.97, 0.82);
-          vec3 col = mix(darkRed, brightOrange, smoothstep(0.2, 0.62, f));
-          col = mix(col, hotGold, smoothstep(0.48, 0.82, f));
-          col = mix(col, whiteHot, smoothstep(0.72, 0.96, f) * (1.0 - rim * 0.5));
-          col += vec3(1.0, 0.42, 0.05) * rim * 0.85;
+          vec3 q = normalize(vPos) * 3.4 + vec3(0.0, -time * 4.4, time * 1.9);
+          float f = noise(q) * 0.65 + noise(q * 2.4 - time * 2.8) * 0.35;
+          float rim = pow(1.0 - max(dot(n, vec3(0.0, 0.0, 1.0)), 0.0), 1.65);
+          vec3 darkRed = vec3(0.65, 0.04, 0.01);
+          vec3 brightOrange = vec3(1.0, 0.38, 0.02);
+          vec3 hotGold = vec3(1.0, 0.82, 0.24);
+          vec3 whiteHot = vec3(1.0, 0.98, 0.88);
+          vec3 col = mix(darkRed, brightOrange, smoothstep(0.16, 0.58, f));
+          col = mix(col, hotGold, smoothstep(0.42, 0.78, f));
+          col = mix(col, whiteHot, smoothstep(0.68, 0.94, f) * (1.0 - rim * 0.45));
+          col += vec3(1.0, 0.48, 0.06) * rim * 0.95;
           gl_FragColor = vec4(col, 1.0);
         }
       `,
     });
-    const coreMesh = new Mesh(new SphereGeometry(radius * 0.72, 28, 20), coreMaterial);
+    const coreMesh = new Mesh(new SphereGeometry(radius * 0.78, 30, 22), coreMaterial);
     flameGroup.add(coreMesh);
 
     // Outer volumetric 3D fire corona
@@ -228,55 +230,83 @@ export class BattleEffects3D {
         void main() {
           vec3 o = localEye / radius;
           vec3 d = normalize(p - localEye);
-          float b = dot(o, d), h = b * b - dot(o, o) + 1.85;
+          float b = dot(o, d), h = b * b - dot(o, o) + 2.45;
           if (h < 0.0) discard;
           float entry = max(0.0, -b - sqrt(h)), end = -b + sqrt(h);
-          float stepSize = (end - entry) / 20.0;
+          float stepSize = (end - entry) / 22.0;
           vec4 sum = vec4(0.0);
-          for (int i = 0; i < 20; i++) {
+          for (int i = 0; i < 22; i++) {
             vec3 q = o + d * (entry + (float(i) + 0.5) * stepSize);
-            float n = noise(q * 3.8 + vec3(0.0, -time * 4.2, 0.0)) * 0.65 + noise(q * 8.0 - time * 2.5) * 0.35;
-            float density = max(0.0, 1.06 - length(q * vec3(1.0, 0.82, 1.0)) + (n - 0.5) * 0.72);
-            float alpha = 1.0 - exp(-density * stepSize * 3.4);
-            vec3 hot = mix(vec3(0.92, 0.12, 0.01), vec3(1.0, 0.52, 0.04), smoothstep(0.1, 0.55, density));
-            hot = mix(hot, vec3(1.0, 0.94, 0.58), smoothstep(0.6, 0.92, density));
+            float n = noise(q * 3.6 + vec3(0.0, -time * 4.8, 0.0)) * 0.65 + noise(q * 7.8 - time * 3.0) * 0.35;
+            float density = max(0.0, 1.18 - length(q * vec3(1.0, 0.78, 1.0)) + (n - 0.5) * 0.78);
+            float alpha = 1.0 - exp(-density * stepSize * 3.8);
+            vec3 hot = mix(vec3(0.95, 0.14, 0.01), vec3(1.0, 0.56, 0.05), smoothstep(0.08, 0.52, density));
+            hot = mix(hot, vec3(1.0, 0.96, 0.65), smoothstep(0.56, 0.9, density));
             sum.rgb += (1.0 - sum.a) * hot * alpha;
             sum.a += (1.0 - sum.a) * alpha;
           }
           if (sum.a < 0.02) discard;
-          gl_FragColor = vec4(sum.rgb, sum.a * 0.88);
+          gl_FragColor = vec4(sum.rgb, sum.a * 0.94);
         }
       `,
     });
-    const coronaMesh = new Mesh(new SphereGeometry(radius * 1.36, 24, 18), coronaMaterial);
+    const coronaMesh = new Mesh(new SphereGeometry(radius * 1.6, 26, 20), coronaMaterial);
     flameGroup.add(coronaMesh);
 
-    // 3D Flame particles and embers along the flight arc and on impact
-    const particleCount = 56;
+    // 3D Impact Shockwave Ring & Explosion Flash Sphere
+    const shockwaveMat = new MeshBasicMaterial({
+      color: '#ff9424',
+      transparent: true,
+      opacity: 0,
+      blending: AdditiveBlending,
+      depthWrite: false,
+    });
+    const shockwaveRing = new Mesh(new TorusGeometry(radius * 0.55, radius * 0.14, 14, 36), shockwaveMat);
+    shockwaveRing.rotation.x = 0.42;
+    shockwaveRing.visible = false;
+    group.add(shockwaveRing);
+
+    const flashMat = new MeshBasicMaterial({
+      color: '#ffe89c',
+      transparent: true,
+      opacity: 0,
+      blending: AdditiveBlending,
+      depthWrite: false,
+    });
+    const flashSphere = new Mesh(new SphereGeometry(radius * 0.75, 20, 16), flashMat);
+    flashSphere.visible = false;
+    group.add(flashSphere);
+
+    // 96 3D Flame particles and embers
+    const particleCount = 96;
     const sparkGeometry = new IcosahedronGeometry(1, 0);
-    const sparkMaterial = new MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.95 });
+    const sparkMaterial = new MeshBasicMaterial({
+      color: '#ffffff',
+      transparent: true,
+      opacity: 0.96,
+      blending: AdditiveBlending,
+      depthWrite: false,
+    });
     const sparks = new InstancedMesh(sparkGeometry, sparkMaterial, particleCount);
     sparks.instanceMatrix.setUsage(DynamicDrawUsage);
     sparks.frustumCulled = false;
     group.add(sparks);
 
     const dummy = new Object3D();
-    const colorHot = new Color('#fff3a6');
-    const colorMid = new Color('#ff7b14');
-    const colorCool = new Color('#c81d09');
+    const colorHot = new Color('#fff7ba');
+    const colorMid = new Color('#ff7412');
+    const colorCool = new Color('#cc1806');
     const tempColor = new Color();
 
     const particles = Array.from({ length: particleCount }, (_, i) => ({
       position: new Vector3(),
       velocity: new Vector3(),
       life: 0,
-      maxLife: 0.34,
+      maxLife: 0.38,
       size: 1,
       seed: i * 2.39996,
     }));
-    for (let i = 0; i < particleCount; i++) {
-      sparks.setColorAt(i, colorHot);
-    }
+    for (let i = 0; i < particleCount; i++) sparks.setColorAt(i, colorHot);
     if (sparks.instanceColor) sparks.instanceColor.needsUpdate = true;
 
     // Occlusion plane at the source card so the sphere visibly emerges from inside the card
@@ -290,17 +320,18 @@ export class BattleEffects3D {
 
     const began = performance.now() / 1000;
     let impacted = false;
+    let impactTime = 0;
     let emitIndex = 0;
     let emitClock = 0;
     const startCenter = this.center(source, -radius * 0.85);
     const position = startCenter.clone();
     const previousPosition = startCenter.clone();
-    const duration = this.reduced ? 0.16 : 0.78;
+    const duration = this.reduced ? 0.18 : 0.82;
     const emergeDuration = duration * 0.24;
 
     return new Promise((resolve) => {
       let resolved = false;
-      const timer = window.setTimeout(() => safeResolve(), Math.ceil((duration + 0.12) * 1000));
+      const timer = window.setTimeout(() => safeResolve(), Math.ceil((duration + 0.15) * 1000));
       const safeResolve = () => {
         if (resolved) return;
         resolved = true;
@@ -314,33 +345,30 @@ export class BattleEffects3D {
           const elapsed = now - began;
           const unit = target();
           const targetRect = unit?.getBoundingClientRect() ?? initialTarget.getBoundingClientRect();
-          const end = this.center(targetRect, 10);
+          const end = this.center(targetRect, 14);
 
           if (elapsed < emergeDuration) {
-            // Phase 1: Sphere rises from inside the card face and expands
             const tEmerge = smooth(elapsed / emergeDuration);
-            position.copy(this.center(source, -radius * 0.85 + tEmerge * (radius * 0.85 + 38)));
-            flameGroup.scale.setScalar(0.18 + 0.82 * tEmerge);
+            position.copy(this.center(source, -radius * 0.85 + tEmerge * (radius * 0.85 + 52)));
+            flameGroup.scale.setScalar(0.16 + 0.84 * tEmerge);
           } else {
-            // Phase 2: Parabolic 3D arc from the card to the target unit
             const tTravel = clamp((elapsed - emergeDuration) / (duration - emergeDuration));
             const eased = tTravel * tTravel * (3 - 2 * tTravel);
-            const launch = this.center(source, 38);
+            const launch = this.center(source, 52);
             const dx = end.x - launch.x;
             const dy = end.y - launch.y;
             const dist = Math.hypot(dx, dy);
-            const sideArc = (dx >= 0 ? -1 : 1) * Math.min(42, dist * 0.11);
+            const sideArc = (dx >= 0 ? -1 : 1) * Math.min(48, dist * 0.12);
             const control = launch.clone().lerp(end, 0.48);
             control.x += sideArc;
-            control.y += Math.min(82, Math.max(38, dist * 0.22));
-            control.z = 135;
+            control.y += Math.min(96, Math.max(46, dist * 0.24));
+            control.z = 175;
 
             const curve = new QuadraticBezierCurve3(launch, control, end);
             position.copy(curve.getPoint(eased));
 
-            // Stretch corona slightly along flight tangent like a real fireball
             const tangent = curve.getTangent(eased);
-            const stretch = 1 + 0.22 * Math.sin(tTravel * Math.PI);
+            const stretch = 1 + 0.34 * Math.sin(tTravel * Math.PI);
             flameGroup.scale.set(1, stretch, 1);
             flameGroup.rotation.z = Math.atan2(tangent.y, tangent.x) - Math.PI / 2;
           }
@@ -355,58 +383,70 @@ export class BattleEffects3D {
           const velocity = position.clone().sub(previousPosition).divideScalar(Math.max(delta, 0.001));
           previousPosition.copy(position);
 
-          // Emit continuous flame particles along the emergence and arc
           emitClock += delta;
-          while (!impacted && emitClock >= 0.014) {
-            emitClock -= 0.014;
+          while (!impacted && emitClock >= 0.009) {
+            emitClock -= 0.009;
             const p = particles[emitIndex++ % particles.length];
-            const angle = p.seed + elapsed * 7.5;
-            const spread = radius * (elapsed < emergeDuration ? 0.42 : 0.58);
+            const angle = p.seed + elapsed * 8.5;
+            const spread = radius * (elapsed < emergeDuration ? 0.48 : 0.68);
             p.position.copy(position).add(
               new Vector3(
                 Math.cos(angle) * spread,
                 Math.sin(angle) * spread,
-                Math.sin(angle * 1.7) * spread * 0.6,
+                Math.sin(angle * 1.7) * spread * 0.65,
               ),
             );
             p.velocity
               .copy(velocity)
-              .multiplyScalar(-0.14)
+              .multiplyScalar(-0.18)
               .add(
                 new Vector3(
-                  Math.cos(angle) * 26,
-                  22 + Math.sin(angle) * 18,
-                  Math.sin(angle * 1.3) * 24,
+                  Math.cos(angle) * 38,
+                  28 + Math.sin(angle) * 24,
+                  Math.sin(angle * 1.3) * 32,
                 ),
               );
-            p.maxLife = 0.28 + (emitIndex % 5) * 0.03;
+            p.maxLife = 0.34 + (emitIndex % 5) * 0.035;
             p.life = p.maxLife;
-            p.size = Math.max(2.6, radius * 0.24);
+            p.size = Math.max(4.2, radius * 0.25);
           }
 
-          // Impact burst when reaching the target card
           if (elapsed >= duration && !impacted) {
             impacted = true;
+            impactTime = elapsed;
             flameGroup.visible = false;
             sourceMask.visible = false;
-            for (let i = 0; i < 24; i++) {
+            shockwaveRing.visible = true;
+            shockwaveRing.position.copy(end);
+            flashSphere.visible = true;
+            flashSphere.position.copy(end);
+
+            for (let i = 0; i < 64; i++) {
               const p = particles[emitIndex++ % particles.length];
-              const theta = (i / 24) * Math.PI * 2;
-              const speed = 55 + (i % 3) * 28;
-              p.position.copy(end).add(new Vector3(Math.cos(theta) * 6, Math.sin(theta) * 6, 4));
+              const theta = (i / 64) * Math.PI * 2;
+              const ringLayer = i % 3;
+              const speed = 78 + ringLayer * 48;
+              p.position.copy(end).add(new Vector3(Math.cos(theta) * 10, Math.sin(theta) * 10, 8));
               p.velocity.set(
-                Math.cos(theta) * speed - Math.sin(theta) * 34,
-                Math.sin(theta) * speed + Math.cos(theta) * 34,
-                25 + (i % 4) * 14,
+                Math.cos(theta) * speed - Math.sin(theta) * 46,
+                Math.sin(theta) * speed + Math.cos(theta) * 46,
+                38 + (i % 4) * 22,
               );
-              p.maxLife = 0.32;
+              p.maxLife = 0.42;
               p.life = p.maxLife;
-              p.size = Math.max(3.2, radius * 0.26);
+              p.size = Math.max(5.2, radius * 0.28);
             }
             safeResolve();
           }
 
-          // Update all live flame particles
+          if (impacted) {
+            const post = clamp((elapsed - impactTime) / 0.42);
+            shockwaveRing.scale.setScalar(1 + post * 2.8);
+            shockwaveMat.opacity = (1 - post) * 0.92;
+            flashSphere.scale.setScalar(1 + post * 1.9);
+            flashMat.opacity = Math.max(0, 1 - post * 1.6) * 0.85;
+          }
+
           particles.forEach((p, i) => {
             if (p.life <= 0) {
               dummy.scale.setScalar(0);
@@ -416,10 +456,10 @@ export class BattleEffects3D {
             }
             p.life = Math.max(0, p.life - delta);
             p.position.addScaledVector(p.velocity, delta);
-            p.velocity.multiplyScalar(Math.max(0, 1 - delta * 3.2));
+            p.velocity.multiplyScalar(Math.max(0, 1 - delta * 2.9));
             const ratio = p.life / p.maxLife;
             dummy.position.copy(p.position);
-            dummy.scale.setScalar(p.size * Math.sin(ratio * Math.PI * 0.85));
+            dummy.scale.setScalar(p.size * Math.sin(ratio * Math.PI * 0.88));
             dummy.rotation.set(p.seed + elapsed * 4, elapsed * 5, p.seed);
             dummy.updateMatrix();
             sparks.setMatrixAt(i, dummy.matrix);
@@ -434,11 +474,466 @@ export class BattleEffects3D {
           sparks.instanceMatrix.needsUpdate = true;
           if (sparks.instanceColor) sparks.instanceColor.needsUpdate = true;
 
-          return elapsed > duration + 0.34;
+          return elapsed > duration + 0.45;
         },
         dispose: safeResolve,
       });
     });
+  }
+
+  /**
+   * 3D Healing spell stream: emerges from the spell card, arcs to the wounded ally,
+   * and wraps the ally in an ascending 3D emerald-gold helix.
+   */
+  healSpell(source: Rect, target: () => HTMLElement | null): Promise<void> {
+    if (this.lost) return Promise.resolve();
+    const initialTarget = target();
+    if (!initialTarget) return Promise.resolve();
+
+    const group = new Group();
+    const orbRadius = Math.max(14, Math.min(24, source.width * 0.24));
+    const orbMat = new MeshBasicMaterial({
+      color: '#88ffbe',
+      transparent: true,
+      opacity: 0.92,
+      blending: AdditiveBlending,
+    });
+    const orb = new Mesh(new OctahedronGeometry(orbRadius, 2), orbMat);
+    group.add(orb);
+
+    const count = 52;
+    const sparks = new InstancedMesh(
+      new OctahedronGeometry(1, 0),
+      new MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.9, blending: AdditiveBlending, depthWrite: false }),
+      count,
+    );
+    sparks.instanceMatrix.setUsage(DynamicDrawUsage);
+    sparks.frustumCulled = false;
+    group.add(sparks);
+
+    const dummy = new Object3D();
+    const cMint = new Color('#b5ffd9');
+    const cGold = new Color('#ffe98a');
+    for (let i = 0; i < count; i++) sparks.setColorAt(i, i % 2 === 0 ? cMint : cGold);
+    if (sparks.instanceColor) sparks.instanceColor.needsUpdate = true;
+
+    const began = performance.now() / 1000;
+    const flightDuration = this.reduced ? 0.15 : 0.62;
+    const totalDuration = flightDuration + 0.55;
+    let resolved = false;
+
+    return new Promise((resolve) => {
+      const timer = window.setTimeout(() => safeResolve(), Math.ceil(totalDuration * 1000));
+      const safeResolve = () => {
+        if (resolved) return;
+        resolved = true;
+        window.clearTimeout(timer);
+        resolve();
+      };
+
+      this.add(`heal-${++this.serial}`, {
+        group,
+        update: (now) => {
+          const elapsed = now - began;
+          const unit = target() ?? initialTarget;
+          const tRect = unit.getBoundingClientRect();
+          const start = this.center(source, 28);
+          const end = this.center(tRect, 18);
+          const control = start.clone().lerp(end, 0.5);
+          control.y += 65;
+          control.z = 120;
+          const curve = new QuadraticBezierCurve3(start, control, end);
+
+          if (elapsed < flightDuration) {
+            const t = smooth(elapsed / flightDuration);
+            orb.position.copy(curve.getPoint(t));
+            orb.rotation.set(elapsed * 4, elapsed * 5, 0);
+            orb.scale.setScalar(0.35 + 0.65 * Math.sin(t * Math.PI));
+          } else {
+            orb.visible = false;
+            safeResolve();
+          }
+
+          for (let i = 0; i < count; i++) {
+            const frac = i / count;
+            if (elapsed < flightDuration) {
+              const trailT = clamp(elapsed / flightDuration - frac * 0.35);
+              const pt = curve.getPoint(smooth(trailT));
+              const angle = elapsed * 8 + i * 0.6;
+              const r = 10 * Math.sin(frac * Math.PI);
+              dummy.position.set(pt.x + Math.cos(angle) * r, pt.y + Math.sin(angle) * r, pt.z + 8);
+              dummy.scale.setScalar(trailT > 0 ? (1 - frac * 0.6) * 4.8 : 0);
+            } else {
+              const post = clamp((elapsed - flightDuration) / 0.55);
+              const angle = frac * Math.PI * 4 + post * 6;
+              const rad = Math.max(22, tRect.width * 0.46) * (1 - post * 0.25);
+              const yOff = (frac - 0.5) * tRect.height * 0.85 + post * 36;
+              dummy.position.set(end.x + Math.cos(angle) * rad, end.y + yOff, end.z + Math.sin(angle) * 18);
+              dummy.scale.setScalar((1 - post) * 5.2);
+            }
+            dummy.rotation.set(elapsed * 3, elapsed * 4, i);
+            dummy.updateMatrix();
+            sparks.setMatrixAt(i, dummy.matrix);
+          }
+          sparks.instanceMatrix.needsUpdate = true;
+          return elapsed >= totalDuration;
+        },
+        dispose: safeResolve,
+      });
+    });
+  }
+
+  /**
+   * 3D Volcano mountain cone that emerges right on the Vulcão card's slot, stays active
+   * while all 3 waves erupt, and sinks back into the card when the eruption finishes.
+   */
+  volcano(id: string, slotTarget: () => HTMLElement | null, remainingMs: () => number): void {
+    if (this.lost) return;
+    const first = slotTarget();
+    if (!first) return;
+
+    const group = new Group();
+    const rect = first.getBoundingClientRect();
+    const baseRadius = Math.max(24, Math.min(44, rect.width * 0.48));
+    const topRadius = baseRadius * 0.38;
+    const height = Math.max(32, rect.height * 0.42);
+
+    // 3D Volcanic Cone with glowing lava fissures and molten rim
+    const volcanoMaterial = new ShaderMaterial({
+      side: DoubleSide,
+      uniforms: { time: { value: 0 }, pulse: { value: 0 } },
+      vertexShader: `
+        varying vec2 vUv;
+        varying vec3 vNormal;
+        varying vec3 vPos;
+        void main() {
+          vUv = uv;
+          vec3 p = position;
+          float ridge = sin( atan(p.z, p.x) * 7.0 + p.y * 0.12 ) * 2.2 * (1.0 - uv.y * 0.5);
+          p.x += normalize(p.xz + vec2(0.001)).x * ridge;
+          p.z += normalize(p.xz + vec2(0.001)).y * ridge;
+          vPos = p;
+          vNormal = normalize(normalMatrix * normal);
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
+        }
+      `,
+      fragmentShader: `
+        precision highp float;
+        varying vec2 vUv;
+        varying vec3 vNormal;
+        uniform float time;
+        uniform float pulse;
+        void main() {
+          float angle = vUv.x * 6.28318;
+          float veins = pow(max(0.0, sin(angle * 6.0 + sin(vUv.y * 8.0 - time * 3.5) * 1.4)), 4.0);
+          float craterGlow = smoothstep(0.58, 0.98, vUv.y);
+          float lava = clamp(veins * smoothstep(0.15, 0.9, vUv.y) + craterGlow * 0.85 + pulse * 0.35, 0.0, 1.0);
+          vec3 rock = vec3(0.16, 0.11, 0.10) * (0.55 + 0.45 * max(dot(normalize(vNormal), normalize(vec3(-0.3, 0.6, 1.0))), 0.0));
+          vec3 magma = mix(vec3(0.92, 0.18, 0.02), vec3(1.0, 0.78, 0.18), smoothstep(0.4, 0.95, lava));
+          vec3 col = mix(rock, magma, lava);
+          gl_FragColor = vec4(col, 0.98);
+        }
+      `,
+    });
+
+    const coneGeom = new CylinderGeometry(topRadius, baseRadius, height, 28, 14, true);
+    const coneMesh = new Mesh(coneGeom, volcanoMaterial);
+    // Tilt the cone toward the camera so both its 3D slopes and glowing crater are visible
+    coneMesh.rotation.x = 0.68;
+    coneMesh.position.z = 18;
+    group.add(coneMesh);
+
+    // Molten lava pool inside the crater peak
+    const craterMat = new MeshBasicMaterial({
+      color: '#ffcf48',
+      transparent: true,
+      opacity: 0.95,
+      blending: AdditiveBlending,
+    });
+    const craterPool = new Mesh(new SphereGeometry(topRadius * 0.88, 18, 12), craterMat);
+    craterPool.scale.set(1, 0.38, 1);
+    craterPool.position.set(0, Math.cos(0.68) * (height * 0.46), 18 + Math.sin(0.68) * (height * 0.46));
+    craterPool.rotation.x = 0.68;
+    group.add(craterPool);
+
+    // Rising 3D lava embers & ash above the crater
+    const emberCount = 32;
+    const embers = new InstancedMesh(
+      new IcosahedronGeometry(1, 0),
+      new MeshBasicMaterial({ color: '#ff9624', transparent: true, opacity: 0.9, blending: AdditiveBlending, depthWrite: false }),
+      emberCount,
+    );
+    embers.instanceMatrix.setUsage(DynamicDrawUsage);
+    embers.frustumCulled = false;
+    group.add(embers);
+    const dummy = new Object3D();
+
+    const began = performance.now() / 1000;
+    let retractStarted: number | null = null;
+
+    this.add(`volcano-${id}`, {
+      group,
+      update: (now) => {
+        const slot = slotTarget();
+        if (!slot || !slot.isConnected) return true;
+        const r = slot.getBoundingClientRect();
+        group.position.copy(this.center(r, 12));
+
+        if (remainingMs() <= 0 && retractStarted === null) {
+          retractStarted = now;
+        }
+        const grown = smooth((now - began) / (this.reduced ? 0.08 : 0.55));
+        const progress =
+          retractStarted === null
+            ? grown
+            : grown * (1 - smooth((now - retractStarted) / (this.reduced ? 0.08 : 0.48)));
+
+        group.scale.set(progress, progress, progress);
+        volcanoMaterial.uniforms.time.value = now - began;
+        volcanoMaterial.uniforms.pulse.value = 0.5 + 0.5 * Math.sin((now - began) * 5.0);
+        craterPool.scale.setScalar(0.88 + 0.14 * Math.sin((now - began) * 7.0));
+
+        for (let i = 0; i < emberCount; i++) {
+          const cycle = ((now - began) * 1.4 + i / emberCount) % 1;
+          const angle = i * 2.399 + now * 2.2;
+          const spread = topRadius * (0.3 + cycle * 1.1);
+          dummy.position.set(
+            Math.cos(angle) * spread,
+            craterPool.position.y + cycle * 38,
+            craterPool.position.z + Math.sin(angle) * spread * 0.6 + cycle * 16,
+          );
+          dummy.scale.setScalar(progress * (1 - cycle) * 3.8);
+          dummy.rotation.set(now * 3, angle, i);
+          dummy.updateMatrix();
+          embers.setMatrixAt(i, dummy.matrix);
+        }
+        embers.instanceMatrix.needsUpdate = true;
+
+        return retractStarted !== null && progress <= 0.002;
+      },
+    });
+  }
+
+  /**
+   * Launches 3D molten lava bombs from the Volcano card's crater in arcs to every unit on the board.
+   */
+  volcanoWave(slotTarget: () => HTMLElement | null, unitTargets: () => HTMLElement[], wave: number): void {
+    if (this.lost) return;
+    const originEl = slotTarget();
+    const targets = unitTargets();
+    if (!originEl) return;
+
+    const group = new Group();
+    const originRect = originEl.getBoundingClientRect();
+    const start = this.center(originRect, 42);
+
+    // Expanding 3D crater eruption ring at the volcano slot
+    const ringMat = new MeshBasicMaterial({
+      color: '#ff8a1e',
+      transparent: true,
+      opacity: 0.9,
+      blending: AdditiveBlending,
+      depthWrite: false,
+    });
+    const ring = new Mesh(new TorusGeometry(Math.max(18, originRect.width * 0.28), 4, 12, 32), ringMat);
+    ring.position.copy(start);
+    ring.rotation.x = 0.55;
+    group.add(ring);
+
+    const bombCount = Math.max(1, targets.length);
+    const bombRadius = Math.max(9, Math.min(15, originRect.width * 0.16));
+    const bombMat = new MeshStandardMaterial({
+      color: '#ff4808',
+      emissive: '#ff8818',
+      emissiveIntensity: 2.2,
+      roughness: 0.6,
+    });
+    const bombs = targets.map((el, i) => {
+      const mesh = new Mesh(new DodecahedronBombGeometry(bombRadius), bombMat);
+      group.add(mesh);
+      return { el, mesh, index: i };
+    });
+
+    const sparkCount = Math.max(24, bombCount * 14);
+    const sparks = new InstancedMesh(
+      new IcosahedronGeometry(1, 0),
+      new MeshBasicMaterial({ color: '#ffbe42', transparent: true, opacity: 0.92, blending: AdditiveBlending, depthWrite: false }),
+      sparkCount,
+    );
+    sparks.instanceMatrix.setUsage(DynamicDrawUsage);
+    sparks.frustumCulled = false;
+    group.add(sparks);
+    const dummy = new Object3D();
+
+    const began = performance.now() / 1000;
+    const flightDuration = this.reduced ? 0.15 : 0.58;
+    const totalDuration = flightDuration + 0.34;
+
+    this.add(`volcano-wave-${wave}-${++this.serial}`, {
+      group,
+      update: (now) => {
+        const elapsed = now - began;
+        const ringT = clamp(elapsed / 0.45);
+        ring.scale.setScalar(1 + ringT * 2.4);
+        ringMat.opacity = (1 - ringT) * 0.9;
+
+        const tFlight = clamp(elapsed / flightDuration);
+        const eased = tFlight * tFlight * (3 - 2 * tFlight);
+
+        bombs.forEach(({ el, mesh, index }) => {
+          const end = this.center(el.getBoundingClientRect(), 12);
+          const control = start.clone().lerp(end, 0.5);
+          control.y += 72 + (index % 3) * 18;
+          control.z = 145;
+          const curve = new QuadraticBezierCurve3(start, control, end);
+
+          if (elapsed < flightDuration) {
+            mesh.visible = true;
+            mesh.position.copy(curve.getPoint(eased));
+            mesh.rotation.set(elapsed * 6 + index, elapsed * 5, index);
+          } else {
+            mesh.visible = false;
+          }
+
+          const perBomb = Math.floor(sparkCount / Math.max(1, bombs.length));
+          for (let k = 0; k < perBomb; k++) {
+            const idx = index * perBomb + k;
+            if (idx >= sparkCount) break;
+            if (elapsed < flightDuration) {
+              const trailT = clamp(tFlight - (k / perBomb) * 0.28);
+              const pt = curve.getPoint(trailT * trailT * (3 - 2 * trailT));
+              dummy.position.set(
+                pt.x + Math.cos(elapsed * 10 + k) * 5,
+                pt.y + Math.sin(elapsed * 10 + k) * 5,
+                pt.z,
+              );
+              dummy.scale.setScalar(trailT > 0 ? (1 - k / perBomb) * 3.8 : 0);
+            } else {
+              const post = clamp((elapsed - flightDuration) / 0.34);
+              const angle = (k / perBomb) * Math.PI * 2 + index;
+              const dist = post * 34;
+              dummy.position.set(
+                end.x + Math.cos(angle) * dist,
+                end.y + Math.sin(angle) * dist,
+                end.z + (1 - post) * 18,
+              );
+              dummy.scale.setScalar((1 - post) * 4.4);
+            }
+            dummy.updateMatrix();
+            sparks.setMatrixAt(idx, dummy.matrix);
+          }
+        });
+        sparks.instanceMatrix.needsUpdate = true;
+
+        return elapsed >= totalDuration;
+      },
+    });
+  }
+
+  /**
+   * 3D Combat Attack Strike from an attacking troop to its target with 3D geometry and impact shards.
+   */
+  attackStrike(from: Rect, to: Rect, trail: string, colorHex: string): void {
+    if (this.lost || this.reduced) return;
+    const group = new Group();
+    const accent = new Color(colorHex || '#fbe185');
+    const coreMat = new MeshBasicMaterial({ color: '#fff7dc', transparent: true, opacity: 0.96 });
+    const glowMat = new MeshBasicMaterial({
+      color: accent,
+      transparent: true,
+      opacity: 0.85,
+      blending: AdditiveBlending,
+      depthWrite: false,
+    });
+
+    const headGroup = new Group();
+    const radius = Math.max(8, Math.min(14, from.width * 0.14));
+    const coreMesh = new Mesh(
+      trail === 'slash'
+        ? new ConeGeometry(radius * 0.65, radius * 2.8, 6)
+        : trail === 'impact'
+          ? new IcosahedronGeometry(radius * 1.1, 0)
+          : new OctahedronGeometry(radius * 0.95, 1),
+      coreMat,
+    );
+    const glowMesh = new Mesh(new SphereGeometry(radius * 1.35, 14, 12), glowMat);
+    headGroup.add(coreMesh, glowMesh);
+    group.add(headGroup);
+
+    const shardCount = 18;
+    const shards = new InstancedMesh(
+      new OctahedronGeometry(1, 0),
+      new MeshBasicMaterial({ color: accent, transparent: true, opacity: 0.88, blending: AdditiveBlending, depthWrite: false }),
+      shardCount,
+    );
+    shards.instanceMatrix.setUsage(DynamicDrawUsage);
+    shards.frustumCulled = false;
+    group.add(shards);
+    const dummy = new Object3D();
+
+    const start = this.center(from, 28);
+    const end = this.center(to, 18);
+    const control = start.clone().lerp(end, 0.5);
+    control.z = 85;
+    const curve = new QuadraticBezierCurve3(start, control, end);
+
+    const began = performance.now() / 1000;
+    const flightDuration = 0.34;
+    const totalDuration = 0.56;
+
+    this.add(`strike-${++this.serial}`, {
+      group,
+      update: (now) => {
+        const elapsed = now - began;
+        if (elapsed < flightDuration) {
+          const t = smooth(elapsed / flightDuration);
+          const pos = curve.getPoint(t);
+          const tangent = curve.getTangent(t);
+          headGroup.position.copy(pos);
+          headGroup.rotation.z = Math.atan2(tangent.y, tangent.x) - Math.PI / 2;
+          coreMesh.rotation.y = elapsed * 10;
+
+          for (let i = 0; i < shardCount; i++) {
+            const frac = i / shardCount;
+            const trailT = clamp(t - frac * 0.25);
+            const pt = curve.getPoint(trailT);
+            dummy.position.set(pt.x, pt.y, pt.z);
+            dummy.scale.setScalar(trailT > 0 ? (1 - frac) * 3.4 : 0);
+            dummy.rotation.set(elapsed * 5, i, 0);
+            dummy.updateMatrix();
+            shards.setMatrixAt(i, dummy.matrix);
+          }
+        } else {
+          headGroup.visible = false;
+          const post = clamp((elapsed - flightDuration) / (totalDuration - flightDuration));
+          for (let i = 0; i < shardCount; i++) {
+            const angle = (i / shardCount) * Math.PI * 2;
+            const speed = 18 + (i % 3) * 14;
+            dummy.position.set(
+              end.x + Math.cos(angle) * speed * post,
+              end.y + Math.sin(angle) * speed * post,
+              end.z + (1 - post) * 16,
+            );
+            dummy.scale.setScalar((1 - post) * 4.2);
+            dummy.rotation.set(post * 6, angle, i);
+            dummy.updateMatrix();
+            shards.setMatrixAt(i, dummy.matrix);
+          }
+        }
+        shards.instanceMatrix.needsUpdate = true;
+        return elapsed >= totalDuration;
+      },
+    });
+  }
+
+  /**
+   * 3D Thorns counter-attack: shoots 3D spiked bramble lances from the sigil slot to the attacker.
+   */
+  thorns(slotTarget: () => HTMLElement | null, attackerTarget: () => HTMLElement | null): void {
+    const fromEl = slotTarget();
+    const toEl = attackerTarget();
+    if (!fromEl || !toEl) return;
+    this.attackStrike(fromEl.getBoundingClientRect(), toEl.getBoundingClientRect(), 'slash', '#63f2a1');
   }
 
   /**
@@ -473,7 +968,6 @@ export class BattleEffects3D {
 
     // Four 3D tentacle paths emerging from bottom-left and bottom-right sides and embracing the card
     const paths = [
-      // Bottom-left emerging, wrapping across lower-mid front to right side
       [
         new Vector3(-w * 0.56, -h * 0.56, -8),
         new Vector3(-w * 0.54, -h * 0.32, 5),
@@ -482,7 +976,6 @@ export class BattleEffects3D {
         new Vector3(w * 0.52, h * 0.14, 4),
         new Vector3(w * 0.48, h * 0.24, -4),
       ],
-      // Bottom-right emerging, wrapping across mid front to left side
       [
         new Vector3(w * 0.56, -h * 0.56, -8),
         new Vector3(w * 0.54, -h * 0.26, 5),
@@ -491,7 +984,6 @@ export class BattleEffects3D {
         new Vector3(-w * 0.52, h * 0.22, 4),
         new Vector3(-w * 0.47, h * 0.30, -4),
       ],
-      // Bottom-left outer tentacle climbing left edge and hooking over upper-left front
       [
         new Vector3(-w * 0.50, -h * 0.55, -10),
         new Vector3(-w * 0.56, -h * 0.18, -3),
@@ -499,7 +991,6 @@ export class BattleEffects3D {
         new Vector3(-w * 0.26, h * 0.28, 12),
         new Vector3(w * 0.12, h * 0.32, 10),
       ],
-      // Bottom-right outer tentacle climbing right edge and hooking over upper-right front
       [
         new Vector3(w * 0.50, -h * 0.55, -10),
         new Vector3(w * 0.56, -h * 0.14, -3),
@@ -560,7 +1051,7 @@ export class BattleEffects3D {
             ? grown
             : grown * (1 - smooth((now - retractStarted) / retractDuration));
 
-        const baseRadius = Math.max(2.6, w * 0.048);
+        const baseRadius = Math.max(2.8, w * 0.05);
 
         for (const tube of tubes) {
           const position = tube.geometry.getAttribute('position');
@@ -578,13 +1069,11 @@ export class BattleEffects3D {
             normal.crossVectors(tangent, axis).normalize();
             binormal.crossVectors(tangent, normal).normalize();
 
-            // Slight organic breathing/tightening while holding the card
             const holdOffset = Math.sin(fraction * Math.PI) * squeeze;
             const centerX = pt.x - Math.sign(pt.x || 1) * holdOffset;
             const centerY = pt.y + (progress < 1 ? (1 - progress) * -6 * (1 - fraction) : 0);
             const centerZ = pt.z;
 
-            // Taper from thick root base at the ground to a fine curled tip
             const taper = (1 - fraction * 0.84) * Math.min(1, progress * 3.2);
             const radius = baseRadius * taper;
 
@@ -605,5 +1094,15 @@ export class BattleEffects3D {
         return retractStarted !== null && progress <= 0.002;
       },
     });
+  }
+}
+
+function newDodecahedronBombGeometry(radius: number): BufferGeometry {
+  return new IcosahedronGeometry(radius, 1);
+}
+class DodecahedronBombGeometry extends IcosahedronGeometry {
+  constructor(radius: number) {
+    super(radius, 1);
+    void newDodecahedronBombGeometry;
   }
 }

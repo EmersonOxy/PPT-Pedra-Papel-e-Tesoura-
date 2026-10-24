@@ -65,6 +65,7 @@ export class GameApp {
   private readonly progressionStorageKey = 'trindade.card-progression.v1';
   private pendingSigilFlips = new Map<string, HTMLElement>();
   private pendingSigilFlipSlots = new Map<string, HTMLElement>();
+  private activeRevealedSigils = new Map<string, { card: CardInstance; side: Side; slot: number; untilClockMs: number; untilWallMs: number }>();
   private pendingSpellOrigins = new Map<string, DOMRect>();
   private pendingSpellFaces = new Map<string, string>();
   private fireballHitIds = new Set<string>();
@@ -279,6 +280,7 @@ export class GameApp {
     if (this.drag?.started && this.drag.source === 'hand') this.restoreDraggedCard(this.drag, true);
     if (this.drag?.started && this.drag.source === 'board') this.hideAttackAim(this.drag);
     this.drag = null;
+    this.activeRevealedSigils.clear();
     this.effects3d?.clear();
     window.clearTimeout(this.toastTimer);
     const toast = this.root.querySelector<HTMLElement>('#toast');
@@ -773,7 +775,7 @@ export class GameApp {
 
   private transition(result: Transition, failureMessage?: string): void {
     if (!result.events.length && failureMessage) { this.toast(failureMessage); return; }
-    if (result.events.some((event) => event.type === 'reveal' || (event.type === 'spell' && event.definitionId === 'wandering-flame'))) {
+    if (result.events.some((event) => event.type === 'reveal' || event.type === 'spell')) {
       const attackProfiles = this.captureAttackProfiles(result.events, this.state);
       this.captureSigilFlips(result.events, this.state);
       this.revealResolutionPending = true;
@@ -794,17 +796,21 @@ export class GameApp {
 
   private async resolveAfterSigilReveal(result: Transition, attackProfiles: Map<string, AttackAnimationProfile | undefined>): Promise<void> {
     const reveals = result.events.filter((event): event is Extract<GameEvent, { type: 'reveal' }> => event.type === 'reveal');
-    const fireballs = result.events.filter((event): event is Extract<GameEvent, { type: 'spell' }> => event.type === 'spell' && event.definitionId === 'wandering-flame');
-    if (fireballs.length) {
+    const spells = result.events.filter((event): event is Extract<GameEvent, { type: 'spell' }> => event.type === 'spell');
+    if (spells.length) {
       this.selectedId = null;
       this.syncSelection();
-      for (const spell of fireballs) {
+      for (const spell of spells) {
         const handEl = this.root.querySelector<HTMLElement>(`#hand-area [data-card-id="${CSS.escape(spell.instanceId)}"]`);
         if (handEl) handEl.style.visibility = 'hidden';
       }
-      for (const spell of fireballs) await this.animateSpell(spell);
-      for (const event of result.events) {
-        if (event.type === 'damage') this.fireballHitIds.add(event.instanceId);
+      for (const spell of spells) {
+        await this.animateSpell(spell);
+        if (spell.definitionId === 'wandering-flame') {
+          for (const event of result.events) {
+            if (event.type === 'damage') this.fireballHitIds.add(event.instanceId);
+          }
+        }
       }
     }
     for (const reveal of reveals) await this.animateSigilReveal(reveal);
@@ -878,7 +884,7 @@ export class GameApp {
         const result = advanceTime(this.state, delta);
         const transferOrigins = this.captureTransferOrigins(result.events);
         const attackProfiles = this.captureAttackProfiles(result.events, priorState);
-        if (result.events.some((event) => event.type === 'reveal' || (event.type === 'spell' && event.definitionId === 'wandering-flame'))) {
+        if (result.events.some((event) => event.type === 'reveal' || event.type === 'spell')) {
           this.captureSigilFlips(result.events, priorState);
           this.revealResolutionPending = true;
           void this.resolveAfterSigilReveal(result, attackProfiles);
@@ -888,6 +894,7 @@ export class GameApp {
           if (result.events.length) { this.captureDestructions(result.events); this.render(); this.animateCardTransfers(transferOrigins); void this.playEvents(result.events, attackProfiles); }
         }
       }
+      this.pruneExpiredActiveSigils();
       this.renderMatchStatus();
       this.renderPhaseStatus();
       this.updateAttackCooldowns();
@@ -909,7 +916,7 @@ export class GameApp {
     let missionsChanged = false;
     for (const event of events) {
       if (event.type === 'attack') this.animateAttack(event, attackProfiles.get(event.attackerId));
-      if (event.type === 'spell' && (!revealsAlreadyShown || event.definitionId !== 'wandering-flame')) await this.animateSpell(event);
+      if (event.type === 'spell' && !revealsAlreadyShown) await this.animateSpell(event);
       if (event.type === 'place') this.animateEntry(event.instanceId);
       if (event.type === 'place' && event.side === 'player') { this.cardsPlaced += 1; missionsChanged = true; }
       if (event.type === 'damage') this.animateImpact(event.instanceId, event.amount);
@@ -946,29 +953,36 @@ export class GameApp {
     const attacker = this.root.querySelector<HTMLElement>(`[data-card-id="${CSS.escape(event.attackerId)}"]`);
     const targetId = event.targetId;
     const target = (targetId ? this.root.querySelector<HTMLElement>(`[data-card-id="${CSS.escape(targetId)}"]`) : null)
-      ?? (event.targetSlot !== undefined ? this.root.querySelector<HTMLElement>(`[data-slot-side="${event.targetSide}"][data-slot="${event.targetSlot}"]`) : null)
+      ?? (event.targetSlot !== undefined ? this.root.querySelector<HTMLElement>(`#${event.targetSide}-grid [data-slot="${event.targetSlot}"]`) : null)
       ?? this.root.querySelector<HTMLElement>(event.targetSide === 'player' ? '#player-life-target' : '#enemy-life-target');
     if (!attacker || !target) return;
     const from = attacker.getBoundingClientRect(); const to = target.getBoundingClientRect();
     const dx = to.left + to.width / 2 - from.left - from.width / 2;
     const dy = to.top + to.height / 2 - from.top - from.height / 2;
     const distance = Math.max(1, Math.hypot(dx, dy));
+    const lungeDist = Math.min(72, Math.max(28, distance * 0.38));
     const profileClass = attackProfileClass(profile);
     attacker.classList.remove('is-attacking', profileClass);
-    attacker.style.setProperty('--attack-x', `${dx / distance * 16}px`);
-    attacker.style.setProperty('--attack-y', `${dy / distance * 16}px`);
+    attacker.style.setProperty('--attack-x', `${dx / distance * lungeDist}px`);
+    attacker.style.setProperty('--attack-y', `${dy / distance * lungeDist}px`);
+    attacker.style.setProperty('--attack-tilt-x', `${(-dy / distance * 14).toFixed(1)}deg`);
+    attacker.style.setProperty('--attack-tilt-y', `${(dx / distance * 14).toFixed(1)}deg`);
     attacker.classList.add('is-attacking', profileClass);
     const finishAttack = (animation: AnimationEvent) => {
       if (animation.target !== attacker) return;
       attacker.classList.remove('is-attacking', profileClass);
       attacker.style.removeProperty('--attack-x'); attacker.style.removeProperty('--attack-y');
+      attacker.style.removeProperty('--attack-tilt-x'); attacker.style.removeProperty('--attack-tilt-y');
       attacker.removeEventListener('animationend', finishAttack);
     };
     attacker.addEventListener('animationend', finishAttack);
+    const trail = attacker.dataset.trail ?? 'orb';
+    const color = attacker.style.getPropertyValue('--effect-color');
+    this.effects3d?.attackStrike(from, to, trail, color);
     const projectile = document.createElement('i');
     projectile.className = attackProjectileClass(event.side, profile);
-    projectile.dataset.trail = attacker.dataset.trail ?? 'orb';
-    projectile.style.setProperty('--effect-color', attacker.style.getPropertyValue('--effect-color'));
+    projectile.dataset.trail = trail;
+    projectile.style.setProperty('--effect-color', color);
     projectile.style.setProperty('--flight-angle', `${Math.atan2(dy, dx) * 180 / Math.PI}deg`);
     projectile.style.left = `${from.left + from.width / 2}px`;
     projectile.style.top = `${from.top + from.height / 2}px`;
@@ -1079,15 +1093,51 @@ export class GameApp {
     if (!targetId) return;
     const target = this.root.querySelector<HTMLElement>(`[data-card-id="${CSS.escape(targetId)}"]`);
     target?.classList.add('is-link-target');
-    window.setTimeout(() => { source?.classList.remove('is-link-source'); target?.classList.remove('is-link-target'); }, 700);
+    if (source && target) {
+      source.classList.add('is-performing-effect');
+      target.classList.add('is-performing-effect');
+      this.effects3d?.attackStrike(source.getBoundingClientRect(), target.getBoundingClientRect(), 'orb', '#68dcff');
+    }
+    window.setTimeout(() => {
+      source?.classList.remove('is-link-source', 'is-performing-effect');
+      target?.classList.remove('is-link-target', 'is-performing-effect');
+    }, 820);
   }
 
   private captureSigilFlips(events: GameEvent[], before: GameState): void {
     for (const event of events) {
       if (event.type !== 'reveal') continue;
       const card = before.players[event.side].sigils[event.slot];
-      const slot = this.root.querySelector<HTMLElement>(`#game [data-slot-side="${event.side}"][data-slot="${event.slot}"]`);
+      const slot = this.root.querySelector<HTMLElement>(`#game [data-slot-side="${event.side}"][data-slot-kind="sigil"][data-slot="${event.slot}"]`)
+        ?? this.root.querySelector<HTMLElement>(`#game [data-slot-side="${event.side}"][data-slot="${event.slot}"]`);
       if (!card || !slot || this.pendingSigilFlips.has(event.instanceId)) continue;
+      const definition = getCardDefinition(card.definitionId);
+      const durationMs = definition.ability === 'volcano' ? 8900 : definition.ability === 'roots' ? 4300 : 2200;
+      this.activeRevealedSigils.set(`${event.side}:${event.slot}`, {
+        card: { ...card, revealed: true },
+        side: event.side,
+        slot: event.slot,
+        untilClockMs: before.clockMs + durationMs,
+        untilWallMs: performance.now() + durationMs + 400,
+      });
+      if (definition.ability === 'volcano') {
+        const key = `${event.side}:${event.slot}`;
+        this.effects3d?.volcano(
+          card.instanceId,
+          () => this.root.querySelector<HTMLElement>(`#game [data-slot-side="${event.side}"][data-slot-kind="sigil"][data-slot="${event.slot}"]`),
+          () => this.getSigilRemainingMs(key, card.instanceId),
+        );
+      } else if (definition.ability === 'thorns') {
+        const attackEvent = events.find((e): e is Extract<GameEvent, { type: 'attack' }> => e.type === 'attack');
+        const damageEvent = events.find((e): e is Extract<GameEvent, { type: 'damage' }> => e.type === 'damage');
+        const attackerId = attackEvent?.attackerId ?? damageEvent?.instanceId;
+        if (attackerId) {
+          this.effects3d?.thorns(
+            () => this.root.querySelector<HTMLElement>(`#game [data-slot-side="${event.side}"][data-slot-kind="sigil"][data-slot="${event.slot}"]`),
+            () => this.root.querySelector<HTMLElement>(`[data-card-id="${CSS.escape(attackerId)}"]`),
+          );
+        }
+      }
       const rect = slot.getBoundingClientRect();
       if (!rect.width || !rect.height) continue;
       slot.classList.add('is-revealing');
@@ -1096,9 +1146,34 @@ export class GameApp {
       ghost.className = 'sigil-reveal-ghost';
       ghost.setAttribute('aria-hidden', 'true');
       Object.assign(ghost.style, { left: `${rect.left}px`, top: `${rect.top}px`, width: `${rect.width}px`, height: `${rect.height}px` });
-      ghost.innerHTML = `<div class="sigil-reveal-flipper"><div class="sigil-reveal-back">${renderCardBack(event.side)}</div><div class="sigil-reveal-front">${renderCardFace(getCardDefinition(card.definitionId), card, event.side, 'field')}</div></div>`;
+      ghost.innerHTML = `<div class="sigil-reveal-flipper"><div class="sigil-reveal-back">${renderCardBack(event.side)}</div><div class="sigil-reveal-front">${renderCardFace(definition, card, event.side, 'field')}</div></div>`;
       document.body.appendChild(ghost);
       this.pendingSigilFlips.set(event.instanceId, ghost);
+    }
+  }
+
+  private getSigilRemainingMs(key: string, instanceId: string): number {
+    const entry = this.activeRevealedSigils.get(key);
+    if (!entry || entry.card.instanceId !== instanceId) return 0;
+    if (this.state.players[entry.side].sigils[entry.slot]) return 0;
+    const eruptionActive = (this.state.eruptions ?? []).some((e) => e.instanceId === instanceId);
+    const clockRem = entry.untilClockMs - this.state.clockMs;
+    const wallRem = entry.untilWallMs - performance.now();
+    if (eruptionActive) return Math.max(900, clockRem, wallRem);
+    return Math.min(clockRem, wallRem);
+  }
+
+  private pruneExpiredActiveSigils(): void {
+    let changed = false;
+    for (const [key, entry] of this.activeRevealedSigils) {
+      if (this.getSigilRemainingMs(key, entry.card.instanceId) <= 0) {
+        this.activeRevealedSigils.delete(key);
+        changed = true;
+      }
+    }
+    if (changed) {
+      this.renderSigils('player', this.state.players.player.sigils);
+      this.renderSigils('enemy', this.state.players.enemy.sigils);
     }
   }
 
@@ -1109,7 +1184,7 @@ export class GameApp {
     ghost.classList.add('is-flipping');
     return new Promise((resolve) => window.setTimeout(() => {
       ghost.classList.add('is-revealed');
-      window.setTimeout(() => { ghost.remove(); resolve(); }, 280);
+      window.setTimeout(() => { ghost.remove(); resolve(); }, 320);
     }, 460));
   }
 
@@ -1122,13 +1197,37 @@ export class GameApp {
     void board.offsetWidth;
     board.classList.add('is-volcano-erupting');
     window.setTimeout(() => board.classList.remove('is-volcano-erupting'), 900);
-    const eruption = document.createElement('div');
-    eruption.className = `volcano-eruption-overlay volcano-eruption-overlay--${side}`;
-    eruption.setAttribute('aria-hidden', 'true');
-    eruption.innerHTML = `<i class="volcano-eruption-fissures"></i><i class="volcano-eruption-ring"></i><i class="volcano-eruption-core"></i><span class="volcano-eruption-label">ERUPÇÃO · ONDA ${wave}</span>`;
-    Object.assign(eruption.style, { left: '0', top: '0', width: '100%', height: '100%' });
-    board.appendChild(eruption);
-    window.setTimeout(() => eruption.remove(), 1350);
+
+    // Find the active Vulcão sigil slot on the owner's side and pulse the card
+    let volcanoSlotEl = this.root.querySelector<HTMLElement>(`#game [data-slot-side="${side}"][data-slot-kind="sigil"] .battle-card[data-card-id]`)?.closest<HTMLElement>('.secret-slot') ?? null;
+    if (!volcanoSlotEl) {
+      for (const [, entry] of this.activeRevealedSigils) {
+        if (entry.side === side && entry.card.definitionId === 'eclipse-seal') {
+          volcanoSlotEl = this.root.querySelector<HTMLElement>(`#game [data-slot-side="${side}"][data-slot-kind="sigil"][data-slot="${entry.slot}"]`);
+          break;
+        }
+      }
+    }
+    const volcanoCardEl = volcanoSlotEl?.querySelector<HTMLElement>('.battle-card');
+    if (volcanoCardEl) {
+      volcanoCardEl.classList.remove('is-performing-effect');
+      void volcanoCardEl.offsetWidth;
+      volcanoCardEl.classList.add('is-performing-effect');
+      window.setTimeout(() => volcanoCardEl.classList.remove('is-performing-effect'), 820);
+      this.showAbilityLabel(volcanoCardEl, `VULCÃO · ONDA ${wave}/3`, 'red');
+    }
+
+    // Launch 3D molten lava bombs from the 3D volcano on the card's slot to all active troops
+    for (const event of ['enemy', 'player'] as const) {
+      this.state.players[event].slots.forEach((unit) => {
+        if (unit) this.fireballHitIds.add(unit.instanceId);
+      });
+    }
+    this.effects3d?.volcanoWave(
+      () => volcanoSlotEl ?? board,
+      () => Array.from(this.root.querySelectorAll<HTMLElement>('#player-grid .battle-card[data-card-id], #enemy-grid .battle-card[data-card-id]')),
+      wave,
+    );
   }
 
   private animateLife(side: Side, healing: boolean): void {
@@ -1180,60 +1279,62 @@ export class GameApp {
       ? this.root.querySelector<HTMLElement>('#hand-area')?.getBoundingClientRect()
       : this.root.querySelector<HTMLElement>('.enemy-deck-display')?.getBoundingClientRect();
     const from = this.pendingSpellOrigins.get(event.instanceId) ?? fallbackOrigin;
-    const faceMarkup = this.pendingSpellFaces.get(event.instanceId);
+    const definition = getCardDefinition(event.definitionId);
+    const faceMarkup = this.pendingSpellFaces.get(event.instanceId)
+      ?? renderCardFace(definition, { instanceId: event.instanceId, definitionId: event.definitionId, owner: event.side, health: 0, nextAttackAtMs: 0, revealed: true }, event.side, 'hand');
     this.pendingSpellOrigins.delete(event.instanceId);
     this.pendingSpellFaces.delete(event.instanceId);
     const target = event.targetId
       ? this.root.querySelector<HTMLElement>(`[data-card-id="${CSS.escape(event.targetId)}"]`)
       : null;
     const targetElement = target
-      ?? (event.targetSlot !== undefined ? this.root.querySelector<HTMLElement>(`[data-slot-side="${event.targetSide}"][data-slot="${event.targetSlot}"]`) : null)
+      ?? (event.targetSlot !== undefined ? this.root.querySelector<HTMLElement>(`#${event.targetSide}-grid [data-slot="${event.targetSlot}"]`) : null)
       ?? this.root.querySelector<HTMLElement>(event.targetSide === 'player' ? '#player-life-target' : '#enemy-life-target');
     if (!from || !targetElement) return Promise.resolve();
+
+    // Keep the spell card visible and raised in a 3D channeling pose until the spell effect finishes
+    let originGhost: HTMLElement | null = null;
+    if (faceMarkup && from.width && from.height) {
+      originGhost = document.createElement('div');
+      originGhost.className = 'spell-origin-ghost';
+      originGhost.setAttribute('aria-hidden', 'true');
+      Object.assign(originGhost.style, {
+        left: `${from.left}px`,
+        top: `${from.top}px`,
+        width: `${from.width}px`,
+        height: `${from.height}px`,
+      });
+      originGhost.innerHTML = faceMarkup;
+      document.body.append(originGhost);
+    }
+    const dismissOriginGhost = () => {
+      if (!originGhost) return;
+      originGhost.classList.add('is-finishing');
+      window.setTimeout(() => originGhost?.remove(), 220);
+    };
+
+    const resolveTarget = () =>
+      (event.targetId ? this.root.querySelector<HTMLElement>(`[data-card-id="${CSS.escape(event.targetId)}"]`) : null)
+      ?? targetElement;
+
     const isFireball = event.definitionId === 'wandering-flame';
     if (isFireball && this.effects3d) {
-      let originGhost: HTMLElement | null = null;
-      if (faceMarkup && from.width && from.height) {
-        originGhost = document.createElement('div');
-        originGhost.className = 'spell-origin-ghost';
-        originGhost.setAttribute('aria-hidden', 'true');
-        Object.assign(originGhost.style, {
-          left: `${from.left}px`,
-          top: `${from.top}px`,
-          width: `${from.width}px`,
-          height: `${from.height}px`,
-        });
-        originGhost.innerHTML = faceMarkup;
-        document.body.append(originGhost);
-        window.setTimeout(() => originGhost?.remove(), 340);
-      }
-      return this.effects3d.fireball(from, () =>
-        (event.targetId ? this.root.querySelector<HTMLElement>(`[data-card-id="${CSS.escape(event.targetId)}"]`) : null)
-        ?? targetElement,
-      );
+      return this.effects3d.fireball(from, resolveTarget).then(() => {
+        const board = this.root.querySelector<HTMLElement>('.arena-board');
+        board?.classList.remove('is-fireball-impact');
+        void board?.offsetWidth;
+        board?.classList.add('is-fireball-impact');
+        window.setTimeout(() => board?.classList.remove('is-fireball-impact'), 360);
+        dismissOriginGhost();
+      });
     }
-    const to = targetElement.getBoundingClientRect();
-    const projectile = document.createElement('i');
-    projectile.className = `combat-projectile ${event.targetSide === 'enemy' ? 'combat-projectile--enemy' : ''}`;
-    const spellVisual = cardEffects[event.definitionId] ?? cardEffects[event.targetSide === event.side ? 'runic-pulse' : 'wandering-flame'];
-    projectile.dataset.trail = event.targetSide === event.side ? 'orb' : 'spark';
-    projectile.style.setProperty('--effect-color', spellVisual.color);
-    projectile.style.left = `${from.left + from.width / 2}px`;
-    projectile.style.top = `${from.top + from.height / 2}px`;
-    projectile.style.setProperty('--dx', `${to.left + to.width / 2 - from.left - from.width / 2}px`);
-    projectile.style.setProperty('--dy', `${to.top + to.height / 2 - from.top - from.height / 2}px`);
-    document.body.appendChild(projectile);
-    return new Promise((resolve) => {
-      let finished = false;
-      const finish = () => {
-        if (finished) return;
-        finished = true;
-        projectile.remove();
-        resolve();
-      };
-      projectile.addEventListener('animationend', (animation) => { if (animation.target === projectile) finish(); });
-      window.setTimeout(finish, 850);
-    });
+    if (this.effects3d) {
+      return this.effects3d.healSpell(from, resolveTarget).then(() => {
+        dismissOriginGhost();
+      });
+    }
+    dismissOriginGhost();
+    return Promise.resolve();
   }
 
   private render(): void {
@@ -1396,7 +1497,11 @@ export class GameApp {
     const target = this.root.querySelector<HTMLElement>(side === 'player' ? '#player-secrets' : '#enemy-secrets');
     if (!target) return;
     sigils.forEach((card, slot) => {
-      const displayedCard = card && !this.isBeingDragged(card) ? card : null;
+      const key = `${side}:${slot}`;
+      const activeEntry = !card ? this.activeRevealedSigils.get(key) : undefined;
+      const activeRevealed = activeEntry && this.getSigilRemainingMs(key, activeEntry.card.instanceId) > 0 ? activeEntry.card : null;
+      const displayedCard = card && !this.isBeingDragged(card) ? card : activeRevealed;
+      const isEffectActive = Boolean(activeRevealed);
       const content = !displayedCard ? '<span class="empty-rune" aria-hidden="true">✧</span>' : displayedCard.revealed
         ? this.unitMarkup(displayedCard, side, true)
         : renderCardBack(side);
@@ -1413,7 +1518,7 @@ export class GameApp {
       const cardId = displayedCard?.instanceId ?? '';
       const revealed = displayedCard?.revealed ? 'true' : 'false';
       const changed = button.dataset.sigilId !== cardId || button.dataset.sigilRevealed !== revealed;
-      button.className = `slot secret-slot ${side === 'enemy' ? 'enemy-slot' : 'player-slot'}${this.selectedId === displayedCard?.instanceId ? ' is-selected' : ''}${armedThorns ? ' is-thorns-armed' : ''}`;
+      button.className = `slot secret-slot ${side === 'enemy' ? 'enemy-slot' : 'player-slot'}${this.selectedId === displayedCard?.instanceId ? ' is-selected' : ''}${armedThorns ? ' is-thorns-armed' : ''}${isEffectActive ? ' is-sigil-effect-active' : ''}`;
       button.dataset.slotSide = side;
       button.dataset.slotKind = 'sigil';
       button.dataset.slot = String(slot);
