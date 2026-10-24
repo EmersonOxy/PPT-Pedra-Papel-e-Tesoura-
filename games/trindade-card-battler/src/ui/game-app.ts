@@ -11,7 +11,7 @@ import type { MatchFlowState } from '../game/session-flow.ts';
 import { renderCardBack, renderCardFace, renderDeckCardBack } from './card-presentation.ts';
 import { getOpponentProfile, opponentProfiles } from '../game/opponents.ts';
 import { attackProfileClass, attackProjectileClass, cooldownSweepDegrees, handFanSpacing, shouldHighlightDeck } from './combat-presentation.ts';
-import { animateFireballModel } from './fireball-model.ts';
+import { BattleEffects3D } from './effects-3d.ts';
 import type { AttackAnimationProfile } from '../game/types.ts';
 
 const missionRewards: Record<string, string> = { 'first-match': 'runic-pulse', 'first-win': 'amber-phoenix', 'first-formation': 'solemn-guardian' };
@@ -66,6 +66,9 @@ export class GameApp {
   private pendingSigilFlips = new Map<string, HTMLElement>();
   private pendingSigilFlipSlots = new Map<string, HTMLElement>();
   private pendingSpellOrigins = new Map<string, DOMRect>();
+  private pendingSpellFaces = new Map<string, string>();
+  private fireballHitIds = new Set<string>();
+  private effects3d: BattleEffects3D | null = null;
   private revealResolutionPending = false;
 
   constructor(root: HTMLElement) {
@@ -172,6 +175,7 @@ export class GameApp {
       </main><svg class="attack-aim-overlay" id="attack-aim-overlay" aria-hidden="true"><defs><marker id="attack-arrowhead" markerWidth="18" markerHeight="18" refX="15" refY="9" markerUnits="userSpaceOnUse" orient="auto"><path d="M1 2L16 9L1 16L5 9Z"></path></marker></defs><path id="attack-aim-line" d=""></path></svg><div class="overlay card-preview-overlay" id="card-preview-overlay" aria-hidden="true"><div class="card-preview-wrap" id="card-preview-wrap"></div></div><div class="transition-curtain" id="transition-curtain" aria-hidden="true"></div></div>`;
     this.renderDeckLibrary();
     this.renderHome();
+    if (!this.effects3d) this.effects3d = new BattleEffects3D();
   }
 
   private bindEvents(): void {
@@ -275,6 +279,7 @@ export class GameApp {
     if (this.drag?.started && this.drag.source === 'hand') this.restoreDraggedCard(this.drag, true);
     if (this.drag?.started && this.drag.source === 'board') this.hideAttackAim(this.drag);
     this.drag = null;
+    this.effects3d?.clear();
     window.clearTimeout(this.toastTimer);
     const toast = this.root.querySelector<HTMLElement>('#toast');
     if (toast) { toast.textContent = ''; toast.classList.remove('visible'); }
@@ -553,7 +558,11 @@ export class GameApp {
     const result = castSpell(this.state, 'player', this.selectedId, target);
     if (result.events.length === 0) { this.toast('Este alvo não pode receber esse feitiço.'); return; }
     const source = this.root.querySelector<HTMLElement>(`#hand-area [data-card-id="${CSS.escape(this.selectedId)}"]`);
-    if (source) this.pendingSpellOrigins.set(this.selectedId, source.getBoundingClientRect());
+    if (source) {
+      this.pendingSpellOrigins.set(this.selectedId, source.getBoundingClientRect());
+      const face = source.querySelector<HTMLElement>('.card-face');
+      if (face) this.pendingSpellFaces.set(this.selectedId, face.outerHTML);
+    }
     this.selectedId = null;
     this.transition(result);
   }
@@ -764,7 +773,7 @@ export class GameApp {
 
   private transition(result: Transition, failureMessage?: string): void {
     if (!result.events.length && failureMessage) { this.toast(failureMessage); return; }
-    if (result.events.some((event) => event.type === 'reveal')) {
+    if (result.events.some((event) => event.type === 'reveal' || (event.type === 'spell' && event.definitionId === 'wandering-flame'))) {
       const attackProfiles = this.captureAttackProfiles(result.events, this.state);
       this.captureSigilFlips(result.events, this.state);
       this.revealResolutionPending = true;
@@ -780,11 +789,24 @@ export class GameApp {
     if (result.events.some((event) => event.type === 'place' || event.type === 'spell' || event.type === 'return' || event.type === 'move' || event.type === 'target')) this.selectedId = null;
     this.render();
     this.animateCardTransfers(origins);
-    this.playEvents(result.events, attackProfiles);
+    void this.playEvents(result.events, attackProfiles);
   }
 
   private async resolveAfterSigilReveal(result: Transition, attackProfiles: Map<string, AttackAnimationProfile | undefined>): Promise<void> {
     const reveals = result.events.filter((event): event is Extract<GameEvent, { type: 'reveal' }> => event.type === 'reveal');
+    const fireballs = result.events.filter((event): event is Extract<GameEvent, { type: 'spell' }> => event.type === 'spell' && event.definitionId === 'wandering-flame');
+    if (fireballs.length) {
+      this.selectedId = null;
+      this.syncSelection();
+      for (const spell of fireballs) {
+        const handEl = this.root.querySelector<HTMLElement>(`#hand-area [data-card-id="${CSS.escape(spell.instanceId)}"]`);
+        if (handEl) handEl.style.visibility = 'hidden';
+      }
+      for (const spell of fireballs) await this.animateSpell(spell);
+      for (const event of result.events) {
+        if (event.type === 'damage') this.fireballHitIds.add(event.instanceId);
+      }
+    }
     for (const reveal of reveals) await this.animateSigilReveal(reveal);
     this.captureDestructions(result.events);
     this.state = result.state;
@@ -795,7 +817,7 @@ export class GameApp {
       this.pendingSigilFlipSlots.get(reveal.instanceId)?.classList.remove('is-revealing');
       this.pendingSigilFlipSlots.delete(reveal.instanceId);
     }
-    this.playEvents(result.events, attackProfiles, true);
+    void this.playEvents(result.events, attackProfiles, true);
     this.revealResolutionPending = false;
   }
 
@@ -856,14 +878,14 @@ export class GameApp {
         const result = advanceTime(this.state, delta);
         const transferOrigins = this.captureTransferOrigins(result.events);
         const attackProfiles = this.captureAttackProfiles(result.events, priorState);
-        if (result.events.some((event) => event.type === 'reveal')) {
+        if (result.events.some((event) => event.type === 'reveal' || (event.type === 'spell' && event.definitionId === 'wandering-flame'))) {
           this.captureSigilFlips(result.events, priorState);
           this.revealResolutionPending = true;
           void this.resolveAfterSigilReveal(result, attackProfiles);
         } else {
           this.state = result.state;
           this.syncMatchFlowWithEngine();
-          if (result.events.length) { this.captureDestructions(result.events); this.render(); this.animateCardTransfers(transferOrigins); this.playEvents(result.events, attackProfiles); }
+          if (result.events.length) { this.captureDestructions(result.events); this.render(); this.animateCardTransfers(transferOrigins); void this.playEvents(result.events, attackProfiles); }
         }
       }
       this.renderMatchStatus();
@@ -887,7 +909,7 @@ export class GameApp {
     let missionsChanged = false;
     for (const event of events) {
       if (event.type === 'attack') this.animateAttack(event, attackProfiles.get(event.attackerId));
-      if (event.type === 'spell') await this.animateSpell(event);
+      if (event.type === 'spell' && (!revealsAlreadyShown || event.definitionId !== 'wandering-flame')) await this.animateSpell(event);
       if (event.type === 'place') this.animateEntry(event.instanceId);
       if (event.type === 'place' && event.side === 'player') { this.cardsPlaced += 1; missionsChanged = true; }
       if (event.type === 'damage') this.animateImpact(event.instanceId, event.amount);
@@ -947,6 +969,7 @@ export class GameApp {
     projectile.className = attackProjectileClass(event.side, profile);
     projectile.dataset.trail = attacker.dataset.trail ?? 'orb';
     projectile.style.setProperty('--effect-color', attacker.style.getPropertyValue('--effect-color'));
+    projectile.style.setProperty('--flight-angle', `${Math.atan2(dy, dx) * 180 / Math.PI}deg`);
     projectile.style.left = `${from.left + from.width / 2}px`;
     projectile.style.top = `${from.top + from.height / 2}px`;
     projectile.style.setProperty('--dx', `${dx}px`);
@@ -1033,12 +1056,20 @@ export class GameApp {
     const target = this.root.querySelector<HTMLElement>(`[data-card-id="${CSS.escape(instanceId)}"]`);
     if (!target) return;
     target.classList.add('is-rooted', 'roots-binding');
-    const vines = document.createElement('span');
-    vines.className = 'roots-vines';
-    vines.setAttribute('aria-hidden', 'true');
-    vines.innerHTML = '<svg viewBox="0 0 100 140" preserveAspectRatio="none"><path d="M-4 129C22 110 4 89 30 78S22 45 43 28 44 5 50-4M104 130C76 110 97 89 70 76S79 47 58 29 57 5 50-4M-2 72C19 66 23 50 16 37M102 71C82 64 78 49 85 35"/><path d="M29 82l-10-5 3 13M70 80l10-6-2 13M44 31l-9-5 2 12M57 31l9-6-2 12"/></svg>';
-    target.append(vines);
-    window.setTimeout(() => { vines.remove(); target.classList.remove('roots-binding'); }, 1150);
+    const expiresAt = performance.now() + 4000;
+    this.effects3d?.roots(
+      instanceId,
+      () => this.root.querySelector<HTMLElement>(`[data-card-id="${CSS.escape(instanceId)}"]`),
+      () => {
+        const unit = [...this.state.players.player.slots, ...this.state.players.enemy.slots].find(
+          (card) => card?.instanceId === instanceId,
+        );
+        if (!unit) return 0;
+        const engineRemaining = (unit.rootedUntilMs ?? 0) - this.state.clockMs;
+        return Math.min(engineRemaining, expiresAt - performance.now());
+      },
+    );
+    window.setTimeout(() => target.classList.remove('roots-binding'), 4900);
     this.showAbilityLabel(target, 'RAÍZES PRENDERAM · 4s', 'green');
   }
 
@@ -1108,11 +1139,13 @@ export class GameApp {
   }
 
   private animateImpact(instanceId: string, amount: number): void {
+    const isFireballHit = this.fireballHitIds.delete(instanceId);
     const target = this.root.querySelector<HTMLElement>(`[data-card-id="${CSS.escape(instanceId)}"]`);
     if (!target) return;
-    target.classList.remove('is-hit');
+    target.classList.remove('is-hit', 'is-fireball-hop');
     void target.offsetWidth;
     target.classList.add('is-hit');
+    if (isFireballHit) target.classList.add('is-fireball-hop');
     const board = this.root.querySelector<HTMLElement>('.arena-board');
     if (board?.classList.contains('is-volcano-erupting')) {
       const sideClass = target.dataset.side === board.dataset.volcanoOwner ? 'volcano-ally-hit' : 'volcano-enemy-hit';
@@ -1125,7 +1158,7 @@ export class GameApp {
     target.appendChild(number);
     const finishImpact = (animation: AnimationEvent) => {
       if (animation.target !== target) return;
-      target.classList.remove('is-hit', 'is-healing'); number.remove();
+      target.classList.remove('is-hit', 'is-healing', 'is-fireball-hop'); number.remove();
       target.removeEventListener('animationend', finishImpact);
     };
     target.addEventListener('animationend', finishImpact);
@@ -1143,8 +1176,13 @@ export class GameApp {
   }
 
   private animateSpell(event: Extract<GameEvent, { type: 'spell' }>): Promise<void> {
-    const from = this.pendingSpellOrigins.get(event.instanceId) ?? this.root.querySelector<HTMLElement>('#hand-area')?.getBoundingClientRect();
+    const fallbackOrigin = event.side === 'player'
+      ? this.root.querySelector<HTMLElement>('#hand-area')?.getBoundingClientRect()
+      : this.root.querySelector<HTMLElement>('.enemy-deck-display')?.getBoundingClientRect();
+    const from = this.pendingSpellOrigins.get(event.instanceId) ?? fallbackOrigin;
+    const faceMarkup = this.pendingSpellFaces.get(event.instanceId);
     this.pendingSpellOrigins.delete(event.instanceId);
+    this.pendingSpellFaces.delete(event.instanceId);
     const target = event.targetId
       ? this.root.querySelector<HTMLElement>(`[data-card-id="${CSS.escape(event.targetId)}"]`)
       : null;
@@ -1152,21 +1190,36 @@ export class GameApp {
       ?? (event.targetSlot !== undefined ? this.root.querySelector<HTMLElement>(`[data-slot-side="${event.targetSide}"][data-slot="${event.targetSlot}"]`) : null)
       ?? this.root.querySelector<HTMLElement>(event.targetSide === 'player' ? '#player-life-target' : '#enemy-life-target');
     if (!from || !targetElement) return Promise.resolve();
+    const isFireball = event.definitionId === 'wandering-flame';
+    if (isFireball && this.effects3d) {
+      let originGhost: HTMLElement | null = null;
+      if (faceMarkup && from.width && from.height) {
+        originGhost = document.createElement('div');
+        originGhost.className = 'spell-origin-ghost';
+        originGhost.setAttribute('aria-hidden', 'true');
+        Object.assign(originGhost.style, {
+          left: `${from.left}px`,
+          top: `${from.top}px`,
+          width: `${from.width}px`,
+          height: `${from.height}px`,
+        });
+        originGhost.innerHTML = faceMarkup;
+        document.body.append(originGhost);
+        window.setTimeout(() => originGhost?.remove(), 340);
+      }
+      return this.effects3d.fireball(from, () =>
+        (event.targetId ? this.root.querySelector<HTMLElement>(`[data-card-id="${CSS.escape(event.targetId)}"]`) : null)
+        ?? targetElement,
+      );
+    }
     const to = targetElement.getBoundingClientRect();
     const projectile = document.createElement('i');
-    const isFireball = event.definitionId === 'wandering-flame';
-    projectile.className = `combat-projectile ${isFireball ? 'is-fireball' : ''} ${event.targetSide === 'enemy' ? 'combat-projectile--enemy' : ''}`;
+    projectile.className = `combat-projectile ${event.targetSide === 'enemy' ? 'combat-projectile--enemy' : ''}`;
     const spellVisual = cardEffects[event.definitionId] ?? cardEffects[event.targetSide === event.side ? 'runic-pulse' : 'wandering-flame'];
-    projectile.dataset.trail = isFireball ? 'fireball' : event.targetSide === event.side ? 'orb' : 'spark';
+    projectile.dataset.trail = event.targetSide === event.side ? 'orb' : 'spark';
     projectile.style.setProperty('--effect-color', spellVisual.color);
-    let stopFireballModel = () => {};
-    if (isFireball) {
-      projectile.setAttribute('aria-label', 'Bola de fogo em voo');
-      projectile.innerHTML = '<span class="fireball-flame fireball-flame--one"></span><span class="fireball-flame fireball-flame--two"></span><span class="fireball-flame fireball-flame--three"></span><span class="fireball-core"><i></i></span><canvas class="fireball-model" width="128" height="128" aria-hidden="true"></canvas><span class="fireball-ember fireball-ember--one"></span><span class="fireball-ember fireball-ember--two"></span>';
-      const model = projectile.querySelector<HTMLCanvasElement>('.fireball-model');
-      stopFireballModel = model ? animateFireballModel(model) : () => {};
-    }
-    projectile.style.left = `${from.left + from.width / 2}px`; projectile.style.top = `${from.top + from.height / 2}px`;
+    projectile.style.left = `${from.left + from.width / 2}px`;
+    projectile.style.top = `${from.top + from.height / 2}px`;
     projectile.style.setProperty('--dx', `${to.left + to.width / 2 - from.left - from.width / 2}px`);
     projectile.style.setProperty('--dy', `${to.top + to.height / 2 - from.top - from.height / 2}px`);
     document.body.appendChild(projectile);
@@ -1175,22 +1228,10 @@ export class GameApp {
       const finish = () => {
         if (finished) return;
         finished = true;
-        stopFireballModel();
         projectile.remove();
-        if (isFireball) {
-          const impact = document.createElement('i');
-          impact.className = 'fireball-impact-burst';
-          impact.setAttribute('aria-hidden', 'true');
-          impact.style.left = `${to.left + to.width / 2}px`;
-          impact.style.top = `${to.top + to.height / 2}px`;
-          document.body.append(impact);
-          window.setTimeout(() => impact.remove(), 430);
-        }
         resolve();
       };
-      projectile.addEventListener('animationend', (animation) => {
-        if (animation.target === projectile) finish();
-      });
+      projectile.addEventListener('animationend', (animation) => { if (animation.target === projectile) finish(); });
       window.setTimeout(finish, 850);
     });
   }
