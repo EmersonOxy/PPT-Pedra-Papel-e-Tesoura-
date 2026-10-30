@@ -1,0 +1,43 @@
+{
+  "rulesetId": "trindade-demo-experimental-v1",
+  "startingLife": 20,
+  "deckSize": 24,
+  "copiesPerDefinition": 2,
+  "handLimit": 6,
+  "fieldTopology": {
+    "rows": 2,
+    "columns": 3,
+    "frontRow": {
+      "player": 0,
+      "enemy": 1
+    },
+    "specialSpaces": [
+      {
+        "kind": "sigil",
+        "count": 2
+      }
+    ]
+  },
+  "attackIntervalMs": 6500,
+  "attackIntervalMultiplierByDefinitionId": {
+    "solemn-guardian": 1.08,
+    "astral-fox": 0.92,
+    "moss-colossus": 1.08,
+    "amber-phoenix": 1,
+    "veil-oracle": 0.92,
+    "ember-knight": 1
+  },
+  "initialAttackDelayMsByDefinitionId": {
+    "solemn-guardian": 0,
+    "astral-fox": 0,
+    "moss-colossus": 0,
+    "amber-phoenix": 0,
+    "veil-oracle": 0,
+    "ember-knight": 0
+  },
+  "aiInitialDelayMs": 4000,
+  "aiActionIntervalMs": 4000,
+  "spellDamage": 2,
+  "spellHealing": 2,
+  "note": "Parâmetros temporários de ritmo; intervalos e esperas iniciais por carta são experimentais e não representam balanceamento final."
+}
