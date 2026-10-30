@@ -1,0 +1,72 @@
+{
+  "name": "trindade-studio",
+  "version": "0.2.0",
+  "description": "Editor visual local para o jogo Pedra, Papel e Tesoura do Trindade",
+  "author": "Trindade",
+  "private": true,
+  "type": "module",
+  "main": "electron/main.cjs",
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "typecheck": "tsc --noEmit",
+    "build:renderer": "vite build",
+    "prepare:game-template": "node scripts/prepare-game-template.mjs",
+    "build:windows": "pnpm run typecheck && pnpm run build:renderer && pnpm run prepare:game-template && electron-builder --win nsis --x64",
+    "test": "node --test tests/*.test.cjs",
+    "test:browser": "node scripts/run-packaged-smoke.mjs",
+    "test:package": "node scripts/run-packaged-smoke.mjs"
+  },
+  "dependencies": {
+    "react": "19.3.1",
+    "react-dom": "19.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "26.6.5",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "electron": "44.9.0",
+    "electron-builder": "26.15.3",
+    "typescript": "7.0.2",
+    "vite": "8.3.4"
+  },
+  "build": {
+    "appId": "com.trindade.studio",
+    "productName": "Trindade Studio",
+    "compression": "normal",
+    "asar": true,
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**",
+      "electron/**",
+      "scenes.json",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": ".bundle/game-template",
+        "to": "game-template"
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        }
+      ],
+      "artifactName": "Trindade-Studio-Setup-${version}.exe"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Trindade Studio",
+      "deleteAppDataOnUninstall": false,
+      "runAfterFinish": true
+    }
+  }
+}

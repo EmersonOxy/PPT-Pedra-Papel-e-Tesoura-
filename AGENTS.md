@@ -65,13 +65,36 @@ Delegue em paralelo apenas perguntas independentes. Não permita que agentes edi
 
 ## Marco 2 — baseline, compatibilidade e runtime modular
 
-- O Marco 1 foi concluído e o Marco 2 foi autorizado. Trabalhe somente em `feature/marco-2-modularizacao`; não altere `main` nem a branch de auditoria.
+- O Marco 1 foi concluído e o Marco 2 está em `feature/marco-2-modularizacao`. Ao continuar trabalho específico do Marco 2, use essa branch; o Studio evolui em sua própria branch autorizada, sem alterar `main` ou a branch de auditoria.
 - Preserve `Jogar-Trindade-transicao-preta.html` e `reference/Jogar-Trindade-transicao-preta.baseline.html` byte a byte. Confirme o SHA-256 dos dois em qualquer validação final.
 - O runtime modular começa em `index.html`; regras puras ficam em `src/game/core/`, integração DOM em `src/game/ui/`, recursos em `assets/` e opções visuais validadas em `config/visual.json`. Não importe código do jogo para o Studio.
 - Faça mudanças pequenas e valide cada etapa com os comandos em `docs/BUILD_AND_TEST.md`. A suíte diferencial deve executar as mesmas entradas/RNG na referência e no núcleo modular; divergência de regras interrompe o avanço até ser explicada e corrigida.
 - Use `node scripts/serve-local.mjs` para abrir `http://127.0.0.1:4173/`; o servidor permanece somente leitura, em loopback, sem CORS e contido à raiz. Não contorne políticas de `file://`, browser ou segurança do sistema.
-- Não substitua nem atualize a referência para fazer teste passar. Mecânicas só mudam com solicitação/aprovação própria. Não inicie o Marco 3.
-- Não instale ferramentas ou dependências globais sem necessidade demonstrada e decisão apresentada. Para o Studio, Electron/React/TypeScript/Vite são a stack de UI aprovada como proposta; o runtime do jogo continua em JavaScript modular sem framework imposto.
+- Não substitua nem atualize a referência para fazer teste passar. Mecânicas só mudam com solicitação/aprovação própria.
+- Não instale ferramentas ou dependências globais sem necessidade demonstrada e decisão apresentada. Electron/React/TypeScript/Vite são a stack de UI aprovada para o Studio; o runtime do jogo continua em JavaScript modular sem framework imposto.
+
+## Marco 3 — Trindade Studio
+
+- O Marco 3 está autorizado na branch isolada `feature/marco-3-studio`, iniciada do `origin/main` aprovado. Não misture alterações locais do launcher da branch `feature/marco-2-modularizacao`; preserve-as. Não altere `main`, faça commit, push ou merge sem aprovação posterior.
+- O primeiro incremento entrega uma experiência Windows gráfica: abrir, selecionar elemento no canvas/lista, editar propriedade allowlisted, visualizar, alternar edição/teste, desfazer/refazer e salvar. O uso cotidiano não deve exigir terminal, PowerShell, Node.js instalado ou servidor manual.
+- O navegador de telas usa `studio/scenes.json` como inventário de estados que existem no runtime e como contrato de camadas por cena. Fixtures são determinísticas, restritas ao DOM da prévia em Editar e nunca alteram/cobrem regras competitivas; Testar carrega o runtime real. Ao adicionar estados, valide-os contra HTML/UI/core, catálogo de elementos e teste Electron. Não anuncie alvos ausentes como editáveis.
+- Mantenha Electron seguro (`contextIsolation`, sandbox, `nodeIntegration: false`, CSP), preload mínimo com métodos nomeados, validação de sender/origem/caminho no processo principal e preview separado, sem IPC. Não exponha shell, Git ou filesystem genérico ao renderer.
+- Mantenha Electron como processo principal único e reaproveite módulos/serviços comuns. Não crie três aplicativos independentes para Studio, testes e Git.
+- A prévia usa somente arquivos explicitamente allowlisted do runtime do jogo em loopback; nunca leia, sirva ou empacote documentação, `.git`, testes, segredos, Studio ou configurações de gameplay.
+- Não edite regra, estado competitivo ou arte da referência. Propriedades novas precisam passar pelo contrato do catálogo/schema e ter alvo real/default/teste na mesma mudança.
+- Dependências são exatas e têm lockfile local em `studio/`; não instalar ferramentas globais. Reveja scripts de instalação antes de aprová-los. Usuários finais instalam e abrem pelo instalador/atalho gráfico; Node/pnpm pertencem apenas ao build/desenvolvimento.
+- Antes de declarar pronto, execute testes unitários/negativos, typecheck, build renderer/Windows, caracterização diferencial e evidência da interface real. Declare falhas, limitações e testes que não puderam ser executados; não conte checks de HTTP como teste interativo.
+- Atualize `docs/STUDIO_ARCHITECTURE.md`, `docs/STUDIO_USER_GUIDE.md` e `docs/BUILD_AND_TEST.md` quando o contrato, suporte, execução ou riscos mudarem.
+
+### Central multiprojeto, engine e atualizações
+
+- Trindade Studio é a interface de criação; Trindade Engine contém capacidades reutilizáveis de runtime; modelos são catálogos versionados; cada jogo é um projeto independente. Não acople a Central a IDs, telas ou regras de Pedra, Papel e Tesoura.
+- Cada projeto tem `trindade.project.json` com UUID estável, versão do manifesto/formato, modelo e versão, ID da engine, versão testada e versão mínima compatível. Configuração, assets, scripts e regras pertencem à pasta do projeto; estado da Central (lista recente) fica nos dados do usuário, fora do app e dos projetos.
+- A Central lista apenas modelos realmente implementados. Neste incremento, somente `pedra-papel-tesoura-web` está disponível; não apresente projeto vazio, puzzle, RPG ou outras categorias como funcionais.
+- A atualização do Studio não pode modificar ou migrar projetos automaticamente. Formatos mais novos/incompatíveis devem ser recusados com mensagem; migração futura exige escolha explícita, validação, backup recuperável e testes antes de gravar.
+- Preserve fronteiras para extensões JavaScript e lógica visual por eventos/condições/ações versionadas, mas não implemente tais sistemas nem templates futuros sem escopo aprovado.
+- O verificador de atualização consulta somente a release estável do repositório oficial. Nesta etapa a instalação é manual e iniciada pelo usuário; não baixar/executar instaladores nem migrar projeto em background. Mudanças de canal ou origem exigem decisão explícita.
+- Não publique release para habilitar o verificador. Assinatura Authenticode, metadados de atualização assinados, download/instalação automática e rollback são trabalho futuro sujeito a validação própria.
 
 ## Contrato obrigatório para elementos editáveis no Studio
 
@@ -81,6 +104,8 @@ Delegue em paralelo apenas perguntas independentes. Não permita que agentes edi
 - Nunca expor HTML, JavaScript, CSS arbitrário, selector executável, comando de sistema, asset remoto ou propriedade não validada no editor.
 - Valores visuais ficam em `config/visual.json`; experimentos de regra ficam em `config/gameplay.local.json` isolados. Parâmetros competitivos permanecem somente leitura até aprovação explícita.
 - Mudança incompatível de ID, tipo, default, unidade ou semântica requer incremento de versão, migração determinística, backup e teste de compatibilidade. Versões futuras não podem ser sobrescritas por cliente antigo.
+- O catálogo v3 reúne geometria registrada (`flow-box-v1` / CSS px) e propriedades visuais tipadas. Fontes, tamanhos/peso/alinhamento, cores, opacidade, visibilidade e assets só aparecem se o registro do elemento os declarar. Studio, serviço de projeto e runtime validam a mesma allowlist. Projetos schema 1 e 2 permanecem sem migração automática; migração futura exige ação explícita, backup e validação em cópia. Mudanças de geometria incluem limites, breakpoints, alvo oculto e colisões relevantes. Nunca exponha CSS ou JavaScript arbitrário no inspetor.
+- Assets de imagem continuam limitados aos IDs locais cadastrados. Uma futura importação deve aceitar formatos raster allowlisted, validar MIME e assinatura/conteúdo, impor limites de tamanho/dimensões/pixels, gerar `assetId` e nome de arquivo internos e salvar atomicamente dentro da pasta do projeto com backup. SVG, URLs remotas e conteúdo ativo são recusados; não adicione um seletor decorativo sem importação funcional.
 - O contrato detalhado e o procedimento para o Codex estão em `docs/EDITOR_ARCHITECTURE.md` e `docs/GAME_CONFIGURATION.md`; consulte-os ao implementar qualquer nova tela, poder, HUD, asset ou animação.
 
 ## Segurança do Studio e preview
@@ -90,6 +115,10 @@ Delegue em paralelo apenas perguntas independentes. Não permita que agentes edi
 - O preview roda isolado, sem IPC, com origem/canal e payload verificados. Não habilitar combinações amplas de sandbox que coloquem preview e editor na mesma origem privilegiada.
 - Salvamento valida JSON e assets, grava atomicamente e mantém backup. Importação rejeita traversal, links fora da raiz, MIME/extensão incompatíveis e conteúdo ativo não sanitizado.
 - Segredos nunca entram na configuração, logs ou Git. Git usa helper de credenciais existente e stage explícito.
+- Cada sessão de preview é validada contra o identificador ativo mantido pelo processo principal e a origem exata do renderer; validar somente o formato do identificador não basta. Troca de projeto invalida a sessão anterior.
+- Assets próprios devem ser adicionados pela operação nomeada e pelo seletor nativo. PNG/JPEG/WebP estáticos passam por validação de conteúdo, formato, dimensão e tamanho; SVG, animações, URLs externas e conteúdo ativo não são assets. A biblioteca fica em `assets/manifest.json` + `assets/imported/`, usa IDs internos estáveis e não guarda o caminho original.
+- O servidor da prévia só entrega assets listados e verificados no manifesto do projeto ativo; rejeita symlinks, traversal e sessão/origem incorretas. Limites atuais: 5 MiB, 4096 px por dimensão, 16 MP e 500 imagens. Atualize testes e documentação junto com mudanças nesses limites/formatos.
+- Projetos schema 1, 2 e 3 não devem ser migrados ao abrir. Biblioteca de assets é opcional; duplicação/backup deve incluir todos os recursos registrados. Migrações futuras precisam de confirmação explícita e backup validado.
 
 ## Publicação Web e Vercel
 
@@ -116,6 +145,6 @@ Uma mudança está pronta quando respeita o escopo aprovado, preserva os fluxos 
 - Não reescreva histórico existente sem autorização explícita. Nunca use force push neste projeto.
 - Não publique nem faça push automaticamente. Envie alterações ao remoto somente após aprovação de Émerson.
 - O primeiro commit do baseline também exige aprovação após revisão da lista staged, verificação de segredos, diff/checks e integridade/hash. Push exige aprovação separada; não use force push.
-- A autorização de Marco 2 não autoriza iniciar o Marco 3. Conclua as etapas e peça aprovação para qualquer próximo Marco.
+- A autorização de cada Marco vale somente para seu escopo. Aguarde aprovação explícita antes de iniciar o próximo Marco.
 - Não crie commit, push ou merge sem aprovação expressa de Émerson após a revisão da entrega. Não use force push.
 - Use a identidade Git local já configurada neste repositório; não copie nome/email pessoal para a documentação nem propague a configuração para o Git global.

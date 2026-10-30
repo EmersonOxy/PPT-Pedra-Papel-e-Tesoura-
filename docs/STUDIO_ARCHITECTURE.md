@@ -1,0 +1,116 @@
+# Trindade Studio — arquitetura do primeiro incremento
+
+## Objetivo e limite
+
+O Marco 3 estabelece um editor visual Windows funcional para os elementos já registrados pelo jogo. O Studio seleciona elementos pela lista ou diretamente na prévia, edita somente propriedades permitidas pelo catálogo, mostra a prévia do runtime modular real, alterna entre edição e teste, desfaz/refaz e salva a configuração visual com cópia de recuperação.
+
+O runtime do jogo continua em JavaScript modular e sem dependência de React, TypeScript ou Electron. Este marco não altera as regras nem o HTML de referência. O Studio não oferece edição arbitrária de código, HTML ou CSS.
+
+## Componentes
+
+| Componente | Responsabilidade |
+| --- | --- |
+| `studio/electron/main.cjs` | Ciclo do app, Central, seleção de projeto, janela, menu, atualização e validação do remetente IPC. |
+| `studio/electron/preload.cjs` | API nomeada e estreita para projetos/modelos, release estável, salvar visual.json, histórico e fechamento. |
+| `studio/src/` | Interface React/TypeScript: navegador de telas/estados, lista de camadas registradas, prévia, inspetor, histórico, modo de teste e avisos. |
+| `studio/electron/project-service.cjs` | Allowlist de arquivos, validação de catálogo/configuração, caminhos seguros e salvamento atômico com `.bak`. |
+| `studio/electron/project-library.cjs` | Registro de modelos existentes, criação/importação segura, manifesto e lista recente em dados do usuário. |
+| `studio/electron/update-service.cjs` | Consulta metadados da última release estável do repositório oficial; valida origem/versão/instalador e não instala. |
+| `studio/electron/preview-server.cjs` | Servidor GET/HEAD de loopback com allowlist para o runtime modular real, catálogo estático de cenas autenticado e sem IPC. |
+| `studio/scenes.json` | Inventário versionado das oito telas/estados demonstráveis, alvos editáveis por estado e fixtures determinísticas limitadas à prévia. |
+| `studio/electron/renderer-server.cjs` | Servidor local do renderer empacotado e política CSP. |
+| `studio/scripts/prepare-game-template.mjs` | Copia somente os 14 arquivos aprovados do jogo para o bundle de distribuição. |
+| `studio/package.json` / `studio/pnpm-lock.yaml` | Dependências exatas, ferramentas e instalador NSIS x64 por usuário. |
+
+Fluxo de confiança: o renderer do Studio não tem Node (`nodeIntegration: false`), usa `contextIsolation` e sandbox. O preload expõe apenas métodos definidos. O processo principal confere janela, frame e origem em cada mensagem. A prévia usa outra origem de loopback/porta, sem preload nem IPC; seu protocolo aceita somente mensagens versionadas, de origem, janela-pai e sessão correspondentes.
+
+## Pastas
+
+```text
+studio/
+  electron/                 processo principal, preload e serviços confiáveis
+  scripts/                  desenvolvimento e preparação da distribuição
+  src/                      renderer React/TypeScript e estilos
+  tests/                    testes unitários e de fronteira
+  dist/                     build local gerado, ignorado pelo Git
+  .bundle/game-template/    runtime autorizado, gerado e ignorado pelo Git
+  release/                  empacotamento e evidências locais, ignorados pelo Git
+docs/
+  STUDIO_ARCHITECTURE.md
+  STUDIO_USER_GUIDE.md
+  STUDIO_PROJECTS_AND_UPDATES.md
+```
+
+O fluxo de build web do jogo usa sua allowlist existente e não inclui `studio/`.
+
+## Navegador de telas e estados
+
+O catálogo `studio/scenes.json` lista somente estados que existem em `index.html`, `game-ui.js`, `game-view.js` e `core/rules.js`: menu, arena em combate, resultado de vitória/derrota de combate, recompensa, resultado de vitória/derrota da partida e derrota por inatividade. O Studio carrega o mesmo JSON no painel acessível **Telas** e serve uma cópia somente leitura à prévia por rota autenticada com origem e sessão do Studio.
+
+Em modo Editar, o adaptador do bridge modifica somente o DOM da prévia para apresentar valores determinísticos. Ele não altera o objeto de jogo nem chama regras competitivas. As camadas listadas são os IDs reais `data-editor-id` permitidos pelo catálogo e declarados para cada estado. A seleção pelo canvas e pela lista valida esse conjunto. Estados futuros sem alvos exibem mensagem explícita e não inventam controles.
+
+Ao entrar em Testar, o iframe é recarregado com `studioMode=test`, sem fixture, e começa no menu real com as mecânicas normais. Voltar a Editar reinicializa a prévia e reaplica cena/configuração; configuração não salva, seleção de tela e histórico ficam no renderer pai e sobrevivem à troca. Fixtures permanecem no catálogo do Studio e nunca entram na allowlist web nem são importadas pelo núcleo do jogo.
+
+Para adicionar uma cena/estado demonstrável, confirme primeiro que ele existe no runtime, forneça fixture reproduzível, IDs registrados por estado e testes de compatibilidade do catálogo. Não altere regras para facilitar a navegação, nem anuncie como editável um alvo que não existe no DOM.
+
+## Fronteiras para evolução futura
+
+O navegador atual não é um editor de cenas com geometria livre. `scenes.json` apenas descreve estados existentes, camadas registradas e dados de prévia. Próximos incrementos devem separar documentos e APIs para composição de objetos, timeline/animações, mecânicas/poderes e eventos visuais (eventos, condições e ações); a representação por nós e extensões JavaScript ficam atrás de interfaces versionadas e permissões próprias. Esses sistemas não existem nesta etapa e não devem ser simulados por propriedades arbitrárias ou por mudanças nas regras competitivas.
+
+## Central multiprojeto e compatibilidade
+
+O Studio é a interface de criação e gerenciamento. Trindade Engine é o limite arquitetural destinado a capacidades reutilizáveis de execução; modelos descrevem estruturas iniciais; projetos guardam o jogo concreto. A separação começa com serviços e metadados, sem transformar o runtime atual em uma engine genérica nem alterar mecânicas.
+
+`project-library.cjs` mantém catálogo independente da UI. O catálogo atual contém somente `pedra-papel-tesoura-web` v1.0.0, o primeiro modelo real; a Central renderiza os itens do catálogo e não contém opções falsas para projeto vazio, puzzle ou RPG. O diretório de cada jogo é independente e guarda o runtime, configuração, assets, scripts e regras daquele projeto.
+
+Cada raiz de projeto contém `trindade.project.json`: UUID, `manifestVersion`, `projectFormatVersion`, modelo/versão e engine/versões de compatibilidade. A Central guarda recents em `app.getPath('userData')/studio-settings.json`, nunca dentro dos recursos empacotados. Remover item recente só remove a referência da Central, não os arquivos. Um projeto legado sem manifesto só é importado depois de confirmação e snapshot allowlisted recuperável. Um projeto dentro de Git oferece abrir ou criar cópia independente; a operação de cópia não leva `.git`.
+
+O aplicativo rejeita um manifesto de formato futuro ou cuja versão mínima da Trindade Engine ultrapassa a suportada. O update checker e a atualização do Studio não gravam dados de projetos. Migração futura deve ser uma operação separada e iniciada explicitamente: fazer backup validado, planejar a transformação determinística, validar o resultado e manter recuperação se qualquer gravação falhar. Não executar migrações durante abertura ou atualização do Studio.
+
+As fronteiras futuras podem acrescentar extensões JavaScript e grafos/eventos de condições e ações, cada qual com contrato versionado e permissões delimitadas. Nenhum plugin, sistema de nós, event visual scripting ou modelo além do RPS é implementado neste incremento.
+
+## Instalação Windows
+
+O artefato de entrega é um instalador NSIS por usuário criado pelo `electron-builder` já usado no projeto. O instalador cria atalhos no desktop e menu Iniciar, executa sem Node.js e mantém os dados do usuário ao desinstalar. O EXE portable foi rejeitado como canal principal porque não completou o teste de inicialização automatizado neste ambiente. Não existe assinatura de código nesta etapa; não desative SmartScreen nem antivírus para contornar avisos.
+
+O código roda em um único aplicativo Electron. O projeto de jogo selecionado é canonicalizado e carregado a partir da pasta escolhida; os recursos/modelos do Studio ficam no pacote do aplicativo e são copiados para uma pasta de projeto novo. O salvamento altera somente os arquivos allowlisted dentro da raiz selecionada e preserva `.bak` antes da substituição atômica. Configurações e lista recente do aplicativo ficam em `app.getPath('userData')`, separadas dos projetos. Desinstalar não apaga projetos, configurações visuais nem backups. O Studio não chama Vercel nem faz publicação automática.
+
+## Contrato de extensibilidade do editor
+
+O contrato versionado está em `config/editor-elements.schema.json`; valores editáveis ficam em `config/visual.json`. Cada elemento novo precisa de:
+
+1. ID estável, globalmente único, não traduzido, com tipo conhecido e alvo real `data-editor-id` ou adaptador já registrado.
+2. Propriedade declarada no catálogo com tipo conhecido, default válido, limites, unidade quando aplicável, responsividade explícita e operação de vínculo permitida.
+3. Default/configuração compatível que reproduza a aparência atual do jogo.
+4. Validação no processo principal e no runtime; integração genérica por operação registrada, sem código específico para cada ID.
+5. Testes negativos (propriedade desconhecida, tipo/valor inválido, caminho/asset não registrado), teste da aplicação no alvo real e documentação na mesma mudança.
+
+Operações permitidas no primeiro incremento: `textContent`, variáveis CSS nomeadas e registradas, fundo do primeiro filho do alvo e fonte de imagem por ID de asset. O Studio não aceita HTML/JS/CSS arbitrário, seletores fornecidos por dados, caminhos de arquivo, URLs remotas, comandos nem propriedades competitivas. Texto é simples e limitado; cores seguem `#RRGGBB`; imagem escolhe um ID registrado. O preview em modo de edição bloqueia entradas de jogo e comunica seleção; modo de teste libera a partida.
+
+Uma mudança incompatível em ID/tipo/default/unidade/significado incrementa a versão do schema e inclui migração determinística, backup e testes de round-trip. Clientes antigos nunca devem sobrescrever uma versão futura.
+
+Para novas telas, poderes ou animações, o Codex deve primeiro escolher os controles visuais que façam sentido. Regras e números competitivos permanecem fora do inspetor visual; não se deve expor um parâmetro de gameplay como propriedade editável sem uma aprovação de produto própria.
+
+## Salvamento e recuperação
+
+Salvar valida novamente o catálogo e o documento, grava `config/visual.json.bak` com a versão anterior e substitui a configuração com um temporário sincronizado. Se a troca falhar, mantém a versão anterior. A interface mantém undo/redo em memória e pergunta antes de descartar alterações ao fechar ou abrir outro projeto.
+
+O Studio começa na Central. Projetos novos são criados sob `Documentos/TrindadeProjetos`, podendo o usuário escolher outra pasta. Projetos recentes podem ser abertos ou removidos da lista sem apagar dados. Não há integração Git, sincronização remota ou publicação web; o suporte a múltiplos projetos é local e não depende de jogos específicos na UI da Central.
+
+## Decisões, alternativas e riscos
+
+- **Electron + React + TypeScript + Vite** permanece a escolha de UI aprovada. O runtime do jogo não usa esse framework. A janela única reúne as três ações futuras; não há três aplicativos ou cópias independentes.
+- **Instalador NSIS por usuário x64**, criado com o `electron-builder` já usado no projeto. O app incorpora o runtime Electron e o único modelo implementado, não requer Node.js instalado pelo usuário e preserva dados ao desinstalar. O build não é assinado e pode gerar aviso do Windows. O verificador de release é informativo e abre a página oficial para instalação manual; não há download/execução automática, e a assinatura/publicação de releases permanece pendente.
+- **pnpm com lockfile** fixa versões de dependência. `studio/pnpm-workspace.yaml` aprova apenas os scripts revisados de `electron` (download do runtime necessário) e `electron-winstaller` (seleção do binário 7-Zip interno); o restante de scripts de dependência continua negado por padrão.
+- **Servidor de prévia de loopback** foi escolhido para manter origem isolada e o jogo modular funcionando com módulos ES. Somente `127.0.0.1`, GET/HEAD e 14 caminhos são expostos. Ainda é necessário endurecer e revisar a proteção contra CSRF para qualquer feature que altere a superfície de escrita.
+- **Risco de assets:** o catálogo atual só escolhe três imagens registradas, não importa novas imagens. Um fluxo de importação exigirá validação real de MIME/conteúdo, tamanho, extensão e caminho, plus sanitização e backup.
+- **Risco de plataforma:** o empacotamento é Windows x64 e depende dos sistemas suportados pelo Electron atual. macOS/Linux e instalação automática estão fora do escopo.
+- **Compatibilidade de projeto:** o manifesto atual é v1 e declara formato 1, engine 1.0.0 e modelo RPS 1.0.0. Versões de manifesto/formato futuras e engine mínima superior são recusadas sem mutação. Não há migração de projeto nesta etapa.
+- **Integridade de cópia:** criar projeto começa em pasta nova, copia somente a allowlist e remove a pasta recém-criada se a cópia falhar; duplicação e importação mantêm backup allowlisted ou removem apenas o destino que a operação acabou de criar em caso de falha.
+
+## Compatibilidade
+
+- A referência original permanece byte a byte inalterada com SHA-256 `C6011DB78BC72E7932959AD1FCD81EF7EA2D0D353FE58FA391AD72B1B07DF843`.
+- `index.html` segue como entrada modular do jogo, servido em origem isolada do Studio. `Jogar-Trindade-transicao-preta.html` continua como referência autocontida e não recebe mensagens do Studio.
+- A configuração e o catálogo atuais usam schema v3; projetos schema 1 e 2 continuam abrindo sem reescrita/migração silenciosa, e o inspetor expõe somente propriedades presentes no catálogo selecionado. Propriedades novas opcionais não são materializadas até o usuário editar. Restaurar valores remove overrides visuais e mantém a geometria independente. Arquivos internos e código do Studio não entram na prévia nem no bundle Vercel.
+- O contrato de preview usa protocolo 1, origem exata, `event.source` e nonce de sessão de 256 bits. Ao mudar o formato, aumentar versão e manter somente a compatibilidade necessária.

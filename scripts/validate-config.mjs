@@ -8,11 +8,11 @@ const sandbox = JSON.parse(await readFile('config/gameplay.local.json', 'utf8'))
 const modularHtml = await readFile('index.html', 'utf8');
 const ids = new Set();
 
-assert.equal(catalog.version, 1);
+assert.equal(catalog.version, 3);
 assert.equal(visual.schemaVersion, catalog.version);
 assert.equal(sandbox.mode, 'local-sandbox');
 validateConfig(catalog, visual);
-assert.equal(catalog.elements.length, 9, 'Quantidade de elementos editáveis mudou sem atualizar a caracterização.');
+assert.equal(catalog.elements.length, 11, 'Quantidade de elementos editáveis mudou sem atualizar a caracterização.');
 for (const element of catalog.elements) {
   assert.match(element.id, /^[a-z][a-z0-9]*(?:\.[a-z][a-z0-9]*)+$/);
   assert.equal(ids.has(element.id), false, `ID duplicado: ${element.id}`);
@@ -24,7 +24,8 @@ for (const element of catalog.elements) {
   assert.equal([...modularHtml.matchAll(targetPattern)].length, 1, `Target ausente ou duplicado: ${element.id}`);
   for (const property of element.properties) {
     assert.ok(catalog.propertyTypes.includes(property.type));
-    assert.equal(visual.elements[element.id].base?.[property.key], property.default, `Padrão divergente em ${element.id}.${property.key}`);
+    if (property.optional) assert.equal(visual.elements[element.id].base?.[property.key], undefined, `Override opcional foi materializado em ${element.id}.${property.key}`);
+    else assert.equal(visual.elements[element.id].base?.[property.key], property.default, `Padrão divergente em ${element.id}.${property.key}`);
   }
 }
 assert.equal(Object.keys(visual.elements).length, catalog.elements.length, 'Configuração contém elemento ausente do catálogo.');
