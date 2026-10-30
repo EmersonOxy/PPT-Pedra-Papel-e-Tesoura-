@@ -6,7 +6,7 @@ const path = require('node:path');
 const { allowedFiles, loadProjectAt, readAllowedFile, saveVisualConfigAt, validateVisualConfig } = require('../electron/project-service.cjs');
 const { rectanglesOverlap } = require('../electron/geometry.cjs');
 
-const repositoryRoot = path.resolve(__dirname, '..', '..');
+const repositoryRoot = path.resolve(__dirname, '..', '..', 'games', 'pedra-papel-tesoura');
 
 async function makeProject(t) {
   const temp = await fs.mkdtemp(path.join(os.tmpdir(), 'trindade-studio-project-'));

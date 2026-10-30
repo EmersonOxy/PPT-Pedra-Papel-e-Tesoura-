@@ -403,7 +403,7 @@ body { overscroll-behavior: none; }
 /* Original 1800 x 2400 arena: every target shares the artwork coordinate space. */
 .game-shell { grid-template-rows: 6.5fr 71fr 22.5fr !important; }
 .arena-stage { container-type: size; display: grid; place-items: center; min-height: 0; overflow: hidden; background: #07121b; }
-.arena-board { position: relative; width: min(100cqw,75cqh); aspect-ratio: 3 / 4; background: url('../assets/arena/arena sem fundo.png') center / 100% 100% no-repeat, url('../assets/arena/fundo da arena.png') center / cover no-repeat; }
+.arena-board { position: relative; width: min(100cqw,75cqh); aspect-ratio: 3 / 4; background: url('../assets/arena/arena-sem-fundo.webp') center / 100% 100% no-repeat, url('../assets/arena/fundo-da-arena.webp') center / cover no-repeat; }
 .arena-board .field-band { position: absolute; inset: 0; width: 100%; height: 100%; display: block; padding: 0 !important; background: none; transform: none; pointer-events: none; }
 .arena-board .field-band::before, .arena-board .field-band::after { display: none !important; }
 .arena-board .battle-grid, .arena-board .sigil-side { position: absolute; margin: 0; padding: 0; transform: none; pointer-events: auto; }

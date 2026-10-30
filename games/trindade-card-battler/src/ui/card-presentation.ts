@@ -14,17 +14,17 @@ export interface CardPresentation {
 
 // These are provisional visual choices only. They do not encode card type, power, or combat rules.
 export const cardPresentationCatalog: Record<string, CardPresentation> = {
-  'solemn-guardian': { background: 'green', illustration: { kind: 'image', src: new URL('../assets/card-art/Morto Vivo.png', import.meta.url).href } },
-  'astral-fox': { background: 'purple', illustration: { kind: 'image', src: new URL('../assets/card-art/Goblin Ladrão.png', import.meta.url).href } },
-  'moss-colossus': { background: 'blue', illustration: { kind: 'image', src: new URL('../assets/card-art/Ogro Impiedoso.png', import.meta.url).href } },
-  'amber-phoenix': { background: 'red', illustration: { kind: 'image', src: new URL('../assets/card-art/Raposa Mística.png', import.meta.url).href } },
-  'veil-oracle': { background: 'yellow', illustration: { kind: 'image', src: new URL('../assets/card-art/Bruxa Necromante.png', import.meta.url).href } },
-  'vesper-blade': { background: 'purple', illustration: { kind: 'image', src: new URL('../assets/card-art/Raizes Verdejantes.png', import.meta.url).href } },
-  'ember-knight': { background: 'red', illustration: { kind: 'image', src: new URL('../assets/card-art/Campones Briguento.png', import.meta.url).href } },
-  'eclipse-seal': { background: 'purple', illustration: { kind: 'image', src: new URL('../assets/card-art/Vulcão em atividade.png', import.meta.url).href } },
-  'sleeping-thorns': { background: 'green', illustration: { kind: 'image', src: new URL('../assets/card-art/Armadilha de espinhos.png', import.meta.url).href } },
-  'runic-pulse': { background: 'blue', illustration: { kind: 'image', src: new URL('../assets/card-art/Cura Equivalente.png', import.meta.url).href } },
-  'wandering-flame': { background: 'red', illustration: { kind: 'image', src: new URL('../assets/card-art/Bola de fogo.png', import.meta.url).href } },
+  'solemn-guardian': { background: 'green', illustration: { kind: 'image', src: new URL('../assets/card-art/morto-vivo.webp', import.meta.url).href } },
+  'astral-fox': { background: 'purple', illustration: { kind: 'image', src: new URL('../assets/card-art/goblin-ladrao.webp', import.meta.url).href } },
+  'moss-colossus': { background: 'blue', illustration: { kind: 'image', src: new URL('../assets/card-art/ogro-impiedoso.webp', import.meta.url).href } },
+  'amber-phoenix': { background: 'red', illustration: { kind: 'image', src: new URL('../assets/card-art/raposa-mistica.webp', import.meta.url).href } },
+  'veil-oracle': { background: 'yellow', illustration: { kind: 'image', src: new URL('../assets/card-art/bruxa-necromante.webp', import.meta.url).href } },
+  'vesper-blade': { background: 'purple', illustration: { kind: 'image', src: new URL('../assets/card-art/raizes-verdejantes.webp', import.meta.url).href } },
+  'ember-knight': { background: 'red', illustration: { kind: 'image', src: new URL('../assets/card-art/campones-briguento.webp', import.meta.url).href } },
+  'eclipse-seal': { background: 'purple', illustration: { kind: 'image', src: new URL('../assets/card-art/vulcao-em-atividade.webp', import.meta.url).href } },
+  'sleeping-thorns': { background: 'green', illustration: { kind: 'image', src: new URL('../assets/card-art/armadilha-de-espinhos.webp', import.meta.url).href } },
+  'runic-pulse': { background: 'blue', illustration: { kind: 'image', src: new URL('../assets/card-art/cura-equivalente.webp', import.meta.url).href } },
+  'wandering-flame': { background: 'red', illustration: { kind: 'image', src: new URL('../assets/card-art/bola-de-fogo.webp', import.meta.url).href } },
 };
 
 export const sigilByCardKind: Record<CardKind, CardSigilId> = {

@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 const projectRoot = dirname(dirname(dirname(fileURLToPath(import.meta.url))));
-const captureRoot = join(projectRoot, 'studio', 'release', 'visual-comparison');
+const captureRoot = join(projectRoot, '..', '..', 'studio', 'release', 'visual-comparison');
 const scenes = ['menu', 'combate-inicial', 'animacao-empate', 'animacao-ataque', 'combate-apos-ataque', 'resultado-final', 'poder-disponivel'];
 const viewports = ['1366x768', '390x844'];
 

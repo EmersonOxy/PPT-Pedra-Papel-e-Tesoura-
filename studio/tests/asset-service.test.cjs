@@ -5,7 +5,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { importImageAt, MAX_DIMENSION, MAX_FILE_BYTES, MAX_PIXELS, readAssetManifestAt, readRegisteredAssetAt } = require('../electron/asset-service.cjs');
 
-const sourceImage = path.resolve(__dirname, '../../assets/images/hand-paper.png');
+const sourceImage = path.resolve(__dirname, '../../games/pedra-papel-tesoura/assets/images/hand-paper.png');
 
 async function sandbox(t) {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'trindade-assets-'));
@@ -85,7 +85,7 @@ test('rejects duplicate names, traversal, missing files, unregistered assets and
   await fs.mkdir(path.dirname(first));
   await fs.mkdir(path.dirname(duplicate));
   await fs.copyFile(sourceImage, first);
-  const otherImage = path.resolve(__dirname, '../../assets/images/hand-rock.png');
+  const otherImage = path.resolve(__dirname, '../../games/pedra-papel-tesoura/assets/images/hand-rock.png');
   await fs.copyFile(otherImage, duplicate);
   const imported = await importImageAt(project, first);
   await assert.rejects(importImageAt(project, duplicate), /Já existe uma imagem com esse nome/);

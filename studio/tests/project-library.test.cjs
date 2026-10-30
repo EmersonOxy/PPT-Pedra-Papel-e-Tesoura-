@@ -18,7 +18,7 @@ const {
   validateManifest,
 } = require('../electron/project-library.cjs');
 
-const repositoryRoot = path.resolve(__dirname, '..', '..');
+const repositoryRoot = path.resolve(__dirname, '..', '..', 'games', 'pedra-papel-tesoura');
 
 async function makeSandbox(t) {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'trindade-project-library-'));

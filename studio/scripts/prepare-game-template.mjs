@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 
 const studioRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const projectRoot = resolve(studioRoot, '..');
+const projectRoot = resolve(studioRoot, '..', 'games', 'pedra-papel-tesoura');
 const bundleRoot = resolve(studioRoot, '.bundle');
 const templateRoot = resolve(bundleRoot, 'game-template');
 if (!templateRoot.startsWith(bundleRoot + sep)) throw new Error('Destino do modelo fora da pasta permitida.');

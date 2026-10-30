@@ -8,7 +8,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const studioRoot = resolve(fileURLToPath(new URL('..', import.meta.url)));
-const repositoryRoot = resolve(studioRoot, '..');
+const repositoryRoot = resolve(studioRoot, '..', 'games', 'pedra-papel-tesoura');
 const packageRoot = join(studioRoot, 'release');
 const executable = process.env.TRINDADE_STUDIO_TEST_EXE || join(packageRoot, 'win-unpacked', 'Trindade Studio.exe');
 const expectedVersion = process.env.TRINDADE_STUDIO_EXPECTED_VERSION || JSON.parse(await readFile(join(studioRoot, 'package.json'), 'utf8')).version;

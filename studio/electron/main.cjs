@@ -95,7 +95,7 @@ async function locateStartupProject() {
   if (process.env.TRINDADE_STUDIO_TEST_MODE === '1' && process.env.TRINDADE_PROJECT_ROOT) {
     return process.env.TRINDADE_PROJECT_ROOT;
   }
-  if (!app.isPackaged) return process.env.TRINDADE_PROJECT_ROOT || path.resolve(studioDirectory, '..');
+  if (!app.isPackaged) return process.env.TRINDADE_PROJECT_ROOT || path.resolve(studioDirectory, '..', 'games', 'pedra-papel-tesoura');
   return null;
 }
 
@@ -107,7 +107,7 @@ function projectsDirectory() {
 }
 
 function templateDirectory() {
-  return app.isPackaged ? path.join(process.resourcesPath, 'game-template') : path.resolve(studioDirectory, '..');
+  return app.isPackaged ? path.join(process.resourcesPath, 'game-template') : path.resolve(studioDirectory, '..', 'games', 'pedra-papel-tesoura');
 }
 
 async function setProject(root, manifest = null) {

@@ -13,3 +13,6 @@ out/
 
 # Provas locais descartáveis
 .codex/marco1-*/
+
+# Rascunhos pessoais (fora do Git)
+rascunhos/

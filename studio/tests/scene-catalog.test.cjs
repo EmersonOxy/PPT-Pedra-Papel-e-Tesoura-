@@ -4,9 +4,9 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const studioRoot = path.resolve(__dirname, '..');
-const repositoryRoot = path.resolve(studioRoot, '..');
+const repositoryRoot = path.resolve(studioRoot, '..', 'games', 'pedra-papel-tesoura');
 const sceneCatalog = require('../scenes.json');
-const gameCatalog = require('../../config/editor-elements.schema.json');
+const gameCatalog = require('../../games/pedra-papel-tesoura/config/editor-elements.schema.json');
 const gameHtml = fs.readFileSync(path.join(repositoryRoot, 'index.html'), 'utf8');
 const gameView = fs.readFileSync(path.join(repositoryRoot, 'src/game/ui/game-view.js'), 'utf8');
 const gameUi = fs.readFileSync(path.join(repositoryRoot, 'src/game/ui/game-ui.js'), 'utf8');

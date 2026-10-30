@@ -1,9 +1,9 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const catalog = require('../../config/editor-elements.schema.json');
+const catalog = require('../../games/pedra-papel-tesoura/config/editor-elements.schema.json');
 
 test('applies registered geometry only when configured and inherits mobile values safely', async () => {
-  const { applyVisualConfiguration } = await import('../../src/game/ui/visual-config.js');
+  const { applyVisualConfiguration } = await import('../../games/pedra-papel-tesoura/src/game/ui/visual-config.js');
   let mobile = false;
   const properties = new Map();
   const targets = new Map(catalog.elements.map((element) => {
@@ -52,7 +52,7 @@ test('applies registered geometry only when configured and inherits mobile value
 });
 
 test('applies typed visual overrides and restores the exact original title and visibility', async () => {
-  const { applyVisualConfiguration } = await import('../../src/game/ui/visual-config.js');
+  const { applyVisualConfiguration } = await import('../../games/pedra-papel-tesoura/src/game/ui/visual-config.js');
   const targets = new Map();
   const makeStyle = () => {
     const values = new Map();

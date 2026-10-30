@@ -7,7 +7,7 @@ const { createPreviewServer } = require('../electron/preview-server.cjs');
 const { allowedFiles, importImageAt } = require('../electron/project-service.cjs');
 const { createContentSecurityPolicy } = require('../electron/renderer-server.cjs');
 
-const projectRoot = path.resolve(__dirname, '..', '..');
+const projectRoot = path.resolve(__dirname, '..', '..', 'games', 'pedra-papel-tesoura');
 const editorOrigin = 'http://127.0.0.1:45678';
 let activeSession = 'a'.repeat(64);
 const session = 'a'.repeat(64);

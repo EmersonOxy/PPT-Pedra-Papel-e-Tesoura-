@@ -8,10 +8,10 @@ import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const projectRoot = resolve(fileURLToPath(new URL('../..', import.meta.url)));
-const electronPath = process.env.TRINDADE_BROWSER || join(projectRoot, 'studio', 'node_modules', 'electron', 'dist', 'electron.exe');
+const electronPath = process.env.TRINDADE_BROWSER || join(projectRoot, '..', '..', 'studio', 'node_modules', 'electron', 'dist', 'electron.exe');
 const baseUrl = process.env.TRINDADE_BASE_URL || 'http://127.0.0.1:4173';
 const baselineUrl = process.env.TRINDADE_BASELINE_URL || baseUrl;
-const screenshotsRoot = join(projectRoot, 'studio', 'release', 'visual-comparison');
+const screenshotsRoot = join(projectRoot, '..', '..', 'studio', 'release', 'visual-comparison');
 await access(electronPath);
 
 async function availablePort() {
